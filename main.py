@@ -41,7 +41,7 @@ def main():
             print("\n--- 已开启新对话 ---")
             continue
 
-        transcript = manager.get_transcript(client, current_conv, user_input, "claude-opus")
+        transcript = manager.get_transcript(client, current_conv, user_input, "claude-opus4.6")
 
         print("\n[AI]: ", end="", flush=True)
 

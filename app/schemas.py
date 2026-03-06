@@ -10,13 +10,12 @@ class ChatMessage(BaseModel):
     """单条对话消息"""
     role: Literal["user", "assistant", "system"]
     content: str
-
 class ChatCompletionRequest(BaseModel):
     """
     OpenAI-Compatible 发起完成请求的 Payload。
     保留 `conversation_id` 作为特定的扩展字段，若缺失则视为独立请求。
     """
-    model: str = Field(default="claude-opus", description="Requested model.")
+    model: str = Field(default="claude-opus4.6", description="Requested model.")
     messages: List[ChatMessage]
     stream: bool = Field(default=False, description="Whether to stream the response as SSE.")
     temperature: Optional[float] = Field(default=None, description="Sampling temperature.")

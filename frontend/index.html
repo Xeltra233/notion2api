@@ -578,12 +578,11 @@
                             <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                         </svg>
                     </button>
-
                     <!-- Custom Claude Model Dropdown -->
                     <div class="absolute right-[48px] bottom-[14px]">
                         <button id="modelTriggerBtn" type="button"
                             class="flex items-center gap-1.5 text-[13px] italic border border-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/75 bg-black/5 text-black/75 px-2.5 py-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-colors">
-                            <span id="modelTriggerText">Sonnet 4.6</span>
+                            <span id="modelTriggerText">claude-sonnet4.6</span>
                             <span class="text-[10px] mt-0.5">∨</span>
                         </button>
 
@@ -594,7 +593,7 @@
                                 <button type="button"
                                     class="w-full text-left p-2.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-between group transition-colors">
                                     <div class="flex flex-col gap-0.5 pt-0.5">
-                                        <span class="text-sm font-medium">Sonnet 4.6</span>
+                                        <span class="text-sm font-medium">claude-sonnet4.6</span>
                                         <span class="text-xs text-black/50 dark:text-white/50">Most efficient for
                                             everyday tasks</span>
                                     </div>
@@ -726,12 +725,12 @@
         };
 
         const LOCAL_MODELS = [
-            { id: "avocado-froyo-medium", label: "Opus 4.6" },
-            { id: "galette-medium-thinking", label: "Gemini 3.1 Pro" },
-            { id: "oatmeal-cookie", label: "GPT-5.2" }
+            { id: "claude-opus4.6", label: "claude-opus4.6" },
+            { id: "gemini-3.1pro", label: "gemini-3.1pro" },
+            { id: "gpt-5.2", label: "gpt-5.2" }
         ];
-        let currentSelectedModel = "almond-croissant-low";
-        let currentSelectedModelLabel = "Sonnet 4.6";
+        let currentSelectedModel = "claude-sonnet4.6";
+        let currentSelectedModelLabel = "claude-sonnet4.6";
 
         // --- 2. Initialization ---
         function init() {
@@ -922,17 +921,17 @@
             // Primary Model is managed implicitly in level 1 HTML
             DOM.dropdownLevel1.firstElementChild.onclick = (e) => {
                 e.stopPropagation();
-                handleModelSelect("almond-croissant-low", "Sonnet 4.6");
+                handleModelSelect("claude-sonnet4.6", "claude-sonnet4.6");
             }
         }
 
         async function loadModels() {
             // Models logic replaced by custom UI implementation task 2.
             STATE.modelDisplayNames = {
-                "almond-croissant-low": "Sonnet 4.6",
-                "avocado-froyo-medium": "Opus 4.6",
-                "galette-medium-thinking": "Gemini 3.1 Pro",
-                "oatmeal-cookie": "GPT-5.2"
+                "claude-sonnet4.6": "claude-sonnet4.6",
+                "claude-opus4.6": "claude-opus4.6",
+                "gemini-3.1pro": "gemini-3.1pro",
+                "gpt-5.2": "gpt-5.2"
             };
         }
 

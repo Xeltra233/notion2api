@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from app.conversation import compress_round_if_needed
 from app.limiter import limiter
 from app.logger import logger
-from app.model_registry import list_available_models
+from app.model_registry import is_supported_model, list_available_models
 from app.notion_client import NotionUpstreamError
 from app.schemas import (
     ChatCompletionRequest,
@@ -183,8 +183,8 @@ async def create_chat_completion(
     user_prompt, history_messages, raw_user_prompt = _prepare_messages(req_body)
     recall_query = _extract_recall_query(raw_user_prompt) if _contains_recall_intent(raw_user_prompt) else None
 
-    available_models = list_available_models()
-    if req_body.model not in available_models:
+    if not is_supported_model(req_body.model):
+        available_models = list_available_models()
         raise HTTPException(
             status_code=400,
             detail=f"Unsupported model '{req_body.model}'. Available models: {', '.join(available_models)}",
