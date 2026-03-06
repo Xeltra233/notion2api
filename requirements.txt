@@ -1,0 +1,7 @@
+requests
+cloudscraper
+python-dotenv
+fastapi
+uvicorn[standard]
+pydantic
+slowapi

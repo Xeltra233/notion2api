@@ -1,0 +1,153 @@
+import uuid
+from typing import Any, Generator, Optional
+
+import cloudscraper
+import requests
+import urllib3
+
+from app.logger import logger
+from app.stream_parser import parse_stream
+
+# 禁用 SSL 警告
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+class NotionUpstreamError(RuntimeError):
+    """Notion 上游请求失败或返回异常内容。"""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: Optional[int] = None,
+        retriable: bool = True,
+        response_excerpt: str = "",
+    ):
+        super().__init__(message)
+        self.status_code = status_code
+        self.retriable = retriable
+        self.response_excerpt = response_excerpt
+
+
+class NotionOpusAPI:
+    def __init__(self, account_config: dict):
+        """
+        从单组账号配置初始化 Notion 客户端。
+        account_config 需要包含 token_v2, space_id, user_id, space_view_id, user_name, user_email
+        """
+        self.token_v2 = account_config.get("token_v2", "")
+        self.space_id = account_config.get("space_id", "")
+        self.user_id = account_config.get("user_id", "")
+        self.space_view_id = account_config.get("space_view_id", "")
+        self.user_name = account_config.get("user_name", "user")
+        self.user_email = account_config.get("user_email", "")
+        self.url = "https://www.notion.so/api/v3/runInferenceTranscript"
+        self.account_key = self.user_email or self.user_id or "unknown-account"
+
+    def stream_response(self, transcript: list) -> Generator[dict[str, Any], None, None]:
+        """
+        发起 Notion API 请求并返回结构化流生成器。
+        接收完整的 transcript 列表作为参数。
+        """
+        if not isinstance(transcript, list) or not transcript:
+            raise ValueError("Invalid transcript payload: transcript must be a non-empty list.")
+
+        thread_id = str(uuid.uuid4())
+        trace_id = str(uuid.uuid4())
+        response = None
+
+        cookies = {
+            "token_v2": self.token_v2,
+            "notion_user_id": self.user_id,
+        }
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/x-ndjson",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+            "x-notion-space-id": self.space_id,
+            "x-notion-active-user-header": self.user_id,
+            "notion-audit-log-platform": "web",
+            "notion-client-version": "23.13.20260228.0625",
+            "origin": "https://www.notion.so",
+            "referer": "https://www.notion.so/ai",
+        }
+
+        payload = {
+            "traceId": trace_id,
+            "spaceId": self.space_id,
+            "threadId": thread_id,
+            "threadType": "workflow",
+            "createThread": True,
+            "generateTitle": True,
+            "saveAllThreadOperations": True,
+            "setUnreadState": True,
+            "isPartialTranscript": False,
+            "asPatchResponse": True,
+            "isUserInAnySalesAssistedSpace": False,
+            "isSpaceSalesAssisted": False,
+            "threadParentPointer": {
+                "table": "space",
+                "id": self.space_id,
+                "spaceId": self.space_id,
+            },
+            "debugOverrides": {
+                "emitAgentSearchExtractedResults": True,
+                "cachedInferences": {},
+                "annotationInferences": {},
+                "emitInferences": False,
+            },
+            "transcript": transcript,
+        }
+
+        logger.info(
+            "Dispatching request to Notion upstream",
+            extra={
+                "request_info": {
+                    "event": "notion_upstream_request",
+                    "trace_id": trace_id,
+                    "thread_id": thread_id,
+                    "account": self.account_key,
+                    "space_id": self.space_id,
+                }
+            },
+        )
+
+        try:
+            scraper = cloudscraper.create_scraper()
+            response = scraper.post(
+                self.url,
+                cookies=cookies,
+                headers=headers,
+                json=payload,
+                stream=True,
+                timeout=(15, 120),
+            )
+            if response.status_code != 200:
+                excerpt = (response.text or "").strip().replace("\n", " ")[:300]
+                retriable = response.status_code >= 500 or response.status_code == 429
+                raise NotionUpstreamError(
+                    f"Notion upstream returned HTTP {response.status_code}.",
+                    status_code=response.status_code,
+                    retriable=retriable,
+                    response_excerpt=excerpt,
+                )
+
+            emitted = False
+            for chunk in parse_stream(response):
+                emitted = True
+                yield chunk
+
+            if not emitted:
+                raise NotionUpstreamError(
+                    "Notion upstream returned an empty stream.",
+                    status_code=502,
+                    retriable=True,
+                )
+        except requests.exceptions.Timeout as exc:
+            raise NotionUpstreamError("Request to Notion upstream timed out.", retriable=True) from exc
+        except requests.exceptions.RequestException as exc:
+            raise NotionUpstreamError("Request to Notion upstream failed.", retriable=True) from exc
+        finally:
+            if response is not None:
+                response.close()
