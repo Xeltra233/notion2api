@@ -778,9 +778,24 @@ def parse_stream(response: requests.Response) -> Generator[dict[str, Any], None,
                 next_seg_id += 1
                 seg_class = _classify_segment_type(effective_type)
                 segment_types[seg_idx] = seg_class
-                # value[0] 继承段落类型
-                value_types[(seg_idx, 0)] = seg_class
-                next_val_id[seg_idx] = 1
+
+                # 关键修复：遍历 v.value 数组，为每个元素设置正确的类型
+                # Opus/GPT 模型在 agent-inference 的 value 数组中明确标注了每个元素的 type
+                if isinstance(patch_v, dict) and "value" in patch_v:
+                    value_array = patch_v.get("value")
+                    if isinstance(value_array, list):
+                        for idx, item in enumerate(value_array):
+                            if isinstance(item, dict):
+                                item_type = str(item.get("type", "") or "").lower()
+                                item_class = _classify_segment_type(item_type)
+                                value_types[(seg_idx, idx)] = item_class
+                                next_val_id[seg_idx] = idx + 1
+
+                # 如果 v.value 不存在或为空，value[0] 继承段落类型
+                if (seg_idx, 0) not in value_types:
+                    value_types[(seg_idx, 0)] = seg_class
+                    next_val_id[seg_idx] = max(next_val_id.get(seg_idx, 0), 1)
+
                 # 本 patch 后续处理使用此 seg_idx
                 patch_seg = seg_idx
                 patch_role = seg_class
@@ -889,7 +904,39 @@ def parse_stream(response: requests.Response) -> Generator[dict[str, Any], None,
             if seg_owner == SEG_META:
                 continue
             if seg_owner in (SEG_THINKING, SEG_TOOL):
-                yield {"type": "thinking", "text": cleaned}
+                # 关键修复：处理 Opus/GPT 模型的 thinking 内容溢出问题
+                # 某些模型（特别是 Opus）会在 thinking 内容中包含正文
+                # 检测分割点：第一个 "\n\n" 后接中文或英文���案
+                thinking_text = cleaned
+
+                # 检测是否包含内容溢出
+                overflow_split = None
+                patterns = ["\n\n在", "\n\nThe", "\n\n回答", "\n\nAnswer", "\n\n所以", "\n\nThus"]
+
+                for pattern in patterns:
+                    if pattern in thinking_text:
+                        parts = thinking_text.split(pattern, 1)
+                        if len(parts) > 1 and len(parts[1]) > 3:  # 确保分割后有实质内容
+                            overflow_split = (parts[0], pattern + parts[1])
+                            break
+
+                if overflow_split:
+                    # 只输出思考部分，丢弃正文部分
+                    pure_thinking, overflow_content = overflow_split
+                    logger.debug(
+                        "Thinking content overflow detected and split",
+                        extra={
+                            "request_info": {
+                                "event": "thinking_overflow_split",
+                                "thinking_length": len(pure_thinking),
+                                "overflow_length": len(overflow_content),
+                                "overflow_preview": overflow_content[:100] if len(overflow_content) > 100 else overflow_content,
+                            }
+                        },
+                    )
+                    yield {"type": "thinking", "text": pure_thinking}
+                else:
+                    yield {"type": "thinking", "text": thinking_text}
             else:
                 yield {"type": "content", "text": cleaned}
 

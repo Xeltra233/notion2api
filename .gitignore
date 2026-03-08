@@ -38,6 +38,9 @@ ref/
 delete_by_threadID.py
 *.md.bak
 
+# Claude Code local settings
+.claude/settings.local.json
+
 # Docker (Optional to ignore if you want to keep configs in git, usually we keep them)
 # But we definitely ignore local-specific overrides
 docker-compose.override.yml
