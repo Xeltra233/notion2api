@@ -12,7 +12,8 @@ from app.model_registry import get_thread_type, is_gemini_model
 class ConversationManager:
     """SQLite-backed conversation history manager with layered memory."""
 
-    WINDOW_SIZE = 10
+    WINDOW_SIZE = 16  # 16 条消息 = 8 轮对话
+    WINDOW_ROUNDS = 8  # 8 轮对话
     SUMMARY_INJECT_LIMIT = 15
     RECALL_LIMIT = 5
     ASSISTANT_EMPTY_PLACEHOLDER = "[assistant_no_visible_content]"
@@ -102,10 +103,40 @@ class ConversationManager:
                 """
             )
 
+            # 新增：独立的滑动窗口表
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS sliding_window (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    conversation_id TEXT NOT NULL,
+                    round_number INTEGER NOT NULL,
+                    user_content TEXT NOT NULL,
+                    assistant_content TEXT NOT NULL,
+                    assistant_thinking TEXT DEFAULT '',
+                    compress_status TEXT DEFAULT 'active',
+                    created_at INTEGER NOT NULL,
+                    FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_sliding_window_conv_round
+                ON sliding_window(conversation_id, round_number DESC)
+                """
+            )
+            cursor.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_sliding_window_unique
+                ON sliding_window(conversation_id, round_number)
+                """
+            )
+
             # Keep legacy summary for compatibility but do not write to it anymore.
             self._ensure_column(conn, "conversations", "summary TEXT")
             self._ensure_column(conn, "conversations", "next_round_index INTEGER DEFAULT 0")
             self._ensure_column(conn, "conversations", "compress_failed_at INTEGER")
+            self._ensure_column(conn, "conversations", "thread_id TEXT")
             self._ensure_column(conn, "messages", "thinking TEXT")
 
             # Backfill next_round_index for pre-migration conversations that already had history.
@@ -538,6 +569,34 @@ class ConversationManager:
         )
         return conv_id
 
+    def get_conversation_thread_id(self, conversation_id: str) -> Optional[str]:
+        """获取对话关联的 Notion thread_id"""
+        with self._get_conn() as conn:
+            row = conn.execute(
+                "SELECT thread_id FROM conversations WHERE id = ?",
+                (conversation_id,),
+            ).fetchone()
+            return row["thread_id"] if row and row["thread_id"] else None
+
+    def set_conversation_thread_id(self, conversation_id: str, thread_id: str) -> None:
+        """保存对话关联的 Notion thread_id"""
+        with self._get_conn() as conn:
+            conn.execute(
+                "UPDATE conversations SET thread_id = ? WHERE id = ?",
+                (thread_id, conversation_id),
+            )
+            conn.commit()
+            logger.info(
+                "Saved thread_id for conversation",
+                extra={
+                    "request_info": {
+                        "event": "thread_id_saved",
+                        "conversation_id": conversation_id,
+                        "thread_id": thread_id,
+                    }
+                },
+            )
+
     def conversation_exists(self, conversation_id: str) -> bool:
         if not conversation_id:
             return False
@@ -639,8 +698,14 @@ class ConversationManager:
         user_prompt: str,
         assistant_reply: str,
         assistant_thinking: str = "",
-    ) -> None:
-        """Persist one complete user/assistant turn and advance round index."""
+    ) -> int:
+        """
+        Persist one complete user/assistant turn and advance round index.
+        同时更新滑动窗口表。
+
+        Returns:
+            int: 当前轮次号（round_index）
+        """
         with self._get_conn() as conn:
             conv_row = conn.execute(
                 "SELECT id, next_round_index FROM conversations WHERE id = ?",
@@ -652,6 +717,7 @@ class ConversationManager:
             round_index = int(conv_row["next_round_index"] or 0)
             created_at = int(datetime.datetime.now().timestamp())
 
+            # 保留对 messages 表的写入（兼容性）
             conn.execute(
                 """
                 INSERT INTO messages (conversation_id, role, content, thinking, created_at)
@@ -678,11 +744,388 @@ class ConversationManager:
                 created_at,
             )
 
+            # 更新滑动窗口表（使用 UPSERT 确保幂等性和数据完整性）
+            conn.execute(
+                """
+                INSERT INTO sliding_window (
+                    conversation_id, round_number, user_content,
+                    assistant_content, assistant_thinking, compress_status, created_at
+                ) VALUES (?, ?, ?, ?, ?, 'active', ?)
+                ON CONFLICT(conversation_id, round_number) DO UPDATE SET
+                    user_content = excluded.user_content,
+                    assistant_content = excluded.assistant_content,
+                    assistant_thinking = excluded.assistant_thinking,
+                    compress_status = 'active'
+                """,
+                (
+                    conversation_id,
+                    round_index,
+                    user_prompt,
+                    assistant_reply,
+                    assistant_thinking,
+                    created_at,
+                ),
+            )
+
             conn.execute(
                 "UPDATE conversations SET next_round_index = ? WHERE id = ?",
                 (round_index + 1, conversation_id),
             )
             conn.commit()
+
+        return round_index
+
+    # ==================== 滑动窗口管理 ====================
+
+    def update_sliding_window(
+        self,
+        conversation_id: str,
+        round_number: int,
+        user_content: str,
+        assistant_content: str,
+        assistant_thinking: str = "",
+    ) -> None:
+        """
+        更新滑动窗口：将当前轮对话插入 sliding_window 表。
+        使用 UPSERT 确保幂等性和数据完整性。
+        同时归档到 full_archive（已在 persist_round 中完成）。
+        """
+        created_at = int(datetime.datetime.now().timestamp())
+        with self._get_conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO sliding_window (
+                    conversation_id, round_number, user_content,
+                    assistant_content, assistant_thinking, compress_status, created_at
+                ) VALUES (?, ?, ?, ?, ?, 'active', ?)
+                ON CONFLICT(conversation_id, round_number) DO UPDATE SET
+                    user_content = excluded.user_content,
+                    assistant_content = excluded.assistant_content,
+                    assistant_thinking = excluded.assistant_thinking,
+                    compress_status = 'active'
+                """,
+                (
+                    conversation_id,
+                    round_number,
+                    user_content,
+                    assistant_content,
+                    assistant_thinking,
+                    created_at,
+                ),
+            )
+            conn.commit()
+            logger.info(
+                "Sliding window updated",
+                extra={
+                    "request_info": {
+                        "event": "sliding_window_updated",
+                        "conversation_id": conversation_id,
+                        "round_number": round_number,
+                    }
+                },
+            )
+
+    def get_sliding_window(
+        self,
+        conn: sqlite3.Connection,
+        conversation_id: str,
+        limit_rounds: Optional[int] = None,
+    ) -> List[Dict[str, str]]:
+        """
+        获取滑动窗口内容，返回最近 N 轮对话（按 round_number 降序后反转）。
+        天然成对返回 user + assistant，不再需要 _normalize_window_messages()。
+        """
+        if limit_rounds is None:
+            limit_rounds = self.WINDOW_ROUNDS
+
+        rows = conn.execute(
+            """
+            SELECT round_number, user_content, assistant_content, assistant_thinking, compress_status
+            FROM sliding_window
+            WHERE conversation_id = ? AND compress_status = 'active'
+            ORDER BY round_number DESC
+            LIMIT ?
+            """,
+            (conversation_id, limit_rounds),
+        ).fetchall()
+
+        # 添加调试日志（使用 INFO 级别确保可见）
+        logger.info(
+            "Retrieved sliding window data",
+            extra={
+                "request_info": {
+                    "event": "sliding_window_query",
+                    "conversation_id": conversation_id,
+                    "limit_rounds": limit_rounds,
+                    "actual_rows": len(rows),
+                    "round_numbers": [r["round_number"] for r in rows] if rows else [],
+                }
+            },
+        )
+
+        if not rows:
+            return []
+
+        # 反转顺序（从旧到新），并转换为消息列表格式
+        rows_list = list(rows)
+        rows_list.reverse()
+
+        messages: List[Dict[str, str]] = []
+        for row in rows_list:
+            # 添加 user 消息
+            messages.append({
+                "role": "user",
+                "content": str(row["user_content"] or ""),
+                "thinking": "",
+            })
+            # 添加 assistant 消息
+            assistant_text = self._build_assistant_memory_text(
+                str(row["assistant_content"] or ""),
+                str(row["assistant_thinking"] or ""),
+            )
+            messages.append({
+                "role": "assistant",
+                "content": assistant_text,
+                "thinking": str(row["assistant_thinking"] or ""),
+            })
+
+        return messages
+
+    def cleanup_old_sliding_window(
+        self,
+        conn: sqlite3.Connection,
+        conversation_id: str,
+        keep_rounds: Optional[int] = None,
+    ) -> int:
+        """
+        清理滑动窗口中的旧数据。
+        只删除 compress_status='compressed' 的记录，确保压缩完成后才清理。
+        返回删除的记录数。
+        """
+        if keep_rounds is None:
+            keep_rounds = self.WINDOW_ROUNDS
+
+        # 获取当前最大轮次
+        max_round_row = conn.execute(
+            """
+            SELECT MAX(round_number) AS max_round
+            FROM sliding_window
+            WHERE conversation_id = ?
+            """,
+            (conversation_id,),
+        ).fetchone()
+        max_round = int(max_round_row["max_round"] or 0) if max_round_row else 0
+
+        # 计算需要保留的最小轮次
+        min_keep_round = max(0, max_round - keep_rounds + 1)
+
+        # 只删除已压缩的旧数据
+        result = conn.execute(
+            """
+            DELETE FROM sliding_window
+            WHERE conversation_id = ?
+              AND round_number < ?
+              AND compress_status = 'compressed'
+            """,
+            (conversation_id, min_keep_round),
+        )
+        deleted_count = result.rowcount
+
+        if deleted_count > 0:
+            logger.info(
+                "Cleaned up old sliding window records",
+                extra={
+                    "request_info": {
+                        "event": "sliding_window_cleanup",
+                        "conversation_id": conversation_id,
+                        "deleted_count": deleted_count,
+                        "min_keep_round": min_keep_round,
+                    }
+                },
+            )
+
+        return deleted_count
+
+    def get_sliding_window_round_count(
+        self,
+        conn: sqlite3.Connection,
+        conversation_id: str,
+    ) -> int:
+        """获取滑动窗口中的活跃轮数。"""
+        row = conn.execute(
+            """
+            SELECT COUNT(DISTINCT round_number) AS round_count
+            FROM sliding_window
+            WHERE conversation_id = ? AND compress_status = 'active'
+            """,
+            (conversation_id,),
+        ).fetchone()
+        return int(row["round_count"] or 0) if row else 0
+
+    def migrate_messages_to_sliding_window(
+        self,
+        conversation_id: str,
+        batch_size: int = 100,
+    ) -> int:
+        """
+        将现有 messages 表中的数据迁移到 sliding_window 表。
+
+        Args:
+            conversation_id: 要迁移的对话 ID
+            batch_size: 每批处理的消息数
+
+        Returns:
+            int: 迁移的轮次数
+        """
+        with self._get_conn() as conn:
+            # 检查是否已有滑动窗口数据
+            existing_rounds = self.get_sliding_window_round_count(conn, conversation_id)
+            if existing_rounds > 0:
+                logger.info(
+                    "Sliding window already has data, skipping migration",
+                    extra={
+                        "request_info": {
+                            "event": "migration_skipped",
+                            "conversation_id": conversation_id,
+                            "existing_rounds": existing_rounds,
+                        }
+                    },
+                )
+                return 0
+
+            # 获取所有消息
+            messages = conn.execute(
+                """
+                SELECT role, content, COALESCE(thinking, '') AS thinking, created_at
+                FROM messages
+                WHERE conversation_id = ?
+                ORDER BY created_at ASC, id ASC
+                """,
+                (conversation_id,),
+            ).fetchall()
+
+            if not messages:
+                return 0
+
+            # 配对 user + assistant 消息
+            migrated_rounds = 0
+            round_number = 0
+            i = 0
+            created_at = int(datetime.datetime.now().timestamp())
+
+            while i < len(messages):
+                # 查找 user 消息
+                if messages[i]["role"] != "user":
+                    i += 1
+                    continue
+
+                user_content = str(messages[i]["content"] or "")
+                if not user_content.strip():
+                    i += 1
+                    continue
+
+                # 查找对应的 assistant 消息
+                if i + 1 >= len(messages) or messages[i + 1]["role"] != "assistant":
+                    i += 1
+                    continue
+
+                assistant_msg = messages[i + 1]
+                assistant_content = str(assistant_msg["content"] or "")
+                assistant_thinking = str(assistant_msg["thinking"] or "")
+                msg_created_at = int(assistant_msg["created_at"] or created_at)
+
+                # 插入到 sliding_window
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO sliding_window (
+                        conversation_id, round_number, user_content,
+                        assistant_content, assistant_thinking, compress_status, created_at
+                    ) VALUES (?, ?, ?, ?, ?, 'active', ?)
+                    """,
+                    (
+                        conversation_id,
+                        round_number,
+                        user_content,
+                        assistant_content,
+                        assistant_thinking,
+                        msg_created_at,
+                    ),
+                )
+
+                migrated_rounds += 1
+                round_number += 1
+                i += 2
+
+            # 更新 next_round_index
+            if migrated_rounds > 0:
+                conn.execute(
+                    """
+                    UPDATE conversations
+                    SET next_round_index = ?
+                    WHERE id = ? AND COALESCE(next_round_index, 0) < ?
+                    """,
+                    (round_number, conversation_id, round_number),
+                )
+
+            conn.commit()
+
+            logger.info(
+                "Migrated messages to sliding window",
+                extra={
+                    "request_info": {
+                        "event": "migration_completed",
+                        "conversation_id": conversation_id,
+                        "migrated_rounds": migrated_rounds,
+                        "total_messages": len(messages),
+                    }
+                },
+            )
+
+            return migrated_rounds
+
+    def migrate_all_conversations(self) -> Dict[str, int]:
+        """
+        迁移所有对话的 messages 到 sliding_window。
+
+        Returns:
+            Dict[str, int]: 每个对话 ID 对应的迁移轮次数
+        """
+        results: Dict[str, int] = {}
+        conversation_ids = self.list_conversations()
+
+        for conv_id in conversation_ids:
+            try:
+                migrated = self.migrate_messages_to_sliding_window(conv_id)
+                if migrated > 0:
+                    results[conv_id] = migrated
+            except Exception as e:
+                logger.error(
+                    "Failed to migrate conversation",
+                    exc_info=True,
+                    extra={
+                        "request_info": {
+                            "event": "migration_failed",
+                            "conversation_id": conv_id,
+                            "error": str(e),
+                        }
+                    },
+                )
+
+        logger.info(
+            "Completed migration for all conversations",
+            extra={
+                "request_info": {
+                    "event": "migration_all_completed",
+                    "total_conversations": len(conversation_ids),
+                    "migrated_conversations": len(results),
+                    "total_rounds": sum(results.values()),
+                }
+            },
+        )
+
+        return results
+
+    # ==================== 滑动窗口管理结束 ====================
 
     def get_transcript_payload(
         self,
@@ -700,9 +1143,22 @@ class ConversationManager:
             if not row:
                 raise ValueError(f"Conversation ID '{conversation_id}' does not exist.")
 
-            message_count = self._count_messages(conn, conversation_id)
-            active_window_limit = message_count if message_count > self.WINDOW_SIZE else self.WINDOW_SIZE
-            recent_messages = self._fetch_recent_messages(conn, conversation_id, active_window_limit)
+            # 强制使用新的滑动窗口表（单一数据源）
+            sliding_window_rounds = self.get_sliding_window_round_count(conn, conversation_id)
+            recent_messages = self.get_sliding_window(conn, conversation_id)
+
+            logger.info(
+                "Using sliding window as single source of truth",
+                extra={
+                    "request_info": {
+                        "event": "sliding_window_enforced",
+                        "conversation_id": conversation_id,
+                        "round_count": sliding_window_rounds,
+                        "message_count": len(recent_messages),
+                    }
+                },
+            )
+
             summaries = self._fetch_recent_done_summaries(conn, conversation_id)
             memory_degraded = False
 
@@ -713,7 +1169,6 @@ class ConversationManager:
             )
             recalled_text = self._format_recalled_archive(conn, conversation_id, recall_round_indices)
 
-        recent_messages = self._normalize_window_messages(recent_messages)
         transcript: List[Dict[str, Any]] = []
         gemini_mode = is_gemini_model(model_name)
 
@@ -750,6 +1205,22 @@ class ConversationManager:
                 },
             )
 
+        # 添加调试日志（使用 INFO 级别确保可见）
+        logger.info(
+            "Adding recent_messages to transcript",
+            extra={
+                "request_info": {
+                    "event": "recent_messages_addition",
+                    "conversation_id": conversation_id,
+                    "recent_messages_count": len(recent_messages),
+                    "recent_messages_preview": [
+                        {"role": msg.get("role"), "content_length": len(msg.get("content", ""))}
+                        for msg in recent_messages
+                    ]
+                }
+            },
+        )
+
         for msg in recent_messages:
             transcript.append(
                 self._build_dialog_block(
@@ -759,6 +1230,18 @@ class ConversationManager:
                     gemini_mode=gemini_mode,
                 )
             )
+
+        logger.info(
+            "Final transcript size",
+            extra={
+                "request_info": {
+                    "event": "transcript_final_size",
+                    "conversation_id": conversation_id,
+                    "transcript_length": len(transcript),
+                    "transcript_block_types": [block.get("type") for block in transcript]
+                }
+            },
+        )
 
         if recalled_text:
             transcript.append(
@@ -817,9 +1300,285 @@ class ConversationManager:
             return [row["id"] for row in cursor.fetchall()]
 
 
+async def compress_sliding_window_round(
+    manager: ConversationManager,
+    conversation_id: str,
+    round_number: int,
+) -> bool:
+    """
+    压缩滑动窗口中指定轮次的对话。
+
+    异步预压缩流程：
+    1. 检查该轮次是否已压缩（幂等性）
+    2. 标记为 'compressing' 防止并发
+    3. 调用 LLM 生成摘要
+    4. 写入 compressed_summaries
+    5. 标记为 'compressed'
+
+    Returns:
+        bool: 压缩是否成功
+    """
+    from app.summarizer import (
+        SummarizerUnavailableError,
+        is_summarizer_configured,
+        summarize_turn,
+    )
+
+    try:
+        with manager._get_conn() as conn:
+            # 检查该轮次是否存在且需要压缩
+            round_row = conn.execute(
+                """
+                SELECT round_number, user_content, assistant_content, assistant_thinking, compress_status
+                FROM sliding_window
+                WHERE conversation_id = ? AND round_number = ?
+                """,
+                (conversation_id, round_number),
+            ).fetchone()
+
+            if not round_row:
+                logger.debug(
+                    "Sliding window round not found for compression",
+                    extra={
+                        "request_info": {
+                            "event": "sliding_window_round_not_found",
+                            "conversation_id": conversation_id,
+                            "round_number": round_number,
+                        }
+                    },
+                )
+                return False
+
+            if round_row["compress_status"] != "active":
+                logger.debug(
+                    "Sliding window round already compressed or compressing",
+                    extra={
+                        "request_info": {
+                            "event": "sliding_window_round_already_compressed",
+                            "conversation_id": conversation_id,
+                            "round_number": round_number,
+                            "compress_status": round_row["compress_status"],
+                        }
+                    },
+                )
+                return True  # 已压缩视为成功
+
+            # 标记为正在压缩
+            conn.execute(
+                """
+                UPDATE sliding_window
+                SET compress_status = 'compressing'
+                WHERE conversation_id = ? AND round_number = ? AND compress_status = 'active'
+                """,
+                (conversation_id, round_number),
+            )
+            conn.commit()
+
+        # 获取旧的压缩摘要
+        with manager._get_conn() as conn:
+            old_summary_rows = conn.execute(
+                """
+                SELECT summary
+                FROM compressed_summaries
+                WHERE conversation_id = ?
+                  AND compress_status = 'done'
+                  AND COALESCE(summary, '') <> ''
+                  AND round_index < ?
+                ORDER BY round_index ASC
+                """,
+                (conversation_id, round_number),
+            ).fetchall()
+            old_summaries = [
+                str(row["summary"] or "").strip()
+                for row in old_summary_rows
+                if str(row["summary"] or "").strip()
+            ]
+
+        if not is_summarizer_configured():
+            logger.warning(
+                "Skipping compression because summarizer is not configured",
+                extra={
+                    "request_info": {
+                        "event": "sliding_window_compress_skipped_no_summarizer",
+                        "conversation_id": conversation_id,
+                        "round_number": round_number,
+                    }
+                },
+            )
+            # 恢复状态
+            with manager._get_conn() as conn:
+                conn.execute(
+                    """
+                    UPDATE sliding_window
+                    SET compress_status = 'active'
+                    WHERE conversation_id = ? AND round_number = ?
+                    """,
+                    (conversation_id, round_number),
+                )
+                conn.commit()
+            return False
+
+        user_content = str(round_row["user_content"] or "")
+        assistant_content = manager._build_assistant_memory_text(
+            str(round_row["assistant_content"] or ""),
+            str(round_row["assistant_thinking"] or ""),
+        )
+
+        try:
+            summary_text = await summarize_turn(
+                old_summaries=old_summaries,
+                user_msg=user_content,
+                assistant_msg=assistant_content,
+            )
+        except SummarizerUnavailableError:
+            logger.warning(
+                "Compression summary unavailable",
+                extra={
+                    "request_info": {
+                        "event": "sliding_window_compress_summary_unavailable",
+                        "conversation_id": conversation_id,
+                        "round_number": round_number,
+                    }
+                },
+            )
+            # 恢复状态以便下次重试
+            with manager._get_conn() as conn:
+                conn.execute(
+                    """
+                    UPDATE sliding_window
+                    SET compress_status = 'active'
+                    WHERE conversation_id = ? AND round_number = ?
+                    """,
+                    (conversation_id, round_number),
+                )
+                conn.commit()
+            return False
+        except Exception:
+            logger.error(
+                "Failed to summarize sliding window round",
+                exc_info=True,
+                extra={
+                    "request_info": {
+                        "event": "sliding_window_compress_summary_failed",
+                        "conversation_id": conversation_id,
+                        "round_number": round_number,
+                    }
+                },
+            )
+            # 恢复状态以便下次重试
+            with manager._get_conn() as conn:
+                conn.execute(
+                    """
+                    UPDATE sliding_window
+                    SET compress_status = 'active'
+                    WHERE conversation_id = ? AND round_number = ?
+                    """,
+                    (conversation_id, round_number),
+                )
+                conn.commit()
+            return False
+
+        summary_text = summary_text.strip()
+        if not summary_text:
+            logger.warning(
+                "Compression summary was empty",
+                extra={
+                    "request_info": {
+                        "event": "sliding_window_compress_summary_empty",
+                        "conversation_id": conversation_id,
+                        "round_number": round_number,
+                    }
+                },
+            )
+            # 恢复状态以便下次重试
+            with manager._get_conn() as conn:
+                conn.execute(
+                    """
+                    UPDATE sliding_window
+                    SET compress_status = 'active'
+                    WHERE conversation_id = ? AND round_number = ?
+                    """,
+                    (conversation_id, round_number),
+                )
+                conn.commit()
+            return False
+
+        # 写入压缩摘要并更新状态
+        created_at = int(datetime.datetime.now().timestamp())
+        with manager._get_conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO compressed_summaries (
+                    conversation_id, round_index, user_content,
+                    assistant_content, summary, compress_status, created_at
+                ) VALUES (?, ?, ?, ?, ?, 'done', ?)
+                """,
+                (
+                    conversation_id,
+                    round_number,
+                    user_content,
+                    assistant_content,
+                    summary_text,
+                    created_at,
+                ),
+            )
+            conn.execute(
+                """
+                UPDATE sliding_window
+                SET compress_status = 'compressed'
+                WHERE conversation_id = ? AND round_number = ?
+                """,
+                (conversation_id, round_number),
+            )
+            conn.commit()
+
+        logger.info(
+            "Sliding window round compressed successfully",
+            extra={
+                "request_info": {
+                    "event": "sliding_window_round_compressed",
+                    "conversation_id": conversation_id,
+                    "round_number": round_number,
+                    "summary_length": len(summary_text),
+                }
+            },
+        )
+        return True
+
+    except Exception:
+        logger.error(
+            "compress_sliding_window_round crashed",
+            exc_info=True,
+            extra={
+                "request_info": {
+                    "event": "sliding_window_compress_crashed",
+                    "conversation_id": conversation_id,
+                    "round_number": round_number,
+                }
+            },
+        )
+        # 尝试恢复状态
+        try:
+            with manager._get_conn() as conn:
+                conn.execute(
+                    """
+                    UPDATE sliding_window
+                    SET compress_status = 'active'
+                    WHERE conversation_id = ? AND round_number = ?
+                    """,
+                    (conversation_id, round_number),
+                )
+                conn.commit()
+        except Exception:
+            pass
+        return False
+
+
 async def compress_round_if_needed(manager: ConversationManager, conversation_id: str) -> None:
     """
     Move old turns out of sliding window, archive raw text, and summarize with LLM.
+
+    优先处理新的 sliding_window 表，兼容旧的 messages 表。
 
     Any failure is logged only and never raised to request path.
     """
@@ -830,6 +1589,46 @@ async def compress_round_if_needed(manager: ConversationManager, conversation_id
     )
 
     try:
+        # 优先处理新的滑动窗口表
+        with manager._get_conn() as conn:
+            sliding_round_count = manager.get_sliding_window_round_count(conn, conversation_id)
+            if sliding_round_count > manager.WINDOW_ROUNDS:
+                # 找到需要压缩的轮次
+                max_round_row = conn.execute(
+                    """
+                    SELECT MAX(round_number) AS max_round
+                    FROM sliding_window
+                    WHERE conversation_id = ? AND compress_status = 'active'
+                    """,
+                    (conversation_id,),
+                ).fetchone()
+                max_round = int(max_round_row["max_round"] or 0) if max_round_row else 0
+
+                # 计算需要压缩的最小轮次
+                min_compress_round = max(0, max_round - manager.WINDOW_ROUNDS + 1)
+
+                # 获取需要压缩的轮次
+                rounds_to_compress = conn.execute(
+                    """
+                    SELECT round_number
+                    FROM sliding_window
+                    WHERE conversation_id = ?
+                      AND compress_status = 'active'
+                      AND round_number < ?
+                    ORDER BY round_number ASC
+                    """,
+                    (conversation_id, min_compress_round),
+                ).fetchall()
+
+                for row in rounds_to_compress:
+                    round_number = int(row["round_number"])
+                    await compress_sliding_window_round(manager, conversation_id, round_number)
+
+                # 清理已压缩的旧数据
+                manager.cleanup_old_sliding_window(conn, conversation_id)
+                return
+
+        # 兼容旧的 messages 表（如果滑动窗口为空）
         while True:
             with manager._get_conn() as conn:
                 conv_row = conn.execute(

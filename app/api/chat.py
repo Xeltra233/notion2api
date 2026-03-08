@@ -9,7 +9,7 @@ from typing import Any, Dict, Generator, Iterable, List, Tuple
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from app.conversation import compress_round_if_needed
+from app.conversation import compress_round_if_needed, compress_sliding_window_round
 from app.limiter import limiter
 from app.logger import logger
 from app.model_registry import is_supported_model, list_available_models
@@ -316,12 +316,47 @@ def _persist_round(
     assistant_reply: str,
     assistant_thinking: str = "",
 ) -> None:
-    manager.persist_round(
+    """
+    持久化一轮对话并触发异步预压缩。
+
+    预压缩逻辑：
+    - 当 round >= WINDOW_ROUNDS//2 时，提前压缩滑出窗口的轮次
+    - 使用 BackgroundTasks 确保不阻塞当前对话
+    """
+    round_index = manager.persist_round(
         conversation_id,
         user_prompt,
         assistant_reply,
         assistant_thinking=assistant_thinking,
     )
+
+    # 异步预压缩：当窗口快满时提前压缩
+    WINDOW_ROUNDS = 8  # 与 conversation.py 保持一致
+    PRECOMPRESS_THRESHOLD = WINDOW_ROUNDS // 2  # 在第 4 轮时开始预压缩
+
+    if round_index >= PRECOMPRESS_THRESHOLD:
+        # 计算需要压缩的轮次（滑出窗口的轮次）
+        round_to_compress = round_index - WINDOW_ROUNDS + 1
+        if round_to_compress >= 0:
+            background_tasks.add_task(
+                compress_sliding_window_round,
+                manager=manager,
+                conversation_id=conversation_id,
+                round_number=round_to_compress,
+            )
+            logger.info(
+                "Triggered async pre-compression",
+                extra={
+                    "request_info": {
+                        "event": "async_precompress_triggered",
+                        "conversation_id": conversation_id,
+                        "current_round": round_index,
+                        "compress_round": round_to_compress,
+                    }
+                },
+            )
+
+    # 保留原有的压缩逻辑作为兜底
     background_tasks.add_task(
         compress_round_if_needed,
         manager=manager,
@@ -438,8 +473,15 @@ async def create_chat_completion(
             memory_degraded = bool(transcript_payload.get("memory_degraded"))
             memory_headers = {"X-Memory-Status": "degraded"} if memory_degraded else {}
 
-            stream_gen = client.stream_response(transcript)
+            # 获取或创建 thread_id 以保持对话上下文
+            thread_id = manager.get_conversation_thread_id(conversation_id)
+
+            stream_gen = client.stream_response(transcript, thread_id=thread_id)
             first_item = next(stream_gen, None)
+
+            # 保存 thread_id（如果是新对话）
+            if not thread_id and hasattr(client, 'current_thread_id'):
+                manager.set_conversation_thread_id(conversation_id, client.current_thread_id)
 
             if first_item is None:
                 raise NotionUpstreamError("Notion upstream returned empty content.", retriable=True)

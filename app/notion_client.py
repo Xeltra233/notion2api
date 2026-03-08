@@ -207,10 +207,14 @@ class NotionOpusAPI:
                 extra={"request_info": {"event": "thread_delete_error", "thread_id": thread_id}},
             )
 
-    def stream_response(self, transcript: list) -> Generator[dict[str, Any], None, None]:
+    def stream_response(self, transcript: list, thread_id: Optional[str] = None) -> Generator[dict[str, Any], None, None]:
         """
         发起 Notion API 请求并返回结构化流生成器。
         接收完整的 transcript 列表作为参数。
+
+        Args:
+            transcript: 对话历史记录列表
+            thread_id: 可选的已有 thread_id。如果提供，将重用该线程以保持上下文
         """
         if not isinstance(transcript, list) or not transcript:
             raise ValueError("Invalid transcript payload: transcript must be a non-empty list.")
@@ -219,14 +223,25 @@ class NotionOpusAPI:
         thread_type = self._resolve_thread_type(notion_transcript)
         request_profile = self._resolve_request_profile(thread_type)
 
-        thread_id = str(uuid.uuid4())
+        # 如果没有提供 thread_id，创建新的；否则重用已有的
+        should_create_thread = thread_id is None
+        thread_id = thread_id or str(uuid.uuid4())
         trace_id = str(uuid.uuid4())
         response = None
 
-        if request_profile["precreate_thread"]:
+        # 保存 thread_id 以便外部访问
+        self.current_thread_id = thread_id
+
+        if request_profile["precreate_thread"] and should_create_thread:
             if not self._create_thread(thread_id, thread_type):
+                should_create_thread = True
                 request_profile["create_thread"] = True
                 request_profile["is_partial_transcript"] = False
+        elif not should_create_thread:
+            # 如果重用已有线程，不要创建新线程
+            request_profile["create_thread"] = False
+            # 关键修复：设置 is_partial_transcript=True，让 Notion 接受客户端的历史消息
+            request_profile["is_partial_transcript"] = True
 
         cookies = {
             "token_v2": self.token_v2,
@@ -321,13 +336,20 @@ class NotionOpusAPI:
                     retriable=True,
                 )
 
-            # 流结束后，在后台线程中异步删除本次生成的 thread，保持 Notion 主页面干净
-            threading.Thread(
-                target=self.delete_thread,
-                args=(thread_id,),
-                daemon=True,
-                name=f"notion-thread-gc-{thread_id[:8]}",
-            ).start()
+            # 流结束后，不再自动删除 thread
+            # 原因：Notion API 的 workflow 模式依赖于服务器端保存的对话历史
+            # 删除 thread 会导致后续请求无法获取历史消息（AI 失忆）
+            # 保持 thread 存活可以维持对话上下文
+            logger.info(
+                "Thread completed and preserved for conversation context",
+                extra={
+                    "request_info": {
+                        "event": "thread_completed_preserved",
+                        "thread_id": thread_id,
+                        "was_created_new": should_create_thread,
+                    }
+                },
+            )
         except requests.exceptions.Timeout as exc:
             raise NotionUpstreamError("Request to Notion upstream timed out.", retriable=True) from exc
         except requests.exceptions.RequestException as exc:
