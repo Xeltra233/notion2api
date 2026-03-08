@@ -3,6 +3,7 @@ MODEL_MAP: dict[str, str] = {
     "claude-sonnet4.6": "almond-croissant-low",
     "gemini-3.1pro": "galette-medium-thinking",
     "gpt-5.2": "oatmeal-cookie",
+    "gpt-5.4": "oval-kumquat-medium",
 }
 
 NOTION_MODEL_REVERSE_MAP: dict[str, str] = {value: key for key, value in MODEL_MAP.items()}
@@ -12,6 +13,7 @@ DISPLAY_NAMES: dict[str, str] = {
     "claude-sonnet4.6": "Claude Sonnet 4.6",
     "gemini-3.1pro": "Gemini 3.1 Pro",
     "gpt-5.2": "GPT-5.2",
+    "gpt-5.4": "GPT-5.4",
 }
 
 MODEL_ICONS: dict[str, str] = {
@@ -19,6 +21,7 @@ MODEL_ICONS: dict[str, str] = {
     "claude-sonnet4.6": "✳️",
     "gemini-3.1pro": "✦",
     "gpt-5.2": "⚙",
+    "gpt-5.4": "⚙",
 }
 
 DEFAULT_MODEL = "claude-opus4.6"
