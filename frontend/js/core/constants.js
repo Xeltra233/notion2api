@@ -24,10 +24,10 @@ window.NotionAI.Core.Constants = {
 
     // Model Definitions
     MODELS: [
-        { id: "claude-sonnet4.6", label: "Claude Sonnet 4.6" },
-        { id: "claude-opus4.6", label: "Claude Opus 4.6" },
-        { id: "gemini-3.1pro", label: "Gemini 3.1 Pro" },
+        { id: "claude-sonnet4.6", label: "Sonnet 4.6" },
+        { id: "claude-opus4.6", label: "Opus 4.6" },
         { id: "gpt-5.2", label: "GPT-5.2" },
+        { id: "gemini-3.1pro", label: "Gemini 3.1 Pro" },
         { id: "gpt-5.4", label: "GPT-5.4" },
     ],
 
@@ -36,10 +36,10 @@ window.NotionAI.Core.Constants = {
 
     // Display Name Mappings
     MODEL_DISPLAY_NAMES: {
-        "claude-sonnet4.6": "Claude Sonnet 4.6",
-        "claude-opus4.6": "Claude Opus 4.6",
-        "gemini-3.1pro": "Gemini 3.1 Pro",
+        "claude-sonnet4.6": "Sonnet 4.6",
+        "claude-opus4.6": "Opus 4.6",
         "gpt-5.2": "GPT-5.2",
+        "gemini-3.1pro": "Gemini 3.1 Pro",
         "gpt-5.4": "GPT-5.4"
     },
 

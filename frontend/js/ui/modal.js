@@ -52,12 +52,7 @@ window.NotionAI.UI.Modal = {
         const newTitle = input.value.trim();
 
         if (newTitle) {
-            window.NotionAI.Chat.Storage.updateChatTitle(chatId, newTitle);
-
-            const currentChatId = window.NotionAI.Core.State.get('currentChatId');
-            if (currentChatId === chatId) {
-                document.getElementById('headerTitle').textContent = newTitle;
-            }
+            window.NotionAI.Chat.Manager.renameChat(chatId, newTitle);
         }
 
         this.closeRenameModal();

@@ -136,12 +136,44 @@ function populateModels() {
         btn.type = 'button';
         btn.className = 'w-full text-left py-2 px-3 rounded-md hover:bg-black/5 dark:hover:bg-white/5 text-[14px] transition-colors flex justify-between items-center group';
 
+        const contentWrapper = document.createElement('div');
+        contentWrapper.className = 'flex flex-col items-start gap-0.5';
+
+        const titleRow = document.createElement('div');
+        titleRow.className = 'flex items-center gap-2';
+
         const labelSpan = document.createElement('span');
         labelSpan.textContent = model.label;
         if (isSelected) {
             labelSpan.className = 'font-medium';
         }
-        btn.appendChild(labelSpan);
+        titleRow.appendChild(labelSpan);
+
+        // Add Beta badge for Gemini 3.1 and GPT 5.4
+        const needsBeta = model.label.toLowerCase().includes('gemini') || model.label.toLowerCase().includes('5.4');
+        if (needsBeta) {
+            const betaBadge = document.createElement('span');
+            betaBadge.className = 'model-beta-badge';
+            betaBadge.textContent = 'Beta';
+            titleRow.appendChild(betaBadge);
+        }
+
+        contentWrapper.appendChild(titleRow);
+
+        // Add descriptions
+        if (model.label.toLowerCase().includes('sonnet') && model.label.includes('4.6')) {
+            const desc = document.createElement('div');
+            desc.className = 'model-desc';
+            desc.textContent = 'Most efficient for everyday tasks';
+            contentWrapper.appendChild(desc);
+        } else if (model.label.toLowerCase().includes('gemini')) {
+            const desc = document.createElement('div');
+            desc.className = 'model-desc';
+            desc.textContent = 'Smart but Think longer';
+            contentWrapper.appendChild(desc);
+        }
+
+        btn.appendChild(contentWrapper);
 
         if (isSelected) {
             const checkIcon = document.createElement('span');
@@ -216,6 +248,13 @@ async function handleSend() {
     const inputWrapper = document.getElementById('inputAreaWrapper');
     inputWrapper.classList.remove('initial-state-container');
     inputWrapper.classList.add('chat-state-container');
+
+    const selectorContainer = document.querySelector('.model-selector-container');
+    if (selectorContainer) {
+        selectorContainer.classList.remove('dropdown-down');
+        selectorContainer.classList.add('dropdown-up');
+    }
+
     document.getElementById('inputBgMask').classList.remove('opacity-0');
     document.getElementById('inputGradientMask').classList.remove('opacity-0');
 

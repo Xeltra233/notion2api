@@ -11,12 +11,47 @@
     transition: opacity 0.15s ease, transform 0.15s ease;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     font-family: 'Lora', Georgia, serif;
+    min-width: fit-content;
+    white-space: nowrap;
 }
 
 #customModelDropdown.open {
     pointer-events: auto;
     opacity: 1;
     transform: translateY(0);
+}
+
+.dropdown-down .model-dropdown {
+    top: calc(100% + 8px);
+    bottom: auto;
+}
+
+.dropdown-up .model-dropdown {
+    bottom: calc(100% + 8px);
+    top: auto;
+}
+
+.model-beta-badge {
+    background-color: #2a2a2a;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 6px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+html.dark .model-beta-badge {
+    background-color: #444;
+}
+
+.model-desc {
+    font-size: 11px;
+    color: #888888;
+    margin-top: 2px;
 }
 
 /* 3-Dot Custom Dropdown */

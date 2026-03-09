@@ -32,6 +32,12 @@ window.NotionAI.Chat.Manager = {
         inputWrapper.classList.remove('chat-state-container');
         inputWrapper.classList.add('initial-state-container');
 
+        const selectorContainer = document.querySelector('.model-selector-container');
+        if (selectorContainer) {
+            selectorContainer.classList.remove('dropdown-up');
+            selectorContainer.classList.add('dropdown-down');
+        }
+
         document.getElementById('inputBgMask').classList.add('opacity-0');
         document.getElementById('inputGradientMask').classList.add('opacity-0');
 
@@ -65,6 +71,12 @@ window.NotionAI.Chat.Manager = {
         const inputWrapper = document.getElementById('inputAreaWrapper');
         inputWrapper.classList.remove('initial-state-container');
         inputWrapper.classList.add('chat-state-container');
+
+        const selectorContainer = document.querySelector('.model-selector-container');
+        if (selectorContainer) {
+            selectorContainer.classList.remove('dropdown-down');
+            selectorContainer.classList.add('dropdown-up');
+        }
 
         document.getElementById('inputBgMask').classList.remove('opacity-0');
         document.getElementById('inputGradientMask').classList.remove('opacity-0');
