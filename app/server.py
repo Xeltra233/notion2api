@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 from contextlib import asynccontextmanager
-from app.config import ACCOUNTS, API_KEY
+from app.config import ACCOUNTS, API_KEY, is_lite_mode
 from app.account_pool import AccountPool
 from app.conversation import ConversationManager
 from app.api.chat import router as chat_router
@@ -18,9 +18,14 @@ from app.limiter import limiter
 async def lifespan(app: FastAPI):
     # 启动时初始化状态
     app.state.account_pool = AccountPool(ACCOUNTS)
-    app.state.conversation_manager = ConversationManager()
+
+    if not is_lite_mode():
+        app.state.conversation_manager = ConversationManager()
+        logger.info("Service starting up in HEAVY mode", extra={"request_info": {"event": "startup", "accounts": len(ACCOUNTS), "mode": "heavy"}})
+    else:
+        logger.info("Service starting up in LITE mode", extra={"request_info": {"event": "startup", "accounts": len(ACCOUNTS), "mode": "lite"}})
+
     app.state.start_time = time.time()
-    logger.info("Service starting up", extra={"request_info": {"event": "startup", "accounts": len(ACCOUNTS)}})
     yield
     # 关闭时清理
     logger.info("Service shutting down", extra={"request_info": {"event": "shutdown"}})

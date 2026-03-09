@@ -1872,3 +1872,29 @@ async def compress_round_if_needed(manager: ConversationManager, conversation_id
                 }
             },
         )
+
+
+def build_lite_transcript(user_prompt: str, model_name: str) -> list[dict[str, Any]]:
+    """构建 Lite 模式的最简 transcript（只有 config + user）"""
+    from app.model_registry import get_notion_model, get_thread_type
+    import uuid
+
+    notion_model = get_notion_model(model_name)
+    thread_type = get_thread_type(model_name)
+
+    return [
+        {
+            "id": str(uuid.uuid4()),
+            "type": "config",
+            "value": {
+                "type": thread_type,
+                "model": notion_model,
+                "modelFromUser": True,
+            }
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "type": "user",
+            "value": [[user_prompt]]
+        }
+    ]

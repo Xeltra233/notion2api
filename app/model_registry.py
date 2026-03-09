@@ -24,7 +24,8 @@ MODEL_ICONS: dict[str, str] = {
     "gpt-5.4": "⚙",
 }
 
-DEFAULT_MODEL = "claude-opus4.6"
+# 默认使用 Sonnet 4.6（速度和质量的最佳平衡）
+DEFAULT_MODEL = "claude-sonnet4.6"
 
 
 def get_notion_model(model_name: str) -> str:

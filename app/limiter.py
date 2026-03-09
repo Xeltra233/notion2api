@@ -1,5 +1,13 @@
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from app.config import is_lite_mode
 
-# 全局默认限制：每个 IP 每分钟 20 次请求
-limiter = Limiter(key_func=get_remote_address, default_limits=["20/minute"])
+# 根据 APP_MODE 动态设置速率限制
+# Lite 模式：30/minute（单轮问答响应快，3-5秒/次）
+# Heavy 模式：20/minute（需要数据库操作，相对慢一些）
+if is_lite_mode():
+    default_limit = "30/minute"
+else:
+    default_limit = "20/minute"
+
+limiter = Limiter(key_func=get_remote_address, default_limits=[default_limit])

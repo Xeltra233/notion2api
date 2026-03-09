@@ -9,7 +9,8 @@ from typing import Any, Dict, Generator, Iterable, List, Tuple
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from app.conversation import compress_round_if_needed, compress_sliding_window_round
+from app.conversation import compress_round_if_needed, compress_sliding_window_round, build_lite_transcript
+from app.config import is_lite_mode
 from app.limiter import limiter
 from app.logger import logger
 from app.model_registry import is_supported_model, list_available_models
@@ -308,6 +309,143 @@ def _prepare_messages(req_body: ChatCompletionRequest) -> Tuple[str, List[Tuple[
     return user_prompt, history_messages, raw_user_prompt
 
 
+def _prepare_messages_lite(req_body: ChatCompletionRequest) -> str:
+    """Lite 模式：只提取最后一条 user 消息，支持 system 指令合并"""
+    system_messages = []
+    user_prompt = ""
+
+    for msg in req_body.messages:
+        if msg.role == "system" and msg.content.strip():
+            system_messages.append(msg.content.strip())
+        elif msg.role == "user":
+            user_prompt = msg.content
+
+    if not user_prompt.strip():
+        raise HTTPException(status_code=400, detail="The messages list must contain at least one user message.")
+
+    if system_messages:
+        user_prompt = f"[System Instructions: {' '.join(system_messages)}]\n\n{user_prompt}"
+
+    return user_prompt
+
+
+def _create_lite_stream_generator(
+    response_id: str,
+    model_name: str,
+    first_item: Any,
+    stream_gen: Iterable[Any],
+) -> Generator[str, None, None]:
+    """Lite 模式流式生成器：只输出 content，忽略 thinking 和 search"""
+    streamed_content_accumulator = ""
+    authoritative_final_content = ""
+    authoritative_final_source_type = ""
+    assistant_started = False
+
+    try:
+        for raw_item in _iter_stream_items(first_item, stream_gen):
+            item = _normalize_stream_item(raw_item)
+            item_type = item.get("type")
+
+            if item_type == "final_content":
+                final_text = str(item.get("text", "") or "").strip()
+                if final_text:
+                    authoritative_final_content = final_text
+                    authoritative_final_source_type = str(item.get("source_type", "") or "")
+                continue
+
+            # Lite 模式忽略 thinking 和 search
+            if item_type in ("thinking", "search"):
+                continue
+
+            if item_type != "content":
+                continue
+
+            chunk_text = item.get("text", "")
+            if not chunk_text:
+                continue
+
+            streamed_content_accumulator += chunk_text
+            if not assistant_started:
+                assistant_started = True
+                yield _build_stream_chunk(
+                    response_id,
+                    model_name,
+                    role="assistant",
+                    content=chunk_text,
+                )
+            else:
+                yield _build_stream_chunk(response_id, model_name, content=chunk_text)
+    except asyncio.CancelledError:
+        logger.info(
+            "Lite streaming cancelled by client",
+            extra={"request_info": {"event": "lite_stream_cancelled"}},
+        )
+        raise
+    except BaseException as exc:
+        if _is_client_disconnect_error(exc):
+            logger.info(
+                "Lite streaming connection closed by client",
+                extra={"request_info": {"event": "lite_stream_client_disconnected"}},
+            )
+            return
+        logger.error(
+            "Lite streaming interrupted",
+            exc_info=True,
+            extra={"request_info": {"event": "lite_stream_interrupted"}},
+        )
+        error_hint = "\n\n[上游连接中断，请稍后重试。]"
+        streamed_content_accumulator += error_hint
+        if not assistant_started:
+            assistant_started = True
+            yield _build_stream_chunk(
+                response_id,
+                model_name,
+                role="assistant",
+                content=error_hint,
+            )
+        else:
+            yield _build_stream_chunk(response_id, model_name, content=error_hint)
+    finally:
+        # 选择最佳最终回复
+        final_reply, _ = _select_best_final_reply(
+            streamed_content_accumulator,
+            authoritative_final_content,
+            authoritative_final_source_type,
+        )
+
+        # 发送缺失的后缀（如果有）
+        missing_suffix = _compute_missing_suffix(streamed_content_accumulator, final_reply)
+        if missing_suffix:
+            if not assistant_started:
+                assistant_started = True
+                yield _build_stream_chunk(
+                    response_id,
+                    model_name,
+                    role="assistant",
+                    content=missing_suffix,
+                )
+            else:
+                yield _build_stream_chunk(response_id, model_name, content=missing_suffix)
+            streamed_content_accumulator += missing_suffix
+        elif final_reply != streamed_content_accumulator:
+            # 处理分叉内容（使用最终内容）
+            if not streamed_content_accumulator and final_reply:
+                if not assistant_started:
+                    assistant_started = True
+                    yield _build_stream_chunk(
+                        response_id,
+                        model_name,
+                        role="assistant",
+                        content=final_reply,
+                    )
+                else:
+                    yield _build_stream_chunk(response_id, model_name, content=final_reply)
+                streamed_content_accumulator = final_reply
+
+        yield _build_stream_chunk(response_id, model_name, finish_reason="stop")
+        yield "data: [DONE]\n\n"
+
+
 def _persist_round(
     manager,
     background_tasks: BackgroundTasks,
@@ -379,8 +517,167 @@ def _is_client_disconnect_error(exc: BaseException) -> bool:
     return False
 
 
+async def _handle_lite_request(
+    request: Request,
+    req_body: ChatCompletionRequest,
+    response: Response,
+) -> JSONResponse | StreamingResponse:
+    """处理 Lite 模式请求（无记忆，单轮问答）"""
+    pool = request.app.state.account_pool
+
+    # 提取用户问题
+    user_prompt = _prepare_messages_lite(req_body)
+
+    # 验证模型
+    if not is_supported_model(req_body.model):
+        available_models = list_available_models()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported model '{req_body.model}'. Available models: {', '.join(available_models)}",
+        )
+
+    response_id = f"chatcmpl-{uuid.uuid4().hex}"
+    max_retries = min(3, len(pool.clients))
+
+    for attempt in range(1, max_retries + 1):
+        client = None
+        try:
+            client = pool.get_client()
+
+            # 构建 Lite transcript（无历史记忆）
+            transcript = build_lite_transcript(user_prompt, req_body.model)
+
+            # 调用 Notion API（不使用 thread_id）
+            stream_gen = client.stream_response(transcript, thread_id=None)
+            first_item = next(stream_gen, None)
+
+            if first_item is None:
+                raise NotionUpstreamError("Notion upstream returned empty content.", retriable=True)
+
+            # 流式响应
+            if req_body.stream:
+                stream_headers = {
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                }
+                return StreamingResponse(
+                    _create_lite_stream_generator(
+                        response_id,
+                        req_body.model,
+                        first_item,
+                        stream_gen,
+                    ),
+                    media_type="text/event-stream",
+                    headers=stream_headers,
+                )
+
+            # 非流式响应
+            content_parts: list[str] = []
+            authoritative_final_content = ""
+            authoritative_final_source_type = ""
+
+            for raw_item in _iter_stream_items(first_item, stream_gen):
+                item = _normalize_stream_item(raw_item)
+                item_type = item.get("type")
+
+                if item_type == "final_content":
+                    final_text = str(item.get("text", "") or "").strip()
+                    if final_text:
+                        authoritative_final_content = final_text
+                        authoritative_final_source_type = str(item.get("source_type", "") or "")
+                    continue
+
+                # Lite 模式忽略 thinking 和 search
+                if item_type in ("thinking", "search"):
+                    continue
+
+                if item_type != "content":
+                    continue
+
+                chunk_text = item.get("text", "")
+                if chunk_text:
+                    content_parts.append(chunk_text)
+
+            full_text, _ = _select_best_final_reply(
+                "".join(content_parts),
+                authoritative_final_content,
+                authoritative_final_source_type,
+            )
+
+            if not full_text.strip():
+                raise NotionUpstreamError("Notion upstream returned empty content.", retriable=True)
+
+            response_text = full_text if full_text.strip() else "[assistant_no_visible_content]"
+            return ChatCompletionResponse(
+                id=response_id,
+                model=req_body.model,
+                choices=[
+                    ChatMessageResponseChoice(
+                        message=ChatMessage(role="assistant", content=response_text)
+                    )
+                ],
+            )
+
+        except NotionUpstreamError as exc:
+            if client is not None and exc.retriable:
+                pool.mark_failed(client)
+            logger.warning(
+                "Lite mode: Notion upstream failed",
+                extra={
+                    "request_info": {
+                        "event": "lite_notion_upstream_failed",
+                        "attempt": attempt,
+                        "max_retries": max_retries,
+                        "status_code": exc.status_code,
+                        "retriable": exc.retriable,
+                        "response_excerpt": exc.response_excerpt,
+                    }
+                },
+            )
+            if attempt == max_retries or not exc.retriable:
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            logger.error(
+                "Lite mode: No available client in account pool",
+                extra={"request_info": {"event": "lite_account_pool_unavailable", "detail": str(exc)}},
+            )
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "error": {
+                        "message": str(exc),
+                        "type": "rate_limit_error",
+                        "code": "account_pool_cooling"
+                    }
+                }
+            )
+        except HTTPException:
+            raise
+        except Exception:
+            if client is not None:
+                pool.mark_failed(client)
+            logger.error(
+                "Lite mode: Unhandled error",
+                exc_info=True,
+                extra={
+                    "request_info": {
+                        "event": "lite_unhandled_exception",
+                        "attempt": attempt,
+                    }
+                },
+            )
+            if attempt == max_retries:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Unexpected internal error while generating completion.",
+                )
+
+    raise HTTPException(status_code=503, detail="Service unavailable: all upstream retries exhausted.")
+
+
 @router.post("/chat/completions", tags=["chat"])
-@limiter.limit("10/minute")
+@limiter.limit("10/minute")  # 保守的全局限制，实际由limiter.py的default_limits控制
 async def create_chat_completion(
     request: Request,
     req_body: ChatCompletionRequest,
@@ -389,7 +686,16 @@ async def create_chat_completion(
 ):
     """
     创建聊天请求，严格兼容 OpenAI API。
+
+    速率限制：
+    - Lite 模式：30/分钟（适合单轮问答）
+    - Heavy 模式：20/分钟（包含会话管理）
     """
+    # Lite 模式：单轮问答，无记忆
+    if is_lite_mode():
+        return await _handle_lite_request(request, req_body, response)
+
+    # Heavy 模式：完整会话管理
     pool = request.app.state.account_pool
     manager = request.app.state.conversation_manager
 
