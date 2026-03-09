@@ -1,7 +1,7 @@
 import time
 import os
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
@@ -81,8 +81,8 @@ async def generic_exception_handler(request: Request, exc: Exception):
 async def log_requests_middleware(request: Request, call_next):
     start_time = time.time()
     
-    # 跳过 /health 的高频日志打印，避免刷屏
-    is_health = request.url.path == "/health"
+    # 跳过高频且不重要的日志打印，避免刷屏
+    skip_logging = request.url.path in ["/health", "/favicon.ico"]
     
     try:
         response = await call_next(request)
@@ -95,7 +95,7 @@ async def log_requests_middleware(request: Request, call_next):
         process_time = time.time() - start_time
         client_ip = request.client.host if request.client else "unknown"
         
-        if not is_health:
+        if not skip_logging:
             log_level = logger.error if status_code >= 400 else logger.info
             log_level(
                 "Request processed",
@@ -138,6 +138,10 @@ app.include_router(chat_router, prefix="/v1")
 app.include_router(models_router, prefix="/v1")
 
 # 挂载健康检查
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return Response(content=b"", media_type="image/x-icon", status_code=204)
+
 @app.get("/health", tags=["system"])
 def health_check(request: Request):
     uptime = time.time() - request.app.state.start_time

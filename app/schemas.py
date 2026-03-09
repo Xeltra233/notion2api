@@ -10,6 +10,8 @@ class ChatMessage(BaseModel):
     """单条对话消息"""
     role: Literal["user", "assistant", "system"]
     content: str
+    thinking: Optional[str] = None
+
 class ChatCompletionRequest(BaseModel):
     """
     OpenAI-Compatible 发起完成请求的 Payload。

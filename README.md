@@ -187,10 +187,13 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 
 ### 支持的模型
 
-- `claude-opus4.6` - Claude Opus 4.6
-- `claude-sonnet4.6` - Claude Sonnet 4.6
-- `gemini-3.1pro` - Gemini 3.1 Pro
-- `gpt-5.2` - GPT-5.2
+- `claude-opus4.6` - Claude Opus 4.6 (avocado-froyo-medium)
+- `claude-sonnet4.6` - Claude Sonnet 4.6 (almond-croissant-low)
+- `gemini-3.1pro` - Gemini 3.1 Pro (galette-medium-thinking)
+- `gpt-5.2` - GPT-5.2 (oatmeal-cookie)
+- `gpt-5.4` - GPT-5.4 (oval-kumquat-medium)
+
+> **注**：GPT-5.4 目前在 Notion 协议中可能复用 `oatmeal-cookie` 系列，本项目已实现透明转发。建议搭配最新前端使用以获得最佳体验。
 
 ### Python 示例
 

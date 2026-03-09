@@ -34,6 +34,7 @@ logs/
 AI-note/
 GEMINI.md
 CODEX.md
+CLAUDE.md
 ref/
 tests/
 *.md.bak
