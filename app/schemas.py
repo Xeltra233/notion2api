@@ -46,7 +46,7 @@ class ChatCompletionResponse(BaseModel):
         default_factory=lambda: {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     )
     # Standard 模式扩展字段
-    search_metadata: Optional[Dict[str, Any]] = Field(default=None, exclude=True)
+    search_metadata: Optional[Dict[str, Any]] = Field(default=None)
 
 # ================================
 # 流式返回 Schema (供内部组织)

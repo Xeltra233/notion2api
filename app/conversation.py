@@ -1900,13 +1900,18 @@ def build_lite_transcript(user_prompt: str, model_name: str) -> list[dict[str, A
     ]
 
 
-def build_standard_transcript(messages: list[dict[str, Any]], model_name: str) -> list[dict[str, Any]]:
+def build_standard_transcript(
+    messages: list[dict[str, Any]],
+    model_name: str,
+    account: dict
+) -> list[dict[str, Any]]:
     """
     构建 Standard 模式的 transcript（完整上下文）
 
     Args:
         messages: OpenAI 格式的 messages 数组（完整历史）
         model_name: 模型名称
+        account: 账号信息字典，包含 user_id, space_id 等
 
     Returns:
         Notion transcript 数组
@@ -1914,11 +1919,8 @@ def build_standard_transcript(messages: list[dict[str, Any]], model_name: str) -
     参考：notion-2api 项目的实现
     """
     from app.model_registry import get_notion_model, get_thread_type
-    from app.config import get_default_account
     import uuid
     from datetime import datetime
-
-    account = get_default_account()
     notion_model = get_notion_model(model_name)
     thread_type = get_thread_type(model_name)
 
@@ -1946,20 +1948,20 @@ def build_standard_transcript(messages: list[dict[str, Any]], model_name: str) -
         }
     ]
 
-    # 转换 OpenAI messages 到 Notion transcript
+    # 收集所有 system 消息
+    system_instructions = []
+    user_messages = []
+
     for msg in messages:
         role = msg.get("role")
         content = msg.get("content", "")
 
-        if role == "user":
-            transcript.append({
-                "id": str(uuid.uuid4()),
-                "type": "user",
-                "value": [[content]],
-                "userId": account.get("user_id", ""),
-                "createdAt": datetime.now().astimezone().isoformat()
-            })
+        if role == "system":
+            system_instructions.append(content)
+        elif role == "user":
+            user_messages.append(content)
         elif role == "assistant":
+            # assistant 消息单独处理
             transcript.append({
                 "id": str(uuid.uuid4()),
                 "type": "agent-inference",
@@ -1970,8 +1972,30 @@ def build_standard_transcript(messages: list[dict[str, Any]], model_name: str) -
                     }
                 ]
             })
-        elif role == "system":
-            # system 消息可以作为 context 的一部分
-            pass
+
+    # 将 system 指令合并到第一条 user 消息（与 Lite/Heavy 模式保持一致）
+    if user_messages:
+        first_user_content = user_messages[0]
+        if system_instructions:
+            merged_system = "\n".join(system_instructions)
+            first_user_content = f"[System Instructions: {merged_system}]\n\n{first_user_content}"
+
+        transcript.append({
+            "id": str(uuid.uuid4()),
+            "type": "user",
+            "value": [[first_user_content]],
+            "userId": account.get("user_id", ""),
+            "createdAt": datetime.now().astimezone().isoformat()
+        })
+
+        # 添加剩余的 user 消息
+        for content in user_messages[1:]:
+            transcript.append({
+                "id": str(uuid.uuid4()),
+                "type": "user",
+                "value": [[content]],
+                "userId": account.get("user_id", ""),
+                "createdAt": datetime.now().astimezone().isoformat()
+            })
 
     return transcript

@@ -56,7 +56,7 @@ def _build_stream_chunk(
     if content:
         delta["content"] = content
     if thinking:
-        delta["thinking"] = thinking
+        delta["reasoning_content"] = thinking
 
     payload = {
         "id": response_id,
@@ -871,8 +871,13 @@ async def _handle_standard_request(
             client = pool.get_client()
 
             # 构建 Standard transcript（完整上下文）
+            # 从 client 提取账号信息
+            account = {
+                "user_id": client.user_id,
+                "space_id": client.space_id,
+            }
             messages = [msg.dict() for msg in req_body.messages]
-            transcript = build_standard_transcript(messages, req_body.model)
+            transcript = build_standard_transcript(messages, req_body.model, account)
 
             # 调用 Notion API（不使用 thread_id，让 Notion ��动处理）
             stream_gen = client.stream_response(transcript, thread_id=None)
@@ -1042,7 +1047,6 @@ async def _handle_standard_request(
 
 
 @router.post("/chat/completions", tags=["chat"])
-@limiter.limit("10/minute")  # 保守的全局限制，实际由limiter.py的default_limits控制
 async def create_chat_completion(
     request: Request,
     req_body: ChatCompletionRequest,
@@ -1208,13 +1212,13 @@ async def create_chat_completion(
                                         response_id,
                                         req_body.model,
                                         role="assistant",
-                                        reasoning_content=thinking_text,
+                                        thinking=thinking_text,
                                     )
                                 else:
                                     yield _build_stream_chunk(
                                         response_id,
                                         req_body.model,
-                                        reasoning_content=thinking_text,
+                                        thinking=thinking_text,
                                     )
                             continue
 

@@ -355,7 +355,8 @@ class NotionOpusAPI:
             raise NotionUpstreamError("Request to Notion upstream timed out.", retriable=True) from exc
         except requests.exceptions.RequestException as exc:
             logger.error(f"Request failed: {exc}", exc_info=True)
-            raise NotionUpstreamError(f"Request to Notion upstream failed: {exc}", retriable=True) from exc
+            # 不暴露原始异常细节给用户
+            raise NotionUpstreamError("Request to Notion upstream failed. Please try again later.", retriable=True) from exc
         finally:
             if response is not None:
                 response.close()
