@@ -57,32 +57,85 @@ window.NotionAI.Core.App = window.NotionAI.Core.App || {
             window.NotionAI.Core.State.persistActiveModule(resolvedModule);
         }
 
+        const hasAdminSession = Boolean(window.NotionAI.Core.State.get('adminSessionToken'));
+        const chatEnabled = Boolean(window.NotionAI.Core.State.get('chatEnabled'));
         const adminView = document.getElementById('adminWorkspaceView');
         const chatView = document.getElementById('chatWorkspaceView');
-        const chatBtn = document.getElementById('moduleChatBtn');
+        const sidebar = document.getElementById('sidebar');
+        const mobileBackdrop = document.getElementById('mobileBackdrop');
+        const openSidebarBtn = document.getElementById('openSidebarBtn');
         const chatSidebarPanel = document.getElementById('chatSidebarPanel');
         const headerTitle = document.getElementById('headerTitle');
+        const settingsModal = document.getElementById('settingsModal');
+        const settingsModalContent = document.getElementById('settingsModalContent');
+        const settingsNav = document.querySelector('.settings-console-nav');
+        const loginCard = document.getElementById('adminAccessLoginCard');
+        const credentialCard = document.getElementById('adminAccessCredentialCard');
+        const protectedSections = [
+            'settings-section-runtime',
+            'settings-section-overview',
+            'settings-section-usage',
+            'settings-section-accounts',
+            'settings-section-diagnostics'
+        ];
 
-        if (chatBtn) {
-            chatBtn.classList.toggle('hidden', !chatEnabled);
+        if (sidebar) {
+            sidebar.classList.toggle('hidden', !hasAdminSession);
         }
+        if (mobileBackdrop && !hasAdminSession) {
+            mobileBackdrop.classList.add('hidden');
+        }
+        if (openSidebarBtn) {
+            openSidebarBtn.classList.toggle('hidden', !hasAdminSession);
+        }
+        if (settingsModal) {
+            settingsModal.classList.toggle('max-w-7xl', hasAdminSession);
+            settingsModal.classList.toggle('max-w-2xl', !hasAdminSession);
+        }
+        if (settingsModalContent) {
+            settingsModalContent.classList.toggle('shadow-2xl', hasAdminSession);
+            settingsModalContent.classList.toggle('min-h-[calc(100vh-7rem)]', !hasAdminSession);
+            settingsModalContent.classList.toggle('flex', !hasAdminSession);
+            settingsModalContent.classList.toggle('items-center', !hasAdminSession);
+            settingsModalContent.classList.toggle('justify-center', !hasAdminSession);
+        }
+        if (settingsNav) {
+            settingsNav.classList.toggle('hidden', !hasAdminSession);
+        }
+        if (loginCard) {
+            loginCard.classList.toggle('lg:col-span-2', !hasAdminSession);
+        }
+        if (credentialCard) {
+            credentialCard.classList.toggle('hidden', !hasAdminSession);
+        }
+
+        document.querySelectorAll('[data-module]').forEach((button) => {
+            const moduleName = button.dataset.module || '';
+            const hideForSignedOut = !hasAdminSession;
+            const hideForChatDisabled = moduleName === 'chat' && !chatEnabled;
+            button.classList.toggle('hidden', hideForSignedOut || hideForChatDisabled);
+            button.dataset.active = button.dataset.module === resolvedModule ? 'true' : 'false';
+        });
+
+        protectedSections.forEach((id) => {
+            const section = document.getElementById(id);
+            if (section) {
+                section.classList.toggle('hidden', !hasAdminSession);
+            }
+        });
         if (chatSidebarPanel) {
-            chatSidebarPanel.classList.toggle('hidden', resolvedModule !== 'chat');
+            chatSidebarPanel.classList.toggle('hidden', !hasAdminSession || resolvedModule !== 'chat');
         }
         if (adminView) {
             adminView.classList.toggle('hidden', resolvedModule === 'chat');
         }
         if (chatView) {
-            chatView.classList.toggle('hidden', resolvedModule !== 'chat');
+            chatView.classList.toggle('hidden', !hasAdminSession || resolvedModule !== 'chat');
         }
         if (headerTitle) {
-            headerTitle.textContent = this.getModuleTitle(resolvedModule);
+            headerTitle.textContent = hasAdminSession ? this.getModuleTitle(resolvedModule) : '登录后台';
             headerTitle.classList.remove('opacity-0');
         }
-
-        document.querySelectorAll('[data-module]').forEach((button) => {
-            button.dataset.active = button.dataset.module === resolvedModule ? 'true' : 'false';
-        });
     }
 };
 
