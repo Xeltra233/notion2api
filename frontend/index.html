@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Claude - Notion Opus Wrapper</title>
+    <title>Notion2API Management Center</title>
 
     <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -77,17 +77,12 @@
 
     <!-- LEFT SIDEBAR -->
     <aside id="sidebar"
-        class="bg-claudeSidebar dark:bg-darkSidebar w-[260px] h-full flex flex-col border-r border-black/5 dark:border-white/5 absolute md:relative z-30 transition-transform duration-300 -translate-x-full md:translate-x-0 sidebar-shell">
-        <!-- Sidebar Header / Mobile Close -->
+        class="bg-claudeSidebar dark:bg-darkSidebar w-[288px] h-full flex flex-col border-r border-black/5 dark:border-white/5 absolute md:relative z-30 transition-transform duration-300 -translate-x-full md:translate-x-0 sidebar-shell">
         <div class="p-4 flex items-center justify-between mt-2">
-            <h1 class="text-xl font-serif font-medium flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="24" height="24"
-                    class="text-accent star-breathe" style="fill: currentColor;">
-                    <path
-                        d="m19.6 66.5 19.7-11 .3-1-.3-.5h-1l-3.3-.2-11.2-.3L14 53l-9.5-.5-2.4-.5L0 49l1.2-1.5 2-1.3 2.9.2 6.3.5 9.5.6 6.9.4L38 49.1h1.6l.2-.7-.5-.4-.4-.4L29 41l-10.6-7-5.6-4.1-3-2-1.5-2-.6-4.2 2.7-3 3.7.3.9.2 3.7 2.9 8 6.1L37 36l1.5 1.2.6-.4.1-.3-.7-1.1L33 25l-6-10.4-2.7-4.3-.7-2.6c-.3-1-.4-2-.4-3l3-4.2L28 0l4.2.6L33.8 2l2.6 6 4.1 9.3L47 29.9l2 3.8 1 3.4.3 1h.7v-.5l1.5-7.2 1-8.7 1-11.2.3-3.2 1.6-3.8 3-2L61 2.6l2 2.9-.3 1.8-1.1 7.7L59 27.1l-1.5 8.2h.9l1-1.1 4.1-5.4 6.9-8.6 3-3.5L77 13l2.3-1.8h4.3l3.1 4.7-1.4 4.9-4.4 5.6-3.7 4.7-5.3 7.1-3.2 5.7.3.4h.7l12-2.6 6.4-1.1 7.6-1.3 3.5 1.6.4 1.6-1.4 3.4-8.2 2-9.6 2-14.3 3.3-.2.1.2.3 6.4.6 2.8.2h6.8l12.6 1 3.3 2 1.9 2.7-.3 2-5.1 2.6-6.8-1.6-16-3.8-5.4-1.3h-.8v.4l4.6 4.5 8.3 7.5L89 80.1l1.5 2.4-1.3 2-1.4-.2-9.2-7-3.6-3-8-6.8h-.5v.7l1.8 2.7 9.8 14.7.5 4.5-.7 1.4-2.6 1-2.7-.6-5.8-8-6-9.4-7-8.2-.5.4-2.9 30.2-1.3 1.5-3 1.2-2.5-2-1.4-3 1.4-6.2 1.6-8 1.3-6.4 1.2-7.9.7-2.6v-.2H49L43 72l-9 12.3-7.2 7.6-1.7.7-3-1.5.3-2.8L24 86l10-12.8 6-7.9 4-4.6-.1-.5h-.3L17.2 77.4l-4.7.6-2.2.2-3 1-1 8-5.5Z" />
-                </svg>
-                Claude
-            </h1>
+            <div>
+                <div class="text-[10px] uppercase tracking-[0.28em] text-accent/80">Admin First</div>
+                <h1 class="text-xl font-serif font-medium">Notion2API</h1>
+            </div>
             <button id="closeSidebarBtn"
                 class="md:hidden p-2 text-gray-500 hover:text-black dark:item-gray-400 dark:hover:text-white rounded-md">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -96,45 +91,47 @@
             </button>
         </div>
 
-        <!-- New Chat Button -->
-        <div class="px-3 pb-4">
-            <button id="newChatBtn"
-                class="w-full flex items-center gap-2 p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors text-sm font-medium">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                </svg>
-                New chat
-            </button>
+        <div class="px-4 pb-3">
+            <div class="admin-shell-summary">
+                <div class="admin-shell-summary-kicker">Workspace</div>
+                <div class="admin-shell-summary-title">运维入口</div>
+                <div class="admin-shell-summary-copy">默认先进入后台访问与管理模块。Chat 只有启用后才会出现在左侧。</div>
+            </div>
         </div>
 
-        <!-- Chat History List -->
-        <div class="flex-1 overflow-y-auto no-scrollbar px-3 flex flex-col gap-1 pb-4" id="chatList">
-            <!-- Chat items injected here dynamically -->
-        </div>
+        <nav class="px-3 pb-3 flex flex-col gap-2">
+            <button type="button" id="moduleAccessBtn" class="admin-module-btn" data-module="access" data-settings-scroll-target="settings-section-access">Access</button>
+            <button type="button" id="moduleOverviewBtn" class="admin-module-btn" data-module="overview" data-settings-scroll-target="settings-section-overview">Overview</button>
+            <button type="button" id="moduleUsageBtn" class="admin-module-btn" data-module="usage" data-settings-scroll-target="settings-section-usage">Usage</button>
+            <button type="button" id="moduleAccountsBtn" class="admin-module-btn" data-module="accounts" data-settings-scroll-target="settings-section-accounts">Accounts</button>
+            <button type="button" id="moduleRuntimeBtn" class="admin-module-btn" data-module="runtime" data-settings-scroll-target="settings-section-runtime">Runtime</button>
+            <button type="button" id="moduleDiagnosticsBtn" class="admin-module-btn" data-module="diagnostics" data-settings-scroll-target="settings-section-diagnostics">Diagnostics</button>
+            <button type="button" id="moduleChatBtn" class="admin-module-btn hidden" data-module="chat">Chat</button>
+        </nav>
 
-        <!-- Sidebar Footer Action (Settings only) -->
-        <div class="p-4 border-t border-black/5 dark:border-white/5 flex flex-col gap-3">
-            <button id="settingsBtn"
-                class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white py-1.5 px-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="3"></circle>
-                    <path
-                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
-                    </path>
-                </svg>
-                API Settings
-            </button>
+        <div id="chatSidebarPanel" class="hidden flex-1 min-h-0 px-3 pb-4 border-t border-black/5 dark:border-white/5">
+            <div class="px-1 pt-4 pb-3 text-[11px] uppercase tracking-[0.22em] text-gray-500 dark:text-gray-400">Chat module</div>
+            <div class="pb-4">
+                <button id="newChatBtn"
+                    class="w-full flex items-center justify-center gap-2 p-3 rounded-xl transition-colors text-sm font-medium admin-chat-action-btn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    New chat
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto no-scrollbar flex flex-col gap-1" id="chatList">
+                <!-- Chat items injected here dynamically -->
+            </div>
         </div>
     </aside>
 
-    <!-- MAIN CHAT AREA -->
-    <main class="flex-1 flex flex-col relative w-full">
-        <!-- Main Area Header -->
+    <main class="flex-1 flex flex-col relative w-full min-w-0">
         <header
             class="h-14 flex items-center justify-between px-4 sticky top-0 bg-claudeBg/80 dark:bg-darkBg/80 backdrop-blur-md z-10 topbar-shell">
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-3 min-w-0">
                 <button id="openSidebarBtn"
                     class="md:hidden p-2 -ml-2 text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white rounded-md">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -144,8 +141,8 @@
                     </svg>
                 </button>
                 <div id="headerTitle"
-                    class="font-medium text-[15px] truncate max-w-[200px] sm:max-w-xs md:max-w-md hidden md:block opacity-0 transition-opacity">
-                    New chat</div>
+                    class="font-medium text-[15px] truncate max-w-[200px] sm:max-w-xs md:max-w-md opacity-100 transition-opacity">
+                    Admin workspace</div>
             </div>
 
             <button id="themeToggleBtn"
@@ -163,102 +160,11 @@
             </button>
         </header>
 
-        <!-- Memory Banner -->
-        <div id="memoryBanner" class="hidden px-4 sm:px-6 pt-2 relative z-20">
-            <div class="memory-banner max-w-2xl mx-auto rounded-xl px-4 py-3 text-sm flex items-start gap-3">
-                <span class="memory-banner-icon text-base leading-5">⚠️</span>
-                <div class="flex-1 leading-6">Current context memory is limited. Some history may not be accessible. If the issue persists, please contact the administrator.</div>
-                <button id="memoryBannerClose" type="button" class="memory-banner-close text-lg leading-5">✕</button>
-            </div>
-        </div>
-
-        <!-- Chat Stream Render Area -->
-        <div id="chatContainer"
-            class="flex-1 overflow-y-auto w-full max-w-[52rem] mx-auto px-4 sm:px-6 pb-36 pt-6 flex flex-col gap-6 relative z-10 scroll-smooth">
-            <!-- Messages inserted here dynamically -->
-        </div>
-
-        <!-- Sticky Input Area -->
-        <div id="inputAreaWrapper"
-            class="absolute left-0 right-0 p-4 sm:px-6 z-20 pointer-events-none chat-state-container">
-            <div id="inputGradientMask"
-                class="absolute inset-x-0 -top-10 h-10 bg-gradient-to-t from-claudeBg dark:from-darkBg to-transparent z-[-1]">
-            </div>
-            <div id="inputBgMask" class="absolute inset-0 bg-claudeBg dark:bg-darkBg z-[-1]"></div>
-
-            <div class="max-w-2xl w-full mx-auto pointer-events-none flex flex-col items-center">
-                <!-- Initial Welcome Page -->
-                <div id="welcomeScreen"
-                    class="flex flex-col items-center justify-center pb-8 transition-all duration-300 w-full">
-                    <h2
-                        class="text-center text-claudeText dark:text-darkText w-full leading-tight flex flex-row items-center justify-center gap-4 welcome-title">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="42" height="42"
-                            class="text-accent star-breathe" style="fill: currentColor;">
-                            <path
-                                d="m19.6 66.5 19.7-11 .3-1-.3-.5h-1l-3.3-.2-11.2-.3L14 53l-9.5-.5-2.4-.5L0 49l1.2-1.5 2-1.3 2.9.2 6.3.5 9.5.6 6.9.4L38 49.1h1.6l.2-.7-.5-.4-.4-.4L29 41l-10.6-7-5.6-4.1-3-2-1.5-2-.6-4.2 2.7-3 3.7.3.9.2 3.7 2.9 8 6.1L37 36l1.5 1.2.6-.4.1-.3-.7-1.1L33 25l-6-10.4-2.7-4.3-.7-2.6c-.3-1-.4-2-.4-3l3-4.2L28 0l4.2.6L33.8 2l2.6 6 4.1 9.3L47 29.9l2 3.8 1 3.4.3 1h.7v-.5l1.5-7.2 1-8.7 1-11.2.3-3.2 1.6-3.8 3-2L61 2.6l2 2.9-.3 1.8-1.1 7.7L59 27.1l-1.5 8.2h.9l1-1.1 4.1-5.4 6.9-8.6 3-3.5L77 13l2.3-1.8h4.3l3.1 4.7-1.4 4.9-4.4 5.6-3.7 4.7-5.3 7.1-3.2 5.7.3.4h.7l12-2.6 6.4-1.1 7.6-1.3 3.5 1.6.4 1.6-1.4 3.4-8.2 2-9.6 2-14.3 3.3-.2.1.2.3 6.4.6 2.8.2h6.8l12.6 1 3.3 2 1.9 2.7-.3 2-5.1 2.6-6.8-1.6-16-3.8-5.4-1.3h-.8v.4l4.6 4.5 8.3 7.5L89 80.1l1.5 2.4-1.3 2-1.4-.2-9.2-7-3.6-3-8-6.8h-.5v.7l1.8 2.7 9.8 14.7.5 4.5-.7 1.4-2.6 1-2.7-.6-5.8-8-6-9.4-7-8.2-.5.4-2.9 30.2-1.3 1.5-3 1.2-2.5-2-1.4-3 1.4-6.2 1.6-8 1.3-6.4 1.2-7.9.7-2.6v-.2H49L43 72l-9 12.3-7.2 7.6-1.7.7-3-1.5.3-2.8L24 86l10-12.8 6-7.9 4-4.6-.1-.5h-.3L17.2 77.4l-4.7.6-2.2.2-3 1-1 8-5.5Z" />
-                        </svg>
-                        <span id="welcomeGreeting">Golden hour thinking</span>
-                    </h2>
-                </div>
-
-                <div
-                    class="relative bg-white dark:bg-darkInput w-full shadow-[0_0_15px_rgba(0,0,0,0.05)] dark:shadow-none rounded-2xl chat-input-wrapper flex flex-col pointer-events-auto">
-                    <div class="relative w-full">
-                        <input id="imageUploadInput" type="file" accept="image/*" multiple class="hidden">
-                        <textarea id="chatInput" rows="1" placeholder="Reply..."
-                            class="w-full bg-transparent resize-none outline-none max-h-40 min-h-[56px] py-4 pl-4 pr-[50px] text-[15px] placeholder:text-gray-400 dark:placeholder:text-gray-500 overflow-y-auto disabled:opacity-50"
-                            style="height: 56px;"></textarea>
-
-                        <button id="sendBtn" title="Send (Enter)"
-                            class="absolute right-3 bottom-[14px] bg-accent/10 text-accent hover:bg-accent hover:text-white p-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:hover:bg-accent/10 disabled:hover:text-accent disabled:cursor-not-allowed">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <line x1="22" y1="2" x2="11" y2="13"></line>
-                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                            </svg>
-                        </button>
-                    </div>
-
-                    <div class="flex justify-between items-center px-3 pb-3">
-                        <div class="flex items-center gap-2 flex-wrap">
-                            <button id="imageUploadBtn" type="button"
-                                class="flex items-center gap-1.5 text-[13px] border border-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/75 bg-black/5 text-black/75 px-2.5 py-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-colors">
-                                <span>+</span>
-                                <span>Image</span>
-                            </button>
-                            <div id="attachmentPreviewList" class="flex items-center gap-2 flex-wrap"></div>
-                        </div>
-                        <div class="relative model-selector-container dropdown-down">
-                            <button id="modelTriggerBtn" type="button"
-                                class="flex items-center gap-1.5 text-[13px] border border-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/75 bg-black/5 text-black/75 px-2.5 py-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-colors">
-                                <span id="modelTriggerText">Sonnet 4.6</span>
-                                <span class="text-[10px] mt-0.5">∨</span>
-                            </button>
-
-                            <div id="customModelDropdown"
-                                class="model-dropdown absolute right-0 min-w-max w-[auto] bg-white dark:bg-[#2a2825] border border-black/10 dark:border-white/10 rounded-xl p-1.5 z-50 overflow-hidden flex flex-col shadow-lg">
-                                <div id="simpleModelList" class="flex flex-col w-full gap-0.5">
-                                    <!-- Dynamic options injected here -->
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="text-center mt-3 text-xs text-gray-400 dark:text-gray-500 tracking-[0.08em] uppercase">
-                    Shift + Enter for new line. Powered by local Notion API.
-                </div>
-                <div id="attachmentHint" class="text-center mt-2 text-[11px] text-gray-400 dark:text-gray-500 min-h-[16px]"></div>
-            </div>
-        </div>
-    </main>
-
-    <!-- SETTINGS MODAL -->
-    <div id="settingsModal"
-        class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-200">
-        <div class="bg-white dark:bg-[#2a2a2a] w-full max-w-7xl max-h-[92vh] rounded-xl shadow-2xl overflow-y-auto transform scale-95 transition-transform duration-200"
-            id="settingsModalContent">
-            <div class="p-6">
+        <section id="adminWorkspaceView" class="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-6">
+            <div id="settingsModal" class="w-full max-w-7xl mx-auto">
+                <div class="bg-white/88 dark:bg-[#2a2a2a]/92 rounded-3xl shadow-2xl border border-black/5 dark:border-white/10 overflow-hidden"
+                    id="settingsModalContent">
+                    <div class="p-6">
                 <div class="settings-console-header">
                     <div>
                         <h3 class="text-xl font-serif font-medium">运维控制台</h3>
@@ -385,6 +291,7 @@
                                     class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
                                 <input id="runtimeServerApiKeyInput" type="text" placeholder="服务端 API Key（敏感）"
                                     class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                <label class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 sm:col-span-2"><input id="runtimeChatEnabledInput" type="checkbox">启用 Chat 模块（开启后左侧大按钮才显示聊天）</label>
                                 <select id="runtimeProxyModeInput"
                                     class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
                                     <option value="direct">代理模式：直连</option>
@@ -590,7 +497,7 @@
                         <button id="adminBulkCreateWorkspaceBtn" type="button" class="admin-action-btn">批量创建工作区</button>
                         <button id="adminBulkWorkspaceProbeBtn" type="button" class="admin-action-btn">批量探测工作区</button>
                     </div>
-                    <div id="adminPanelNotice" class="text-xs text-gray-500 dark:text-gray-400">请先使用默认后台账号登录，并在首次登录后立即设置新密码。admin session 只保留在当前浏览器会话中。</div>
+                    <div id="adminPanelNotice" class="text-xs text-gray-500 dark:text-gray-400">请先使用当前后台账号登录。admin session 只保留在当前浏览器会话中，如需更换后台用户名或密码，可在上方直接更新。</div>
                     <div id="adminBulkResultPanel" class="text-xs text-gray-500 dark:text-gray-400 space-y-1"></div>
                     <div id="adminOperationHistory" class="text-xs text-gray-500 dark:text-gray-400 space-y-1"></div>
                     <div class="grid grid-cols-1 sm:grid-cols-5 gap-2 text-xs">
@@ -794,14 +701,104 @@
                     <p class="text-xs text-gray-500 dark:text-gray-400">底部保存只应用 Base URL、API Key 和运行时配置。admin session 访问请在上方单独管理。</p>
                     <div class="flex justify-end gap-3">
                         <button id="cancelSettingsBtn"
-                            class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">取消</button>
+                            class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">重置视图</button>
                         <button id="saveSettingsBtn"
                             class="px-4 py-2 rounded-lg text-sm font-medium bg-black text-white dark:bg-white dark:text-black hover:opacity-90 transition-opacity">保存更改</button>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
+        </section>
+
+        <section id="chatWorkspaceView" class="hidden flex-1 min-h-0">
+            <div class="flex-1 flex flex-col relative w-full">
+                <div id="memoryBanner" class="hidden px-4 sm:px-6 pt-2 relative z-20">
+                    <div class="memory-banner max-w-2xl mx-auto rounded-xl px-4 py-3 text-sm flex items-start gap-3">
+                        <span class="memory-banner-icon text-base leading-5">⚠️</span>
+                        <div class="flex-1 leading-6">Current context memory is limited. Some history may not be accessible. If the issue persists, please contact the administrator.</div>
+                        <button id="memoryBannerClose" type="button" class="memory-banner-close text-lg leading-5">✕</button>
+                    </div>
+                </div>
+
+                <div id="chatContainer"
+                    class="flex-1 overflow-y-auto w-full max-w-[52rem] mx-auto px-4 sm:px-6 pb-36 pt-6 flex flex-col gap-6 relative z-10 scroll-smooth">
+                    <!-- Messages inserted here dynamically -->
+                </div>
+
+                <div id="inputAreaWrapper"
+                    class="absolute left-0 right-0 p-4 sm:px-6 z-20 pointer-events-none chat-state-container">
+                    <div id="inputGradientMask"
+                        class="absolute inset-x-0 -top-10 h-10 bg-gradient-to-t from-claudeBg dark:from-darkBg to-transparent z-[-1]">
+                    </div>
+                    <div id="inputBgMask" class="absolute inset-0 bg-claudeBg dark:bg-darkBg z-[-1]"></div>
+
+                    <div class="max-w-2xl w-full mx-auto pointer-events-none flex flex-col items-center">
+                        <div id="welcomeScreen"
+                            class="flex flex-col items-center justify-center pb-8 transition-all duration-300 w-full">
+                            <h2
+                                class="text-center text-claudeText dark:text-darkText w-full leading-tight flex flex-row items-center justify-center gap-4 welcome-title">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="42" height="42"
+                                    class="text-accent star-breathe" style="fill: currentColor;">
+                                    <path
+                                        d="m19.6 66.5 19.7-11 .3-1-.3-.5h-1l-3.3-.2-11.2-.3L14 53l-9.5-.5-2.4-.5L0 49l1.2-1.5 2-1.3 2.9.2 6.3.5 9.5.6 6.9.4L38 49.1h1.6l.2-.7-.5-.4-.4-.4L29 41l-10.6-7-5.6-4.1-3-2-1.5-2-.6-4.2 2.7-3 3.7.3.9.2 3.7 2.9 8 6.1L37 36l1.5 1.2.6-.4.1-.3-.7-1.1L33 25l-6-10.4-2.7-4.3-.7-2.6c-.3-1-.4-2-.4-3l3-4.2L28 0l4.2.6L33.8 2l2.6 6 4.1 9.3L47 29.9l2 3.8 1 3.4.3 1h.7v-.5l1.5-7.2 1-8.7 1-11.2.3-3.2 1.6-3.8 3-2L61 2.6l2 2.9-.3 1.8-1.1 7.7L59 27.1l-1.5 8.2h.9l1-1.1 4.1-5.4 6.9-8.6 3-3.5L77 13l2.3-1.8h4.3l3.1 4.7-1.4 4.9-4.4 5.6-3.7 4.7-5.3 7.1-3.2 5.7.3.4h.7l12-2.6 6.4-1.1 7.6-1.3 3.5 1.6.4 1.6-1.4 3.4-8.2 2-9.6 2-14.3 3.3-.2.1.2.3 6.4.6 2.8.2h6.8l12.6 1 3.3 2 1.9 2.7-.3 2-5.1 2.6-6.8-1.6-16-3.8-5.4-1.3h-.8v.4l4.6 4.5 8.3 7.5L89 80.1l1.5 2.4-1.3 2-1.4-.2-9.2-7-3.6-3-8-6.8h-.5v.7l1.8 2.7 9.8 14.7.5 4.5-.7 1.4-2.6 1-2.7-.6-5.8-8-6-9.4-7-8.2-.5.4-2.9 30.2-1.3 1.5-3 1.2-2.5-2-1.4-3 1.4-6.2 1.6-8 1.3-6.4 1.2-7.9.7-2.6v-.2H49L43 72l-9 12.3-7.2 7.6-1.7.7-3-1.5.3-2.8L24 86l10-12.8 6-7.9 4-4.6-.1-.5h-.3L17.2 77.4l-4.7.6-2.2.2-3 1-1 8-5.5Z" />
+                                </svg>
+                                <span id="welcomeGreeting">Golden hour thinking</span>
+                            </h2>
+                        </div>
+
+                        <div
+                            class="relative bg-white dark:bg-darkInput w-full shadow-[0_0_15px_rgba(0,0,0,0.05)] dark:shadow-none rounded-2xl chat-input-wrapper flex flex-col pointer-events-auto">
+                            <div class="relative w-full">
+                                <input id="imageUploadInput" type="file" accept="image/*" multiple class="hidden">
+                                <textarea id="chatInput" rows="1" placeholder="Reply..."
+                                    class="w-full bg-transparent resize-none outline-none max-h-40 min-h-[56px] py-4 pl-4 pr-[50px] text-[15px] placeholder:text-gray-400 dark:placeholder:text-gray-500 overflow-y-auto disabled:opacity-50"
+                                    style="height: 56px;"></textarea>
+
+                                <button id="sendBtn" title="Send (Enter)"
+                                    class="absolute right-3 bottom-[14px] bg-accent/10 text-accent hover:bg-accent hover:text-white p-1.5 rounded-lg transition-colors disabled:opacity-40 disabled:hover:bg-accent/10 disabled:hover:text-accent disabled:cursor-not-allowed">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <div class="flex justify-between items-center px-3 pb-3">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <button id="imageUploadBtn" type="button"
+                                        class="flex items-center gap-1.5 text-[13px] border border-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/75 bg-black/5 text-black/75 px-2.5 py-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-colors">
+                                        <span>+</span>
+                                        <span>Image</span>
+                                    </button>
+                                    <div id="attachmentPreviewList" class="flex items-center gap-2 flex-wrap"></div>
+                                </div>
+                                <div class="relative model-selector-container dropdown-down">
+                                    <button id="modelTriggerBtn" type="button"
+                                        class="flex items-center gap-1.5 text-[13px] border border-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/75 bg-black/5 text-black/75 px-2.5 py-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-colors">
+                                        <span id="modelTriggerText">Sonnet 4.6</span>
+                                        <span class="text-[10px] mt-0.5">∨</span>
+                                    </button>
+
+                                    <div id="customModelDropdown"
+                                        class="model-dropdown absolute right-0 min-w-max w-[auto] bg-white dark:bg-[#2a2825] border border-black/10 dark:border-white/10 rounded-xl p-1.5 z-50 overflow-hidden flex flex-col shadow-lg">
+                                        <div id="simpleModelList" class="flex flex-col w-full gap-0.5">
+                                            <!-- Dynamic options injected here -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-center mt-3 text-xs text-gray-400 dark:text-gray-500 tracking-[0.08em] uppercase">
+                            Shift + Enter for new line. Powered by local Notion API.
+                        </div>
+                        <div id="attachmentHint" class="text-center mt-2 text-[11px] text-gray-400 dark:text-gray-500 min-h-[16px]"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
 
     <!-- RENAME MODAL -->
     <div id="renameModal"

@@ -581,7 +581,7 @@ window.NotionAI.API.Settings = {
         }
     },
 
-    open() {
+    open(moduleName = 'access') {
         const baseUrl = window.NotionAI.Core.State.get('baseUrl');
         const apiKey = window.NotionAI.Core.State.get('apiKey');
         const adminUsername = window.NotionAI.Core.State.get('adminUsername') || 'admin';
@@ -599,27 +599,15 @@ window.NotionAI.API.Settings = {
         this.loadRuntimeConfigIntoForm();
         this.consumeOAuthCallbackParams();
         this.autoFinalizeOAuthIfPossible();
-
-        const modal = document.getElementById('settingsModal');
-        const content = document.getElementById('settingsModalContent');
-
-        modal.classList.remove('pointer-events-none');
-        modal.classList.add('opacity-100');
-        content.classList.remove('scale-95');
-        content.classList.add('scale-100');
+        if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
+            window.NotionAI.Core.App.setActiveModule(moduleName || 'access');
+        }
     },
 
     close() {
-        const modal = document.getElementById('settingsModal');
-        const content = document.getElementById('settingsModalContent');
-
-        modal.classList.remove('opacity-100');
-        content.classList.remove('scale-100');
-        content.classList.add('scale-95');
-
-        setTimeout(() => {
-            modal.classList.add('pointer-events-none');
-        }, 200);
+        if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
+            window.NotionAI.Core.App.setActiveModule(window.NotionAI.Core.App.getDefaultModule());
+        }
     },
 
     async updateAdminCredentialsOnly() {
@@ -1666,6 +1654,7 @@ window.NotionAI.API.Settings = {
             runtimeAutoRegisterIdleOnlyInput: settings.auto_register_idle_only !== false,
             runtimeAutoRegisterHeadlessInput: Boolean(settings.auto_register_headless),
             runtimeAutoRegisterUseApiInput: settings.auto_register_use_api !== false,
+            runtimeChatEnabledInput: Boolean(settings.chat_enabled),
         };
 
         Object.entries(checkboxMappings).forEach(([id, checked]) => {
@@ -2077,6 +2066,10 @@ window.NotionAI.API.Settings = {
             this.renderAdminAccessStatus(data.admin_auth || {});
             this.renderAdminSessionSummary(data.admin_auth || {});
             this.applyAdminConsoleAccessState(data.admin_auth || {});
+            window.NotionAI.Core.State.set('chatEnabled', Boolean((data.settings || {}).chat_enabled));
+            if (typeof window.NotionAI.Core.App?.syncShellFromState === 'function') {
+                window.NotionAI.Core.App.syncShellFromState();
+            }
             this.renderRuntimeProxyHealth(data.proxy_health || {});
             this.renderRegisterAutomationSummary(data.register_automation || {});
             this.renderRegisterAutomationGuidance(data.register_automation_guidance || {});
@@ -2134,6 +2127,7 @@ window.NotionAI.API.Settings = {
             workspace_execution_mode: document.getElementById('runtimeWorkspaceExecutionModeInput').value || 'manual',
             workspace_request_url: document.getElementById('runtimeWorkspaceRequestUrlInput').value.trim(),
             allow_real_probe_requests: document.getElementById('runtimeAllowRealProbeRequestsInput').checked,
+            chat_enabled: document.getElementById('runtimeChatEnabledInput').checked,
         };
 
         try {
@@ -2151,6 +2145,10 @@ window.NotionAI.API.Settings = {
             this.renderRegisterAutomationSummary({});
             this.renderRuntimeProxyChecks({});
             this.renderRuntimeOperationsPanel({});
+            window.NotionAI.Core.State.set('chatEnabled', Boolean(payload.chat_enabled));
+            if (typeof window.NotionAI.Core.App?.syncShellFromState === 'function') {
+                window.NotionAI.Core.App.syncShellFromState();
+            }
             const hint = document.getElementById('runtimeConfigHint');
             if (hint) {
                 hint.textContent = `运行时配置已保存。后台探测间隔：${payload.account_probe_interval_seconds} 秒。自动创建工作区：${payload.auto_create_workspace ? '开启' : '关闭'}。`;
@@ -2449,6 +2447,10 @@ window.NotionAI.API.Settings = {
             }
             button.dataset.bound = 'true';
             button.addEventListener('click', () => {
+                const moduleName = button.dataset.module || '';
+                if (moduleName && typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
+                    window.NotionAI.Core.App.setActiveModule(moduleName);
+                }
                 const targetId = button.dataset.settingsScrollTarget || '';
                 const target = targetId ? document.getElementById(targetId) : null;
                 if (!target) {

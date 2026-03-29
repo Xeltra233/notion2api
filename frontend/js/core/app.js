@@ -10,41 +10,95 @@ window.NotionAI = window.NotionAI || {};
 const STATE = window.NotionAI.Core.State.getState();
 let memoryDegradedNotified = false;
 
+window.NotionAI.Core.App = window.NotionAI.Core.App || {
+    getDefaultModule() {
+        return window.NotionAI.Core.State.get('adminSessionToken') ? 'overview' : 'access';
+    },
+
+    getModuleTitle(moduleName) {
+        const titles = {
+            access: 'Admin access',
+            overview: 'Overview',
+            usage: 'Usage',
+            accounts: 'Accounts',
+            runtime: 'Runtime',
+            diagnostics: 'Diagnostics',
+            chat: 'Chat'
+        };
+        return titles[moduleName] || 'Admin workspace';
+    },
+
+    setActiveModule(moduleName) {
+        const normalized = String(moduleName || '').trim();
+        const requested = normalized || this.getDefaultModule();
+        const chatEnabled = Boolean(window.NotionAI.Core.State.get('chatEnabled'));
+        const nextModule = requested === 'chat' && !chatEnabled ? this.getDefaultModule() : requested;
+        window.NotionAI.Core.State.persistActiveModule(nextModule);
+        this.syncShellFromState();
+    },
+
+    syncShellFromState() {
+        const activeModule = window.NotionAI.Core.State.get('activeModule') || this.getDefaultModule();
+        const chatEnabled = Boolean(window.NotionAI.Core.State.get('chatEnabled'));
+        const resolvedModule = activeModule === 'chat' && !chatEnabled ? this.getDefaultModule() : activeModule;
+        if (resolvedModule !== activeModule) {
+            window.NotionAI.Core.State.persistActiveModule(resolvedModule);
+        }
+
+        const adminView = document.getElementById('adminWorkspaceView');
+        const chatView = document.getElementById('chatWorkspaceView');
+        const chatBtn = document.getElementById('moduleChatBtn');
+        const chatSidebarPanel = document.getElementById('chatSidebarPanel');
+        const headerTitle = document.getElementById('headerTitle');
+
+        if (chatBtn) {
+            chatBtn.classList.toggle('hidden', !chatEnabled);
+        }
+        if (chatSidebarPanel) {
+            chatSidebarPanel.classList.toggle('hidden', resolvedModule !== 'chat');
+        }
+        if (adminView) {
+            adminView.classList.toggle('hidden', resolvedModule === 'chat');
+        }
+        if (chatView) {
+            chatView.classList.toggle('hidden', resolvedModule !== 'chat');
+        }
+        if (headerTitle) {
+            headerTitle.textContent = this.getModuleTitle(resolvedModule);
+            headerTitle.classList.remove('opacity-0');
+        }
+
+        document.querySelectorAll('[data-module]').forEach((button) => {
+            button.dataset.active = button.dataset.module === resolvedModule ? 'true' : 'false';
+        });
+    }
+};
+
 /**
  * Main application initialization
  */
 function init() {
-    // Initialize storage
     window.NotionAI.Chat.Storage.loadChats();
     window.NotionAI.Chat.Storage.saveChats();
-
-    // Initialize theme
     window.NotionAI.UI.Theme.init();
-
-    // Load models
     window.NotionAI.API.Models.loadModels();
-    if (window.NotionAI.Core.State.get('adminSessionToken')) {
-        window.NotionAI.API.Settings.refreshAdminPanel('当前浏览器会话的 admin session 已恢复。');
-    }
     window.NotionAI.API.Settings.consumeOAuthCallbackParams();
     window.NotionAI.API.Settings.autoFinalizeOAuthIfPossible();
     window.NotionAI.API.Settings.bindActionHistoryFilters();
     window.NotionAI.API.Settings.bindUsageFilters();
     window.NotionAI.API.Settings.bindConsoleNavigation();
 
-    // Render initial UI
     window.NotionAI.Chat.Manager.renderChatList();
     updateWelcomeGreeting();
 
-    // Bind event listeners
     bindEventListeners();
-
-    // Initialize model dropdown
     populateModels();
 
-    // Start new chat if none selected
-    if (!STATE.currentChatId) {
-        window.NotionAI.Chat.Manager.startNewChat();
+    const initialModule = window.NotionAI.Core.State.get('activeModule') || window.NotionAI.Core.App.getDefaultModule();
+    window.NotionAI.Core.App.setActiveModule(initialModule);
+    window.NotionAI.API.Settings.loadRuntimeConfigIntoForm();
+    if (window.NotionAI.Core.State.get('adminSessionToken')) {
+        window.NotionAI.API.Settings.refreshAdminPanel('当前浏览器会话的 admin session 已恢复。');
     }
 }
 
@@ -57,8 +111,26 @@ function bindEventListeners() {
         window.NotionAI.UI.Theme.toggle();
     });
 
+    // Module navigation
+    document.querySelectorAll('[data-module]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const moduleName = button.dataset.module || '';
+            if (!moduleName) {
+                return;
+            }
+            window.NotionAI.Core.App.setActiveModule(moduleName);
+            if (moduleName === 'chat' && !STATE.currentChatId) {
+                window.NotionAI.Chat.Manager.startNewChat();
+            }
+            if (window.innerWidth < 768) {
+                window.NotionAI.UI.Sidebar.close();
+            }
+        });
+    });
+
     // New chat
     document.getElementById('newChatBtn').addEventListener('click', () => {
+        window.NotionAI.Core.App.setActiveModule('chat');
         window.NotionAI.Chat.Manager.startNewChat();
     });
 
@@ -126,11 +198,8 @@ function bindEventListeners() {
     });
 
     // Settings
-    document.getElementById('settingsBtn').addEventListener('click', () => {
-        window.NotionAI.API.Settings.open();
-    });
     document.getElementById('cancelSettingsBtn').addEventListener('click', () => {
-        window.NotionAI.API.Settings.close();
+        window.NotionAI.Core.App.setActiveModule(window.NotionAI.Core.App.getDefaultModule());
     });
     document.getElementById('saveSettingsBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.save();

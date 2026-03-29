@@ -833,6 +833,7 @@ class RuntimeSettingsRequest(BaseModel):
     workspace_execution_mode: str = Field(default="manual")
     workspace_request_url: str = Field(default="")
     allow_real_probe_requests: bool = False
+    chat_enabled: bool = False
     auto_register_enabled: bool = False
     auto_register_idle_only: bool = True
     auto_register_interval_seconds: int = 1800
@@ -1221,6 +1222,7 @@ async def admin_report(
             ),
             "workspace_request_url": config.get("workspace_request_url", ""),
             "allow_real_probe_requests": config.get("allow_real_probe_requests", False),
+            "chat_enabled": config.get("chat_enabled", False),
         }
     )
     return {
@@ -2945,6 +2947,7 @@ async def get_admin_config(
             "workspace_execution_mode": config.get("workspace_execution_mode", "manual"),
             "workspace_request_url": config.get("workspace_request_url", ""),
             "allow_real_probe_requests": config.get("allow_real_probe_requests", False),
+            "chat_enabled": config.get("chat_enabled", False),
         }
     )
     return {
@@ -3080,6 +3083,7 @@ async def update_runtime_settings(
         "workspace_execution_mode": payload.workspace_execution_mode,
         "workspace_request_url": workspace_request_url,
         "allow_real_probe_requests": payload.allow_real_probe_requests,
+        "chat_enabled": payload.chat_enabled,
     }
     if payload.api_key is not None:
         updates["api_key"] = payload.api_key

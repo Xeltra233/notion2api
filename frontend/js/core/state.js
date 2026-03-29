@@ -17,6 +17,8 @@ window.NotionAI.Core.State = {
         adminSessionToken: sessionStorage.getItem('claude_admin_session') || '',
         adminSessionExpiresAt: Number(sessionStorage.getItem('claude_admin_session_expires_at') || 0),
         adminMustChangePassword: false,
+        activeModule: sessionStorage.getItem('claude_active_module') || '',
+        chatEnabled: false,
         theme: localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
         chats: JSON.parse(localStorage.getItem('claude_chats')) || [],
         currentChatId: null,
@@ -84,6 +86,16 @@ window.NotionAI.Core.State = {
         this._state.adminSessionToken = '';
         this._state.adminSessionExpiresAt = 0;
         this._state.adminMustChangePassword = false;
+    },
+
+    persistActiveModule(moduleName) {
+        const normalized = String(moduleName || '').trim();
+        if (normalized) {
+            sessionStorage.setItem('claude_active_module', normalized);
+        } else {
+            sessionStorage.removeItem('claude_active_module');
+        }
+        this._state.activeModule = normalized;
     },
 
     /**

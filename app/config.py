@@ -249,6 +249,7 @@ def _default_config() -> dict[str, Any]:
         "workspace_execution_mode": "manual",
         "workspace_request_url": "",
         "allow_real_probe_requests": False,
+        "chat_enabled": False,
         "auto_register_enabled": False,
         "auto_register_idle_only": True,
         "auto_register_interval_seconds": 1800,

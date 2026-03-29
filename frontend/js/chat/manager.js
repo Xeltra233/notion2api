@@ -14,6 +14,10 @@ window.NotionAI.Chat.Manager = {
     startNewChat() {
         if (window.NotionAI.Core.State.get('isGenerating')) return;
 
+        if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
+            window.NotionAI.Core.App.setActiveModule('chat');
+        }
+
         const currentChatId = Date.now().toString();
         window.NotionAI.Core.State.set('currentChatId', currentChatId);
 
@@ -60,6 +64,10 @@ window.NotionAI.Chat.Manager = {
         const chats = window.NotionAI.Core.State.get('chats');
         const chat = chats.find(c => c.id === chatId);
         if (!chat) return;
+
+        if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
+            window.NotionAI.Core.App.setActiveModule('chat');
+        }
 
         window.NotionAI.Core.State.set('currentChatId', chatId);
 
