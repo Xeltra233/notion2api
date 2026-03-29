@@ -24,9 +24,10 @@ window.NotionAI.Utils.Validation = {
                             if (!msg || typeof msg !== 'object') return null;
                             if (msg.role !== 'user' && msg.role !== 'assistant') return null;
 
-                            const content = typeof msg.content === 'string' ? msg.content : '';
+                            const content = typeof msg.content === 'string' || Array.isArray(msg.content) ? msg.content : '';
                             if (msg.role === 'user') {
-                                if (!content.trim()) return null;
+                                if (typeof content === 'string' && !content.trim()) return null;
+                                if (Array.isArray(content) && !content.length) return null;
                                 return { role: 'user', content };
                             }
 

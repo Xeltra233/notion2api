@@ -61,14 +61,23 @@
     <link rel="stylesheet" href="css/markdown.css">
 </head>
 
-<body class="bg-claudeBg text-claudeText dark:bg-darkBg dark:text-darkText h-screen flex overflow-hidden font-sans">
+<body class="bg-claudeBg text-claudeText dark:bg-darkBg dark:text-darkText h-screen flex overflow-hidden font-sans notion-shell">
+
+    <div class="app-ambient app-ambient-one"></div>
+    <div class="app-ambient app-ambient-two"></div>
+    <div class="app-grid"></div>
 
     <!-- Backdrop for mobile sidebar -->
     <div id="mobileBackdrop" class="fixed inset-0 bg-black/50 z-20 hidden md:hidden transition-opacity"></div>
 
+    <div id="imagePreviewModal" class="fixed inset-0 bg-black/75 z-[70] hidden items-center justify-center p-4">
+        <button id="imagePreviewClose" type="button" class="absolute top-4 right-4 text-white/80 hover:text-white text-3xl leading-none">&times;</button>
+        <img id="imagePreviewContent" alt="Preview" class="max-w-full max-h-full rounded-2xl shadow-2xl border border-white/10">
+    </div>
+
     <!-- LEFT SIDEBAR -->
     <aside id="sidebar"
-        class="bg-claudeSidebar dark:bg-darkSidebar w-[260px] h-full flex flex-col border-r border-black/5 dark:border-white/5 absolute md:relative z-30 transition-transform duration-300 -translate-x-full md:translate-x-0">
+        class="bg-claudeSidebar dark:bg-darkSidebar w-[260px] h-full flex flex-col border-r border-black/5 dark:border-white/5 absolute md:relative z-30 transition-transform duration-300 -translate-x-full md:translate-x-0 sidebar-shell">
         <!-- Sidebar Header / Mobile Close -->
         <div class="p-4 flex items-center justify-between mt-2">
             <h1 class="text-xl font-serif font-medium flex items-center gap-2">
@@ -124,7 +133,7 @@
     <main class="flex-1 flex flex-col relative w-full">
         <!-- Main Area Header -->
         <header
-            class="h-14 flex items-center justify-between px-4 sticky top-0 bg-claudeBg/80 dark:bg-darkBg/80 backdrop-blur-md z-10">
+            class="h-14 flex items-center justify-between px-4 sticky top-0 bg-claudeBg/80 dark:bg-darkBg/80 backdrop-blur-md z-10 topbar-shell">
             <div class="flex items-center gap-3">
                 <button id="openSidebarBtn"
                     class="md:hidden p-2 -ml-2 text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white rounded-md">
@@ -165,7 +174,7 @@
 
         <!-- Chat Stream Render Area -->
         <div id="chatContainer"
-            class="flex-1 overflow-y-auto w-full max-w-2xl mx-auto px-4 sm:px-6 pb-36 pt-4 flex flex-col gap-6 relative z-10 scroll-smooth">
+            class="flex-1 overflow-y-auto w-full max-w-[52rem] mx-auto px-4 sm:px-6 pb-36 pt-6 flex flex-col gap-6 relative z-10 scroll-smooth">
             <!-- Messages inserted here dynamically -->
         </div>
 
@@ -195,6 +204,7 @@
                 <div
                     class="relative bg-white dark:bg-darkInput w-full shadow-[0_0_15px_rgba(0,0,0,0.05)] dark:shadow-none rounded-2xl chat-input-wrapper flex flex-col pointer-events-auto">
                     <div class="relative w-full">
+                        <input id="imageUploadInput" type="file" accept="image/*" multiple class="hidden">
                         <textarea id="chatInput" rows="1" placeholder="Reply..."
                             class="w-full bg-transparent resize-none outline-none max-h-40 min-h-[56px] py-4 pl-4 pr-[50px] text-[15px] placeholder:text-gray-400 dark:placeholder:text-gray-500 overflow-y-auto disabled:opacity-50"
                             style="height: 56px;"></textarea>
@@ -210,7 +220,14 @@
                     </div>
 
                     <div class="flex justify-between items-center px-3 pb-3">
-                        <div></div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <button id="imageUploadBtn" type="button"
+                                class="flex items-center gap-1.5 text-[13px] border border-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/75 bg-black/5 text-black/75 px-2.5 py-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-colors">
+                                <span>+</span>
+                                <span>Image</span>
+                            </button>
+                            <div id="attachmentPreviewList" class="flex items-center gap-2 flex-wrap"></div>
+                        </div>
                         <div class="relative model-selector-container dropdown-down">
                             <button id="modelTriggerBtn" type="button"
                                 class="flex items-center gap-1.5 text-[13px] border border-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/75 bg-black/5 text-black/75 px-2.5 py-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition-colors">
@@ -228,9 +245,10 @@
                     </div>
                 </div>
 
-                <div class="text-center mt-2 text-xs text-gray-400 dark:text-gray-500">
+                <div class="text-center mt-3 text-xs text-gray-400 dark:text-gray-500 tracking-[0.08em] uppercase">
                     Shift + Enter for new line. Powered by local Notion API.
                 </div>
+                <div id="attachmentHint" class="text-center mt-2 text-[11px] text-gray-400 dark:text-gray-500 min-h-[16px]"></div>
             </div>
         </div>
     </main>
@@ -238,33 +256,521 @@
     <!-- SETTINGS MODAL -->
     <div id="settingsModal"
         class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-200">
-        <div class="bg-white dark:bg-[#2a2a2a] w-full max-w-md rounded-xl shadow-2xl overflow-hidden transform scale-95 transition-transform duration-200"
+        <div class="bg-white dark:bg-[#2a2a2a] w-full max-w-7xl max-h-[92vh] rounded-xl shadow-2xl overflow-y-auto transform scale-95 transition-transform duration-200"
             id="settingsModalContent">
             <div class="p-6">
-                <h3 class="text-xl font-serif font-medium mb-4">API Settings</h3>
-
-                <div class="space-y-4">
+                <div class="settings-console-header">
                     <div>
-                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Base URL</label>
-                        <input type="text" id="baseUrlInput"
-                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent/50 outline-none transition-shadow"
-                            placeholder="http://localhost:8000">
+                        <h3 class="text-xl font-serif font-medium">运维控制台</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">在一个后台工作区里统一管理访问、运行时、用量、账号和诊断。</p>
                     </div>
-
-                    <div>
-                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">API Key</label>
-                        <input type="password" id="apiKeyInput"
-                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent/50 outline-none transition-shadow"
-                            placeholder="Optional if not set on server">
+                    <div class="settings-console-nav">
+                        <button type="button" class="settings-console-nav-btn" data-settings-scroll-target="settings-section-access">访问</button>
+                        <button type="button" class="settings-console-nav-btn" data-settings-scroll-target="settings-section-runtime">运行时</button>
+                        <button type="button" class="settings-console-nav-btn" data-settings-scroll-target="settings-section-overview">总览</button>
+                        <button type="button" class="settings-console-nav-btn" data-settings-scroll-target="settings-section-usage">用量</button>
+                        <button type="button" class="settings-console-nav-btn" data-settings-scroll-target="settings-section-accounts">账号</button>
+                        <button type="button" class="settings-console-nav-btn" data-settings-scroll-target="settings-section-diagnostics">诊断</button>
                     </div>
                 </div>
 
-                <div class="mt-8 flex justify-end gap-3">
-                    <button id="cancelSettingsBtn"
-                        class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">Cancel</button>
-                    <button id="saveSettingsBtn"
-                        class="px-4 py-2 rounded-lg text-sm font-medium bg-black text-white dark:bg-white dark:text-black hover:opacity-90 transition-opacity">Save
-                        changes</button>
+                <div class="space-y-4">
+                    <div id="settings-section-access" class="settings-console-panel">
+                        <div class="settings-console-panel-heading">
+                            <div>
+                                <div class="settings-console-kicker">访问</div>
+                                <h4 class="text-sm font-medium">连接与后台访问</h4>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">配置 API 地址访问并初始化 admin session。</p>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">服务地址</label>
+                            <input type="text" id="baseUrlInput"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent/50 outline-none transition-shadow"
+                                placeholder="http://localhost:8000">
+                        </div>
+                        <div class="mt-4">
+                            <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">API 密钥</label>
+                            <input type="password" id="apiKeyInput"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent/50 outline-none transition-shadow"
+                                placeholder="如果服务端未设置，可在这里填写">
+                        </div>
+                        <div class="pt-4 mt-4 border-t border-black/10 dark:border-white/10 space-y-3">
+                            <div id="adminAccessStatusBanner" class="admin-access-banner" data-state="signed_out">
+                                <div class="admin-access-banner-copy">
+                                    <div class="admin-access-banner-label">访问</div>
+                                    <strong id="adminAccessStatusTitle">需要登录</strong>
+                                    <p id="adminAccessStatusDetail">请使用当前后台用户名和密码，在本浏览器会话中建立 admin session 并打开运维控制台。</p>
+                                </div>
+                                <div class="admin-access-banner-actions">
+                                    <button id="adminSignOutBtn" type="button" class="admin-action-btn admin-action-btn-secondary">退出 admin session</button>
+                                </div>
+                            </div>
+                            <div id="adminAccessStatusMeta" class="admin-access-meta"></div>
+                            <div id="adminAuthSourceSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                            <div id="adminAccessSessionSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                                <div class="admin-access-card">
+                                    <div>
+                                        <div class="settings-console-kicker">访问 / 登录</div>
+                                        <h5 class="text-sm font-medium">登录 admin session</h5>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">使用当前后台账号解锁本浏览器会话中的运维控制台和 admin session。</p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">后台用户名</label>
+                                        <input type="text" id="adminUsernameInput"
+                                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent/50 outline-none transition-shadow"
+                                            placeholder="默认后台账号">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">后台密码</label>
+                                        <input type="password" id="adminPasswordInput"
+                                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent/50 outline-none transition-shadow"
+                                            placeholder="默认密码或当前后台密码">
+                                    </div>
+                                </div>
+                                <div class="admin-access-card">
+                                    <div>
+                                        <div class="settings-console-kicker">访问 / 轮换</div>
+                                        <h5 class="text-sm font-medium">轮换后台凭证</h5>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">修改后台用户名、密码，或同时修改两者。若仍在使用默认凭证，必须先设置新密码。</p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">新后台用户名</label>
+                                        <input type="text" id="adminNewUsernameInput"
+                                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent/50 outline-none transition-shadow"
+                                            placeholder="可选，留空则保持当前用户名">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">新后台密码</label>
+                                        <input type="password" id="adminNewPasswordInput"
+                                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent/50 outline-none transition-shadow"
+                                            placeholder="首次登录后可选，但若仍为默认凭证则必须填写">
+                                    </div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <button id="adminUpdateCredentialsBtn" type="button" class="admin-action-btn admin-action-btn-primary">更新后台凭证</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="settings-section-runtime" class="settings-console-panel space-y-3">
+                        <div id="runtimeSectionStatus" class="admin-section-status" data-state="signed_out"><span class="admin-section-status-dot"></span><strong>已锁定</strong><span>登录后台后解锁运行时控制。</span></div>
+                        <div>
+                            <div class="settings-console-kicker">运行时</div>
+                            <h4 class="text-sm font-medium">运行时配置</h4>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">无需环境变量，直接编辑当前服务的运行时设置。</p>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <select id="runtimeAppModeInput"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                <option value="lite">轻量模式</option>
+                                <option value="standard">标准模式</option>
+                                <option value="heavy">重度模式</option>
+                            </select>
+                            <input id="runtimeProbeIntervalInput" type="number" min="30" step="30" placeholder="探测间隔秒数"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="runtimeAllowedOriginsInput" type="text" placeholder="允许的来源，多个用逗号分隔"
+                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="runtimeServerApiKeyInput" type="text" placeholder="服务端 API Key"
+                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="runtimeSiliconflowApiKeyInput" type="text" placeholder="SiliconFlow 密钥"
+                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="runtimeProxyInput" type="text" placeholder="上游代理地址"
+                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <select id="runtimeProxyModeInput"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                <option value="direct">代理模式：直连</option>
+                                <option value="http">代理模式：HTTP</option>
+                                <option value="https">代理模式：HTTPS</option>
+                                <option value="socks5">代理模式：SOCKS5</option>
+                                <option value="warp">代理模式：Warp</option>
+                                <option value="mixed">代理模式：混合</option>
+                            </select>
+                            <input id="runtimeHttpProxyInput" type="text" placeholder="上游 HTTP 代理"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="runtimeHttpsProxyInput" type="text" placeholder="上游 HTTPS 代理"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="runtimeSocks5ProxyInput" type="text" placeholder="上游 SOCKS5 代理"
+                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="runtimeWarpProxyInput" type="text" placeholder="Warp 本地代理（例如 warp-yg 暴露端口）"
+                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="runtimeTemplateSpaceInput" type="text" placeholder="工作区模板 space id"
+                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="runtimeRefreshRequestUrlInput" type="text" placeholder="刷新请求地址"
+                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="runtimeRefreshClientIdInput" type="text" placeholder="刷新客户端 ID"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="runtimeRefreshClientSecretInput" type="text" placeholder="刷新客户端密钥"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="runtimeWorkspaceRequestUrlInput" type="text" placeholder="工作区请求地址"
+                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="runtimeAutoRegisterMailBaseUrlInput" type="text" placeholder="自动注册邮箱服务地址"
+                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="runtimeAutoRegisterMailApiKeyInput" type="text" placeholder="自动注册邮箱 API Key"
+                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="runtimeAutoRegisterDomainInput" type="text" placeholder="自动注册域名（可选）"
+                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <select id="runtimeAutoRegisterMailProviderInput"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                <option value="freemail">自动注册邮箱：freemail</option>
+                                <option value="moemail">自动注册邮箱：moemail</option>
+                                <option value="duckmail">自动注册邮箱：duckmail</option>
+                                <option value="gptmail">自动注册邮箱：gptmail</option>
+                            </select>
+                            <input id="runtimeAutoRegisterIntervalInput" type="number" min="300" step="60" placeholder="自动注册间隔秒数"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="runtimeAutoRegisterMinSpacingInput" type="number" min="300" step="60" placeholder="自动注册最小间隔秒数"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="runtimeAutoRegisterBusyCooldownInput" type="number" min="300" step="60" placeholder="自动注册忙碌冷却秒数"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="runtimeAutoRegisterBatchSizeInput" type="number" min="1" max="3" step="1" placeholder="自动注册批次大小"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-gray-600 dark:text-gray-300">
+                            <label class="flex items-center gap-2"><input id="runtimeAutoCreateWorkspaceInput" type="checkbox">自动创建工作区</label>
+                            <label class="flex items-center gap-2"><input id="runtimeAutoSelectWorkspaceInput" type="checkbox">自动选择工作区</label>
+                            <label class="flex items-center gap-2"><input id="runtimeWorkspaceDryRunInput" type="checkbox">工作区干跑模式</label>
+                            <label class="flex items-center gap-2"><input id="runtimeWarpEnabledInput" type="checkbox">优先使用 Warp 代理</label>
+                            <label class="flex items-center gap-2"><input id="runtimeAutoRegisterEnabledInput" type="checkbox">启用自动注册</label>
+                            <label class="flex items-center gap-2"><input id="runtimeAutoRegisterIdleOnlyInput" type="checkbox">仅在空闲时自动注册</label>
+                            <label class="flex items-center gap-2"><input id="runtimeAutoRegisterHeadlessInput" type="checkbox">自动注册使用无头模式</label>
+                            <label class="flex items-center gap-2"><input id="runtimeAutoRegisterUseApiInput" type="checkbox">优先走 API 而非浏览器</label>
+                        </div>
+                        <label class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300"><input id="runtimeAllowRealProbeRequestsInput" type="checkbox">允许真实探测请求（验证前保持阻止）</label>
+                        <select id="runtimeRefreshExecutionModeInput"
+                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <option value="manual">刷新模式：手动</option>
+                            <option value="dry_run">刷新模式：模板干跑</option>
+                            <option value="live_template">刷新模式：模板实跑</option>
+                        </select>
+                        <select id="runtimeWorkspaceExecutionModeInput"
+                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <option value="manual">工作区模式：手动</option>
+                            <option value="dry_run">工作区模式：模板干跑</option>
+                            <option value="live_template">工作区模式：模板实跑</option>
+                        </select>
+                        <div class="text-[11px] text-gray-500 dark:text-gray-400" id="runtimeConfigHint">保存运行时配置后，会立即更新当前服务设置，并在下一轮后台探测中生效。Warp 本地代理可填写 warp-yg 等工具暴露的端口。</div>
+                        <div class="flex flex-wrap gap-2">
+                            <button id="runtimeLoadBtn" type="button" class="admin-action-btn">加载配置</button>
+                            <button id="runtimeSaveBtn" type="button" class="admin-action-btn">保存配置</button>
+                            <button id="runtimeCheckProxyBtn" type="button" class="admin-action-btn">检查代理</button>
+                            <button id="runtimeTriggerAutoRegisterBtn" type="button" class="admin-action-btn">触发自动注册</button>
+                            <button id="runtimeRefreshAutoRegisterBtn" type="button" class="admin-action-btn">刷新自动注册状态</button>
+                            <button id="runtimeToggleSecretsBtn" type="button" class="admin-action-btn">显示密钥</button>
+                        </div>
+                        <div id="runtimeConfigSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                        <div id="runtimeProxyHealthSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                        <div id="runtimeRegisterAutomationSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                        <div id="runtimeRegisterAutomationGuidance" class="text-[11px] text-gray-500 dark:text-gray-400"></div>
+                        <div id="runtimeOperationsPanel" class="text-[11px] text-gray-500 dark:text-gray-400 space-y-1"></div>
+                        <div id="runtimeProxyChecks" class="text-[11px] text-gray-500 dark:text-gray-400 space-y-1"></div>
+                        <div id="runtimeConfigPaths" class="text-[11px] text-gray-500 dark:text-gray-400 space-y-1"></div>
+                    </div>
+                </div>
+
+                <div id="settings-section-overview" class="mt-6 settings-console-panel space-y-4">
+                    <div id="overviewSectionStatus" class="admin-section-status" data-state="signed_out"><span class="admin-section-status-dot"></span><strong>已锁定</strong><span>登录后台后解锁总览。</span></div>
+                    <div class="flex items-center justify-between gap-3 flex-wrap">
+                        <div>
+                            <div class="settings-console-kicker">总览</div>
+                            <h4 class="text-sm font-medium">账号总控台</h4>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">查看多账号健康状态、OAuth 状态、工作区就绪情况和最近操作。</p>
+                        </div>
+                        <button id="adminRefreshBtn" type="button"
+                            class="px-3 py-1.5 rounded-lg text-xs font-medium bg-black text-white dark:bg-white dark:text-black hover:opacity-90 transition-opacity">刷新总览</button>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs" id="adminSummaryCards">
+                        <div class="admin-stat-card"><span>账号总数</span><strong id="adminStatTotal">-</strong></div>
+                        <div class="admin-stat-card"><span>可用账号</span><strong id="adminStatUsable">-</strong></div>
+                        <div class="admin-stat-card"><span>待刷新</span><strong id="adminStatNeedsRefresh">-</strong></div>
+                        <div class="admin-stat-card"><span>工作区</span><strong id="adminStatWorkspace">-</strong></div>
+                    </div>
+                    <div id="adminAlertSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                    <div id="adminAlertDetails" class="space-y-2"></div>
+                    <div id="adminQuickSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="adminQuickProbeFailuresBtn" type="button" class="admin-action-btn">探测失败</button>
+                        <button id="adminQuickInvalidBtn" type="button" class="admin-action-btn">无效账号</button>
+                        <button id="adminQuickRefreshBtn" type="button" class="admin-action-btn">需要刷新</button>
+                        <button id="adminQuickWorkspaceBtn" type="button" class="admin-action-btn">缺少工作区</button>
+                        <button id="adminQuickPendingHydrationBtn" type="button" class="admin-action-btn">待补全工作区</button>
+                        <button id="adminQuickHydrationDueBtn" type="button" class="admin-action-btn">工作区补全到期</button>
+                        <button id="adminQuickEducationBtn" type="button" class="admin-action-btn">教育账号</button>
+                        <button id="adminQuickUsableBtn" type="button" class="admin-action-btn">仅看可用账号</button>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
+                        <input id="adminSearchInput" type="text" placeholder="搜索邮箱、用户或标签"
+                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
+                        <select id="adminStateFilterInput"
+                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
+                            <option value="">全部状态</option>
+                            <option value="active">可用</option>
+                            <option value="cooling">冷却中</option>
+                            <option value="invalid">无效</option>
+                            <option value="oauth_expired">OAuth 已过期</option>
+                            <option value="needs_refresh">需要刷新</option>
+                            <option value="no_workspace">缺少工作区</option>
+                            <option value="workspace_creation_pending">工作区待创建</option>
+                            <option value="workspace_hydration_due">工作区补全到期</option>
+                            <option value="disabled">已停用</option>
+                        </select>
+                        <select id="adminPlanFilterInput"
+                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
+                            <option value="">全部套餐</option>
+                            <option value="free">免费</option>
+                            <option value="education">教育</option>
+                            <option value="paid">付费</option>
+                            <option value="unknown">未知</option>
+                        </select>
+                        <select id="adminEnabledFilterInput"
+                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
+                            <option value="">全部启用状态</option>
+                            <option value="true">仅看已启用</option>
+                            <option value="false">仅看已停用</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
+                        <select id="adminSortByInput"
+                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
+                            <option value="updated_at">按更新时间排序</option>
+                            <option value="created_at">按创建时间排序</option>
+                            <option value="email">按邮箱排序</option>
+                            <option value="state">按状态排序</option>
+                            <option value="plan">按套餐排序</option>
+                            <option value="workspace_count">按工作区数量排序</option>
+                        </select>
+                        <select id="adminSortOrderInput"
+                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
+                            <option value="desc">降序</option>
+                            <option value="asc">升序</option>
+                        </select>
+                        <input id="adminPageInput" type="number" min="1" value="1" placeholder="页码"
+                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
+                        <input id="adminPageSizeInput" type="number" min="1" max="200" value="20" placeholder="每页数量"
+                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="adminApplyFiltersBtn" type="button" class="admin-action-btn">应用筛选</button>
+                        <button id="adminClearFiltersBtn" type="button" class="admin-action-btn">清空筛选</button>
+                        <button id="adminBulkProbeBtn" type="button" class="admin-action-btn">批量探测筛选结果</button>
+                        <button id="adminBulkRefreshBtn" type="button" class="admin-action-btn">批量刷新筛选结果</button>
+                        <button id="adminBulkRefreshProbeBtn" type="button" class="admin-action-btn">批量刷新并探测</button>
+                        <button id="adminBulkEnableBtn" type="button" class="admin-action-btn">批量启用筛选结果</button>
+                        <button id="adminBulkDisableBtn" type="button" class="admin-action-btn">批量停用筛选结果</button>
+                        <button id="adminBulkSyncWorkspaceBtn" type="button" class="admin-action-btn">批量同步工作区</button>
+                        <button id="adminBulkHydrationRetryBtn" type="button" class="admin-action-btn">批量重试补全</button>
+                        <button id="adminBulkCreateWorkspaceBtn" type="button" class="admin-action-btn">批量创建工作区</button>
+                        <button id="adminBulkWorkspaceProbeBtn" type="button" class="admin-action-btn">批量探测工作区</button>
+                    </div>
+                    <div id="adminPanelNotice" class="text-xs text-gray-500 dark:text-gray-400">请先使用默认后台账号登录，并在首次登录后立即设置新密码。admin session 只保留在当前浏览器会话中。</div>
+                    <div id="adminBulkResultPanel" class="text-xs text-gray-500 dark:text-gray-400 space-y-1"></div>
+                    <div id="adminOperationHistory" class="text-xs text-gray-500 dark:text-gray-400 space-y-1"></div>
+                    <div class="grid grid-cols-1 sm:grid-cols-5 gap-2 text-xs">
+                        <input id="adminActionHistoryAccountFilter" type="text" placeholder="账号 ID / user_id / 邮箱"
+                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
+                        <select id="adminActionHistoryTypeFilter"
+                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
+                            <option value="">全部操作类型</option>
+                            <option value="refresh">仅刷新</option>
+                            <option value="create_workspace">仅创建工作区</option>
+                        </select>
+                        <select id="adminActionHistoryStatusFilter"
+                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
+                            <option value="">全部执行结果</option>
+                            <option value="failed">仅失败</option>
+                            <option value="success">仅成功</option>
+                        </select>
+                        <select id="adminActionHistoryFailureFilter"
+                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
+                            <option value="">全部失败分类</option>
+                            <option value="success">成功</option>
+                            <option value="unauthorized">未授权</option>
+                            <option value="forbidden">被禁止</option>
+                            <option value="rate_limited">触发限流</option>
+                            <option value="timeout">超时</option>
+                            <option value="server_error">服务端错误</option>
+                            <option value="network_error">网络错误</option>
+                            <option value="client_error">客户端错误</option>
+                            <option value="not_found">未找到</option>
+                        </select>
+                        <label class="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#1f1f1f] text-xs text-gray-600 dark:text-gray-300">
+                            <input id="adminActionHistoryReauthOnly" type="checkbox" class="rounded border-gray-300 dark:border-white/10">
+                            <span>仅看重授权</span>
+                        </label>
+                    </div>
+                    <div id="adminActionHistory" class="text-xs text-gray-500 dark:text-gray-400 space-y-1"></div>
+                    <div id="adminProbeHistory" class="text-xs text-gray-500 dark:text-gray-400 space-y-1"></div>
+                    <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                        <span id="adminPaginationSummary">第 1 页</span>
+                        <button id="adminPrevPageBtn" type="button" class="admin-action-btn">上一页</button>
+                        <button id="adminNextPageBtn" type="button" class="admin-action-btn">下一页</button>
+                    </div>
+                </div>
+
+                <div id="settings-section-usage" class="settings-console-panel space-y-4">
+                    <div id="usageSectionStatus" class="admin-section-status" data-state="signed_out"><span class="admin-section-status-dot"></span><strong>已锁定</strong><span>登录后台后解锁用量查询。</span></div>
+                    <div class="usage-hero-panel">
+                        <div class="flex items-start justify-between gap-3 flex-wrap">
+                            <div>
+                                <div class="usage-section-kicker">运维 / 用量</div>
+                                <h4 class="text-sm font-medium">用量查询</h4>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">查询 chat 与 responses 请求记录下来的 token 用量。</p>
+                            </div>
+                            <div id="adminUsageEventsMeta" class="text-[11px] text-gray-500 dark:text-gray-400"></div>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs mt-3">
+                            <input id="adminUsageStartTsInput" type="number" min="0" placeholder="开始时间戳"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
+                            <input id="adminUsageEndTsInput" type="number" min="0" placeholder="结束时间戳"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
+                            <input id="adminUsageModelInput" type="text" placeholder="模型名"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
+                            <input id="adminUsageAccountInput" type="text" placeholder="账号 ID"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs mt-2">
+                            <select id="adminUsageRequestTypeInput"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
+                                <option value="">全部请求类型</option>
+                                <option value="chat.completions">chat.completions</option>
+                                <option value="responses">responses</option>
+                            </select>
+                            <input id="adminUsageLimitInput" type="number" min="1" max="100" value="8" placeholder="事件条数上限"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
+                            <div class="sm:col-span-2 flex flex-wrap gap-2">
+                                <button id="adminUsageApplyBtn" type="button" class="admin-action-btn">应用用量筛选</button>
+                                <button id="adminUsageClearBtn" type="button" class="admin-action-btn">清空用量筛选</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="adminUsageSummary" class="usage-summary-grid"></div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        <div class="usage-breakdown-panel">
+                            <div class="usage-breakdown-title">按模型统计</div>
+                            <div id="adminUsageByModel" class="space-y-2"></div>
+                        </div>
+                        <div class="usage-breakdown-panel">
+                            <div class="usage-breakdown-title">按账号统计</div>
+                            <div id="adminUsageByAccount" class="space-y-2"></div>
+                        </div>
+                    </div>
+                    <div class="usage-breakdown-panel">
+                        <div class="usage-breakdown-title">最近用量事件</div>
+                        <div id="adminUsageEvents" class="space-y-2"></div>
+                    </div>
+                </div>
+
+                <div id="settings-section-accounts" class="settings-console-panel space-y-4">
+                    <div id="accountsSectionStatus" class="admin-section-status" data-state="signed_out"><span class="admin-section-status-dot"></span><strong>已锁定</strong><span>登录后台后解锁账号操作。</span></div>
+                    <div>
+                        <div class="settings-console-kicker">账号</div>
+                        <h4 class="text-sm font-medium">账号池</h4>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">管理当前账号池，并支持新增或批量导入账号。</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="adminProbeBtn" type="button" class="admin-action-btn">探测账号</button>
+                        <button id="adminRefreshTokensBtn" type="button" class="admin-action-btn">刷新令牌</button>
+                        <button id="adminWorkspaceSyncBtn" type="button" class="admin-action-btn">同步工作区</button>
+                        <button id="adminWorkspaceCreateBtn" type="button" class="admin-action-btn">创建工作区</button>
+                        <button id="adminExportAccountsBtn" type="button" class="admin-action-btn">导出账号</button>
+                    </div>
+                    <div id="adminAccountsPanel" class="max-h-72 overflow-y-auto border border-black/10 dark:border-white/10 rounded-2xl"></div>
+                    <div class="space-y-3 pt-1 border-t border-black/10 dark:border-white/10">
+                        <div>
+                            <h4 class="text-sm font-medium">新增账号</h4>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">快速新增或编辑账号池中的单个账号。</p>
+                        </div>
+                        <input id="adminAccountIdInput" type="hidden">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <input id="adminAccountTokenInput" type="text" placeholder="token_v2 令牌"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="adminAccountUserIdInput" type="text" placeholder="user_id"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="adminAccountSpaceIdInput" type="text" placeholder="space_id"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="adminAccountEmailInput" type="text" placeholder="用户邮箱"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="adminAccountPlanInput" type="text" placeholder="套餐类型，例如 free / education"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <input id="adminAccountTagsInput" type="text" placeholder="标签，多个用逗号分隔"
+                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <textarea id="adminAccountNotesInput" rows="3" placeholder="备注"
+                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none resize-y"></textarea>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <button id="adminAddAccountBtn" type="button" class="admin-action-btn">保存账号</button>
+                            <button id="adminClearAccountFormBtn" type="button" class="admin-action-btn">清空表单</button>
+                        </div>
+                        <textarea id="adminAccountBulkInput" rows="5" placeholder="在这里粘贴账号 JSON 数组，用于批量导入或替换"
+                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
+                        <div class="flex flex-wrap gap-2">
+                            <button id="adminImportAccountsBtn" type="button" class="admin-action-btn">批量导入</button>
+                            <button id="adminReplaceAccountsBtn" type="button" class="admin-action-btn">批量替换</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="settings-section-diagnostics" class="settings-console-panel space-y-3">
+                    <div id="diagnosticsSectionStatus" class="admin-section-status" data-state="signed_out"><span class="admin-section-status-dot"></span><strong>已锁定</strong><span>登录后台后解锁诊断工具。</span></div>
+                    <div>
+                        <div class="settings-console-kicker">诊断</div>
+                        <h4 class="text-sm font-medium">OAuth 回调落库</h4>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">使用本地 redirect URI（例如 gcli2api）。若留空则默认使用当前面板地址，也可以直接填写 <code>http://localhost:8000</code>。</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="oauthStartBtn" type="button" class="admin-action-btn">准备 OAuth 启动参数</button>
+                        <button id="oauthRefreshStatusBtn" type="button" class="admin-action-btn">刷新状态</button>
+                        <button id="workspaceCreateStatusBtn" type="button" class="admin-action-btn">工作区创建状态</button>
+                        <button id="oauthRefreshDiagnosticsBtn" type="button" class="admin-action-btn">刷新诊断</button>
+                        <button id="workspaceDiagnosticsBtn" type="button" class="admin-action-btn">工作区诊断</button>
+                        <button id="requestTemplatesBtn" type="button" class="admin-action-btn">请求模板</button>
+                        <button id="adminReportBtn" type="button" class="admin-action-btn">导出完整报告</button>
+                        <button id="adminSnapshotBtn" type="button" class="admin-action-btn">快速快照</button>
+                        <div id="oauthStartSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                    </div>
+                    <div id="oauthRefreshDiagnosticsPanel" class="space-y-2"></div>
+                    <div id="workspaceDiagnosticsPanel" class="space-y-2"></div>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="copyRequestTemplateBtn" type="button" class="admin-action-btn">复制 JSON 模板</button>
+                        <button id="showGenericTemplatesBtn" type="button" class="admin-action-btn">查看通用模板</button>
+                    </div>
+                    <textarea id="requestTemplateOutput" rows="8" readonly placeholder="请求模板与诊断载荷会显示在这里"
+                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
+                    <textarea id="oauthStartUrlOutput" rows="3" readonly placeholder="准备好的 OAuth 启动链接会显示在这里"
+                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
+                    <textarea id="oauthCallbackBridgeOutput" rows="2" readonly placeholder="回调桥接地址会显示在这里"
+                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <input id="oauthTokenInput" type="text" placeholder="token_v2 令牌"
+                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                        <input id="oauthUserIdInput" type="text" placeholder="user_id"
+                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                        <input id="oauthSpaceIdInput" type="text" placeholder="space_id"
+                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                        <input id="oauthEmailInput" type="text" placeholder="用户邮箱"
+                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                        <input id="oauthRedirectUriInput" type="text" placeholder="redirect URI，例如 http://localhost:8000"
+                            class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                        <textarea id="oauthCallbackUrlInput" rows="3" placeholder="如果自动 callback 未成功，请把完整 callback URL 粘贴到这里"
+                            class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none resize-y"></textarea>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="oauthParseCallbackBtn" type="button" class="admin-action-btn">解析 callback URL</button>
+                        <button id="oauthImportCallbackBtn" type="button" class="admin-action-btn">解析并落库</button>
+                        <button id="oauthFinalizeBtn" type="button" class="admin-action-btn">完成 OAuth 账号落库</button>
+                    </div>
+                </div>
+                </div>
+
+                <div class="mt-8 border-t border-black/10 dark:border-white/10 pt-4 flex items-center justify-between gap-3 flex-wrap">
+                    <p class="text-xs text-gray-500 dark:text-gray-400">底部保存只应用 Base URL、API Key 和运行时配置。admin session 访问请在上方单独管理。</p>
+                    <div class="flex justify-end gap-3">
+                        <button id="cancelSettingsBtn"
+                            class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">取消</button>
+                        <button id="saveSettingsBtn"
+                            class="px-4 py-2 rounded-lg text-sm font-medium bg-black text-white dark:bg-white dark:text-black hover:opacity-90 transition-opacity">保存更改</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -303,6 +809,7 @@
     <!-- API -->
     <script src="js/api/client.js"></script>
     <script src="js/api/models.js"></script>
+    <script src="js/api/admin.js"></script>
     <script src="js/api/settings.js"></script>
 
     <!-- Chat -->

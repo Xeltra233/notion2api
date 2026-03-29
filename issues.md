@@ -70,10 +70,54 @@ API Error: 405 Method Not Allowed
    - Do not use GET, PUT, DELETE on `/v1/chat/completions`
 
 3. **For Claude Code specifically**
-   - Claude Code uses Anthropic's native API format, which is **incompatible** with Notion2API
-   - Notion2API only provides OpenAI-compatible text chat
-   - It cannot read files, execute commands, or use tools
-   - **Claude Code is NOT supported** - use OpenCode or other compatible tools instead
+    - Claude Code uses Anthropic's native API format, which is **incompatible** with Notion2API
+    - Notion2API provides an OpenAI-compatible chat API
+    - User messages now support plain text or OpenAI-style multimodal content arrays with `text` and `image_url`
+    - Image inputs are currently accepted by the API layer and forwarded to Notion as a text fallback that includes the image URL
+    - It cannot read files, execute commands, or use tools
+    - **Claude Code is NOT supported** - use OpenCode or other compatible tools instead
+
+### Q2.1: 400 Bad Request - Invalid multimodal content
+
+**Typical Causes:**
+- `messages[].content` is an array but contains unsupported block types
+- `image_url.url` is empty or not an `http(s)` URL / `data:image/...` URI
+- Non-user messages use non-text content blocks
+
+**Supported format:**
+
+```json
+{
+  "role": "user",
+  "content": [
+    {"type": "text", "text": "Describe this image"},
+    {"type": "image_url", "image_url": {"url": "https://example.com/demo.png"}}
+  ]
+}
+```
+
+**Notes:**
+- Supported user content block types: `text`, `image_url`
+- `system`, `developer`, `assistant` messages should still use plain text or text-only content blocks
+
+### Q2.2: `/v1/responses` input rejected
+
+`POST /v1/responses` currently accepts these shapes:
+
+- `input: "plain text"`
+- `input: [content blocks]`
+- `input: [message objects]`
+
+Examples of valid content blocks:
+
+```json
+[
+  {"type": "text", "text": "Describe this image"},
+  {"type": "image_url", "image_url": {"url": "https://example.com/demo.png"}}
+]
+```
+
+If you send message objects, use the same `role/content` rules as `/v1/chat/completions`.
 
 ---
 
@@ -110,6 +154,34 @@ API Error: 405 Method Not Allowed
 - Don't log out of Notion while the service is running
 
 ---
+
+## Q4: Admin APIs now return masked values - is that a bug?
+
+**Typical Symptoms:**
+```json
+{"token_v2": "********", "has_token_v2": true}
+```
+
+**Cause:**
+- This is expected on safe admin surfaces
+- The project now separates default safe admin views from explicit raw recovery/editing views
+- Safe endpoints return masked secrets plus presence flags so the UI can stay usable without leaking raw credentials
+
+**Expected behavior:**
+- `/v1/admin/accounts/safe` → masked list view
+- `/v1/admin/accounts/export` → masked export by default
+- `/v1/admin/accounts` → explicit raw list view
+- `/v1/admin/accounts/{account_id}` → explicit raw single-account view for edit flows
+- `/v1/admin/accounts/export?raw=true` → explicit raw export
+
+**Audit behavior:**
+- Raw list reads and raw exports are logged into admin operation history
+- Operation log payloads expose metadata like export mode so operators can tell whether a recent export was `safe` or `raw`
+
+**How to tell what you received:**
+- Check `view_mode`, `export_mode`, `redaction_mode`, or `response_mode` in the response body
+- Safe account/config/report responses should identify themselves as `safe`
+- Utility endpoints such as alerts/operations/templates now describe their payload type via `response_mode`
 
 ## More Issues Coming Soon...
 

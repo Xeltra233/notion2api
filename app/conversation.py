@@ -1,12 +1,87 @@
 import datetime
-import os
+import json
 import re
 import sqlite3
 import uuid
 from typing import Any, Dict, List, Optional
 
+from app.config import get_db_path
 from app.logger import logger
 from app.model_registry import get_thread_type, is_gemini_model
+
+
+MULTIMODAL_PREFIX = "[multimodal-content]"
+
+
+def _coerce_content_part(item: Any) -> Any:
+    if hasattr(item, "model_dump"):
+        return item.model_dump()
+    if hasattr(item, "dict"):
+        return item.dict()
+    return item
+
+
+def serialize_message_content(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        try:
+            normalized_content = [_coerce_content_part(item) for item in content]
+            return f"{MULTIMODAL_PREFIX}{json.dumps(normalized_content, ensure_ascii=False, separators=(',', ':'))}"
+        except (TypeError, ValueError):
+            return ""
+    return str(content or "")
+
+
+def deserialize_message_content(content: Any) -> Any:
+    raw = str(content or "")
+    if not raw.startswith(MULTIMODAL_PREFIX):
+        return raw
+    payload = raw[len(MULTIMODAL_PREFIX) :]
+    try:
+        decoded = json.loads(payload)
+    except json.JSONDecodeError:
+        return raw
+    return decoded if isinstance(decoded, list) else raw
+
+
+def content_to_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+
+    text_parts: List[str] = []
+    image_urls: List[str] = []
+
+    for item in content:
+        item = _coerce_content_part(item)
+        if not isinstance(item, dict):
+            continue
+        item_type = str(item.get("type", "") or "").strip().lower()
+        if item_type == "text":
+            text = str(item.get("text", "") or "").strip()
+            if text:
+                text_parts.append(text)
+            continue
+        if item_type == "image_url":
+            image_payload = item.get("image_url")
+            if isinstance(image_payload, dict):
+                url = str(image_payload.get("url", "") or "").strip()
+                if url:
+                    image_urls.append(url)
+
+    lines: List[str] = []
+    if text_parts:
+        lines.append("\n\n".join(text_parts))
+    if image_urls:
+        lines.append(
+            "User attached image URLs:\n" + "\n".join(f"- {url}" for url in image_urls)
+        )
+        lines.append(
+            "Treat the image links as user-provided visual references. If direct image inspection is unavailable, say so explicitly and answer based on the visible text context only."
+        )
+    return "\n\n".join(part for part in lines if part).strip()
 
 
 class ConversationManager:
@@ -19,7 +94,7 @@ class ConversationManager:
     ASSISTANT_EMPTY_PLACEHOLDER = "[assistant_no_visible_content]"
 
     def __init__(self):
-        self.db_path = os.getenv("DB_PATH", "./data/conversations.db")
+        self.db_path = get_db_path()
         os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
         self._init_db()
 
@@ -30,7 +105,9 @@ class ConversationManager:
         conn.execute("PRAGMA busy_timeout = 5000")
         return conn
 
-    def _ensure_column(self, conn: sqlite3.Connection, table: str, column_sql: str) -> None:
+    def _ensure_column(
+        self, conn: sqlite3.Connection, table: str, column_sql: str
+    ) -> None:
         """Ensure column exists while prioritizing SQLite IF NOT EXISTS syntax."""
         try:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column_sql}")
@@ -38,7 +115,10 @@ class ConversationManager:
         except sqlite3.OperationalError:
             # Fallback for old SQLite builds without IF NOT EXISTS support.
             column_name = column_sql.split()[0]
-            columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+            columns = {
+                row["name"]
+                for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+            }
             if column_name not in columns:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {column_sql}")
 
@@ -134,7 +214,9 @@ class ConversationManager:
 
             # Keep legacy summary for compatibility but do not write to it anymore.
             self._ensure_column(conn, "conversations", "summary TEXT")
-            self._ensure_column(conn, "conversations", "next_round_index INTEGER DEFAULT 0")
+            self._ensure_column(
+                conn, "conversations", "next_round_index INTEGER DEFAULT 0"
+            )
             self._ensure_column(conn, "conversations", "compress_failed_at INTEGER")
             self._ensure_column(conn, "conversations", "thread_id TEXT")
             self._ensure_column(conn, "messages", "thinking TEXT")
@@ -205,7 +287,9 @@ class ConversationManager:
             compact = compact[:180].rstrip() + "..."
         return f"[assistant_thinking_only] {compact}"
 
-    def _normalize_window_messages(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    def _normalize_window_messages(
+        self, messages: List[Dict[str, str]]
+    ) -> List[Dict[str, str]]:
         """
         规范化窗口消息，确保 user → assistant 成对出现。
 
@@ -284,28 +368,35 @@ class ConversationManager:
     def _build_dialog_block(
         self,
         role: str,
-        content: str,
+        content: Any,
         notion_client: Any,
         *,
         gemini_mode: bool = False,
     ) -> Dict[str, Any]:
+        notion_text = content_to_text(content)
         if role == "assistant" and gemini_mode:
             return {
                 "id": str(uuid.uuid4()),
                 "type": "agent-inference",
-                "value": [{"type": "text", "content": content}],
+                "value": [{"type": "text", "content": notion_text}],
             }
 
         block: Dict[str, Any] = {
             "id": str(uuid.uuid4()),
             "type": role,
-            "value": [[content]],
+            "value": [[notion_text]],
         }
         if role == "user":
             block["userId"] = notion_client.user_id
         return block
 
-    def _build_config_block(self, model_name: str, *, gemini_mode: bool = False) -> Dict[str, Any]:
+    def _build_config_block(
+        self,
+        model_name: str,
+        *,
+        gemini_mode: bool = False,
+        search_enabled: bool = True,
+    ) -> Dict[str, Any]:
         thread_type = get_thread_type(model_name)
         if gemini_mode:
             return {
@@ -315,7 +406,7 @@ class ConversationManager:
                     "type": thread_type,
                     "model": model_name,
                     "modelFromUser": True,
-                    "useWebSearch": True,
+                    "useWebSearch": bool(search_enabled),
                     "isCustomAgent": False,
                     "enableAgentAutomations": False,
                     "enableAgentIntegrations": False,
@@ -340,7 +431,7 @@ class ConversationManager:
                 "type": thread_type,
                 "model": model_name,
                 "modelFromUser": True,
-                "useWebSearch": True,
+                "useWebSearch": bool(search_enabled),
                 "useReadOnlyMode": False,
                 "writerMode": False,
                 "isCustomAgent": False,
@@ -374,7 +465,7 @@ class ConversationManager:
                 "isOnboardingAgent": False,
                 "availableConnectors": [],
                 "customConnectorNames": [],
-                "searchScopes": [{"type": "everything"}],
+                "searchScopes": [{"type": "everything"}] if search_enabled else [],
                 "useSearchToolV2": False,
                 "useRulePrioritization": False,
                 "enableExperimentalIntegrations": False,
@@ -394,7 +485,9 @@ class ConversationManager:
             },
         }
 
-    def _build_context_block(self, notion_client: Any, *, gemini_mode: bool = False) -> Dict[str, Any]:
+    def _build_context_block(
+        self, notion_client: Any, *, gemini_mode: bool = False
+    ) -> Dict[str, Any]:
         surface = "ai_module" if gemini_mode else "workflows"
         return {
             "id": str(uuid.uuid4()),
@@ -413,7 +506,9 @@ class ConversationManager:
             },
         }
 
-    def _fetch_recent_done_summaries(self, conn: sqlite3.Connection, conversation_id: str) -> List[str]:
+    def _fetch_recent_done_summaries(
+        self, conn: sqlite3.Connection, conversation_id: str
+    ) -> List[str]:
         rows = conn.execute(
             """
             SELECT summary
@@ -457,7 +552,9 @@ class ConversationManager:
         )
         return summaries
 
-    def _has_failed_compression(self, conn: sqlite3.Connection, conversation_id: str) -> bool:
+    def _has_failed_compression(
+        self, conn: sqlite3.Connection, conversation_id: str
+    ) -> bool:
         row = conn.execute(
             """
             SELECT 1
@@ -565,7 +662,12 @@ class ConversationManager:
             conn.commit()
         logger.info(
             "Conversation created",
-            extra={"request_info": {"event": "conversation_created", "conversation_id": conv_id}},
+            extra={
+                "request_info": {
+                    "event": "conversation_created",
+                    "conversation_id": conv_id,
+                }
+            },
         )
         return conv_id
 
@@ -607,7 +709,9 @@ class ConversationManager:
             ).fetchone()
             return row is not None
 
-    def add_message(self, conversation_id: str, role: str, content: str, thinking: str = "") -> None:
+    def add_message(
+        self, conversation_id: str, role: str, content: Any, thinking: str = ""
+    ) -> None:
         """
         Append a single message.
 
@@ -617,6 +721,8 @@ class ConversationManager:
         """
         if role not in {"user", "assistant", "system"}:
             raise ValueError(f"Invalid role: {role}")
+
+        content_text = serialize_message_content(content)
 
         with self._get_conn() as conn:
             conv_row = conn.execute(
@@ -656,7 +762,11 @@ class ConversationManager:
                 (conversation_id,),
             ).fetchone()
 
-            if last_message and str(last_message["role"]) == role and str(last_message["content"]) == content:
+            if (
+                last_message
+                and str(last_message["role"]) == role
+                and str(last_message["content"]) == content_text
+            ):
                 logger.debug(
                     "Duplicate message detected, skipping insertion",
                     extra={
@@ -664,25 +774,27 @@ class ConversationManager:
                             "event": "conversation_duplicate_message_skipped",
                             "conversation_id": conversation_id,
                             "role": role,
-                            "content_length": len(content),
+                            "content_length": len(content_text),
                         }
                     },
                 )
                 return
 
             archive_text = (
-                self._build_assistant_memory_text(content, thinking)
+                self._build_assistant_memory_text(content_text, thinking)
                 if role == "assistant"
-                else content
+                else content_to_text(content)
             )
             conn.execute(
                 """
                 INSERT INTO messages (conversation_id, role, content, thinking, created_at)
                 VALUES (?, ?, ?, ?, ?)
                 """,
-                (conversation_id, role, content, thinking, created_at),
+                (conversation_id, role, content_text, thinking, created_at),
             )
-            self._archive_message(conn, conversation_id, role, archive_text, round_index, created_at)
+            self._archive_message(
+                conn, conversation_id, role, archive_text, round_index, created_at
+            )
 
             if role == "assistant" and previous_role == "user":
                 conn.execute(
@@ -695,7 +807,7 @@ class ConversationManager:
     def persist_round(
         self,
         conversation_id: str,
-        user_prompt: str,
+        user_prompt: Any,
         assistant_reply: str,
         assistant_thinking: str = "",
     ) -> int:
@@ -706,6 +818,9 @@ class ConversationManager:
         Returns:
             int: 当前轮次号（round_index）
         """
+        user_prompt_text = serialize_message_content(user_prompt)
+        user_memory_text = content_to_text(user_prompt)
+
         with self._get_conn() as conn:
             conv_row = conn.execute(
                 "SELECT id, next_round_index FROM conversations WHERE id = ?",
@@ -723,7 +838,7 @@ class ConversationManager:
                 INSERT INTO messages (conversation_id, role, content, thinking, created_at)
                 VALUES (?, 'user', ?, '', ?)
                 """,
-                (conversation_id, user_prompt, created_at),
+                (conversation_id, user_prompt_text, created_at),
             )
             conn.execute(
                 """
@@ -733,8 +848,12 @@ class ConversationManager:
                 (conversation_id, assistant_reply, assistant_thinking, created_at),
             )
 
-            assistant_memory_text = self._build_assistant_memory_text(assistant_reply, assistant_thinking)
-            self._archive_message(conn, conversation_id, "user", user_prompt, round_index, created_at)
+            assistant_memory_text = self._build_assistant_memory_text(
+                assistant_reply, assistant_thinking
+            )
+            self._archive_message(
+                conn, conversation_id, "user", user_memory_text, round_index, created_at
+            )
             self._archive_message(
                 conn,
                 conversation_id,
@@ -760,7 +879,7 @@ class ConversationManager:
                 (
                     conversation_id,
                     round_index,
-                    user_prompt,
+                    user_memory_text,
                     assistant_reply,
                     assistant_thinking,
                     created_at,
@@ -873,21 +992,25 @@ class ConversationManager:
         messages: List[Dict[str, str]] = []
         for row in rows_list:
             # 添加 user 消息
-            messages.append({
-                "role": "user",
-                "content": str(row["user_content"] or ""),
-                "thinking": "",
-            })
+            messages.append(
+                {
+                    "role": "user",
+                    "content": deserialize_message_content(row["user_content"]),
+                    "thinking": "",
+                }
+            )
             # 添加 assistant 消息
             assistant_text = self._build_assistant_memory_text(
                 str(row["assistant_content"] or ""),
                 str(row["assistant_thinking"] or ""),
             )
-            messages.append({
-                "role": "assistant",
-                "content": assistant_text,
-                "thinking": str(row["assistant_thinking"] or ""),
-            })
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": assistant_text,
+                    "thinking": str(row["assistant_thinking"] or ""),
+                }
+            )
 
         return messages
 
@@ -1134,6 +1257,7 @@ class ConversationManager:
         new_prompt: str,
         model_name: str,
         recall_query: Optional[str] = None,
+        search_enabled: bool = True,
     ) -> Dict[str, Any]:
         with self._get_conn() as conn:
             row = conn.execute(
@@ -1144,7 +1268,9 @@ class ConversationManager:
                 raise ValueError(f"Conversation ID '{conversation_id}' does not exist.")
 
             # 强制使用新的滑动窗口表（单一数据源）
-            sliding_window_rounds = self.get_sliding_window_round_count(conn, conversation_id)
+            sliding_window_rounds = self.get_sliding_window_round_count(
+                conn, conversation_id
+            )
             recent_messages = self.get_sliding_window(conn, conversation_id)
 
             logger.info(
@@ -1167,17 +1293,29 @@ class ConversationManager:
                 conversation_id,
                 recall_query or "",
             )
-            recalled_text = self._format_recalled_archive(conn, conversation_id, recall_round_indices)
+            recalled_text = self._format_recalled_archive(
+                conn, conversation_id, recall_round_indices
+            )
 
         transcript: List[Dict[str, Any]] = []
         gemini_mode = is_gemini_model(model_name)
 
-        transcript.append(self._build_config_block(model_name, gemini_mode=gemini_mode))
-        transcript.append(self._build_context_block(notion_client, gemini_mode=gemini_mode))
+        transcript.append(
+            self._build_config_block(
+                model_name,
+                gemini_mode=gemini_mode,
+                search_enabled=search_enabled,
+            )
+        )
+        transcript.append(
+            self._build_context_block(notion_client, gemini_mode=gemini_mode)
+        )
 
         # Summary injection must stay between context block and recent-window messages.
         if summaries:
-            numbered = "\n".join(f"{idx + 1}. {item}" for idx, item in enumerate(summaries))
+            numbered = "\n".join(
+                f"{idx + 1}. {item}" for idx, item in enumerate(summaries)
+            )
             transcript.append(
                 self._build_dialog_block(
                     "user",
@@ -1214,9 +1352,12 @@ class ConversationManager:
                     "conversation_id": conversation_id,
                     "recent_messages_count": len(recent_messages),
                     "recent_messages_preview": [
-                        {"role": msg.get("role"), "content_length": len(msg.get("content", ""))}
+                        {
+                            "role": msg.get("role"),
+                            "content_length": len(msg.get("content", "")),
+                        }
                         for msg in recent_messages
-                    ]
+                    ],
                 }
             },
         )
@@ -1238,7 +1379,9 @@ class ConversationManager:
                     "event": "transcript_final_size",
                     "conversation_id": conversation_id,
                     "transcript_length": len(transcript),
-                    "transcript_block_types": [block.get("type") for block in transcript]
+                    "transcript_block_types": [
+                        block.get("type") for block in transcript
+                    ],
                 }
             },
         )
@@ -1278,7 +1421,9 @@ class ConversationManager:
             "memory_degraded": memory_degraded,
         }
 
-    def get_transcript(self, notion_client, conversation_id: str, new_prompt: str, model_name: str) -> list:
+    def get_transcript(
+        self, notion_client, conversation_id: str, new_prompt: str, model_name: str
+    ) -> list:
         payload = self.get_transcript_payload(
             notion_client=notion_client,
             conversation_id=conversation_id,
@@ -1290,13 +1435,17 @@ class ConversationManager:
 
     def delete_conversation(self, conversation_id: str) -> bool:
         with self._get_conn() as conn:
-            cursor = conn.execute("DELETE FROM conversations WHERE id = ?", (conversation_id,))
+            cursor = conn.execute(
+                "DELETE FROM conversations WHERE id = ?", (conversation_id,)
+            )
             conn.commit()
             return cursor.rowcount > 0
 
     def list_conversations(self) -> List[str]:
         with self._get_conn() as conn:
-            cursor = conn.execute("SELECT id FROM conversations ORDER BY created_at DESC")
+            cursor = conn.execute(
+                "SELECT id FROM conversations ORDER BY created_at DESC"
+            )
             return [row["id"] for row in cursor.fetchall()]
 
 
@@ -1574,7 +1723,9 @@ async def compress_sliding_window_round(
         return False
 
 
-async def compress_round_if_needed(manager: ConversationManager, conversation_id: str) -> None:
+async def compress_round_if_needed(
+    manager: ConversationManager, conversation_id: str
+) -> None:
     """
     Move old turns out of sliding window, archive raw text, and summarize with LLM.
 
@@ -1591,7 +1742,9 @@ async def compress_round_if_needed(manager: ConversationManager, conversation_id
     try:
         # 优先处理新的滑动窗口表
         with manager._get_conn() as conn:
-            sliding_round_count = manager.get_sliding_window_round_count(conn, conversation_id)
+            sliding_round_count = manager.get_sliding_window_round_count(
+                conn, conversation_id
+            )
             if sliding_round_count > manager.WINDOW_ROUNDS:
                 # 找到需要压缩的轮次
                 max_round_row = conn.execute(
@@ -1622,7 +1775,9 @@ async def compress_round_if_needed(manager: ConversationManager, conversation_id
 
                 for row in rounds_to_compress:
                     round_number = int(row["round_number"])
-                    await compress_sliding_window_round(manager, conversation_id, round_number)
+                    await compress_sliding_window_round(
+                        manager, conversation_id, round_number
+                    )
 
                 # 清理已压缩的旧数据
                 manager.cleanup_old_sliding_window(conn, conversation_id)
@@ -1661,14 +1816,20 @@ async def compress_round_if_needed(manager: ConversationManager, conversation_id
 
                 oldest_user = oldest_rows[0]
                 oldest_assistant = oldest_rows[1]
-                if oldest_user["role"] != "user" or oldest_assistant["role"] != "assistant":
+                if (
+                    oldest_user["role"] != "user"
+                    or oldest_assistant["role"] != "assistant"
+                ):
                     logger.warning(
                         "Skip compression due to non user/assistant oldest pair",
                         extra={
                             "request_info": {
                                 "event": "conversation_compress_skipped",
                                 "conversation_id": conversation_id,
-                                "roles": [oldest_user["role"], oldest_assistant["role"]],
+                                "roles": [
+                                    oldest_user["role"],
+                                    oldest_assistant["role"],
+                                ],
                             }
                         },
                     )
@@ -1691,7 +1852,11 @@ async def compress_round_if_needed(manager: ConversationManager, conversation_id
                     """,
                     (conversation_id, round_index),
                 ).fetchall()
-                old_summaries = [str(row["summary"] or "").strip() for row in old_summary_rows if str(row["summary"] or "").strip()]
+                old_summaries = [
+                    str(row["summary"] or "").strip()
+                    for row in old_summary_rows
+                    if str(row["summary"] or "").strip()
+                ]
                 logger.info(
                     "Prepared cumulative old summaries for turn compression",
                     extra={
@@ -1713,7 +1878,9 @@ async def compress_round_if_needed(manager: ConversationManager, conversation_id
                         str(oldest_assistant["thinking"]),
                     ),
                     "user_created_at": int(oldest_user["created_at"] or created_at),
-                    "assistant_created_at": int(oldest_assistant["created_at"] or created_at),
+                    "assistant_created_at": int(
+                        oldest_assistant["created_at"] or created_at
+                    ),
                     "round_index": round_index,
                     "created_at": created_at,
                 }
@@ -1778,7 +1945,9 @@ async def compress_round_if_needed(manager: ConversationManager, conversation_id
                     return
 
                 with manager._get_conn() as conn:
-                    current_message_count = manager._count_messages(conn, conversation_id)
+                    current_message_count = manager._count_messages(
+                        conn, conversation_id
+                    )
                     if current_message_count <= manager.WINDOW_SIZE:
                         return
 
@@ -1874,7 +2043,9 @@ async def compress_round_if_needed(manager: ConversationManager, conversation_id
         )
 
 
-def build_lite_transcript(user_prompt: str, model_name: str) -> list[dict[str, Any]]:
+def build_lite_transcript(
+    user_prompt: Any, model_name: str, *, search_enabled: bool = False
+) -> list[dict[str, Any]]:
     """构建 Lite 模式的最简 transcript（只有 config + user）"""
     from app.model_registry import get_notion_model, get_thread_type
     import uuid
@@ -1890,20 +2061,23 @@ def build_lite_transcript(user_prompt: str, model_name: str) -> list[dict[str, A
                 "type": thread_type,
                 "model": notion_model,
                 "modelFromUser": True,
-            }
+                "useWebSearch": bool(search_enabled),
+            },
         },
         {
             "id": str(uuid.uuid4()),
             "type": "user",
-            "value": [[user_prompt]]
-        }
+            "value": [[content_to_text(user_prompt)]],
+        },
     ]
 
 
 def build_standard_transcript(
     messages: list[dict[str, Any]],
     model_name: str,
-    account: dict
+    account: dict,
+    *,
+    search_enabled: bool = True,
 ) -> list[dict[str, Any]]:
     """
     构建 Standard 模式的 transcript（完整上下文）
@@ -1921,6 +2095,7 @@ def build_standard_transcript(
     from app.model_registry import get_notion_model, get_thread_type
     import uuid
     from datetime import datetime
+
     notion_model = get_notion_model(model_name)
     thread_type = get_thread_type(model_name)
 
@@ -1933,8 +2108,8 @@ def build_standard_transcript(
                 "type": thread_type,
                 "model": notion_model,
                 "modelFromUser": True,
-                "useWebSearch": True,
-            }
+                "useWebSearch": bool(search_enabled),
+            },
         },
         {
             "id": str(uuid.uuid4()),
@@ -1944,8 +2119,8 @@ def build_standard_transcript(
                 "currentDatetime": datetime.now().astimezone().isoformat(),
                 "userId": account.get("user_id", ""),
                 "spaceId": account.get("space_id", ""),
-            }
-        }
+            },
+        },
     ]
 
     # 收集所有 system 消息
@@ -1955,47 +2130,52 @@ def build_standard_transcript(
     for msg in messages:
         role = msg.get("role")
         content = msg.get("content", "")
+        notion_text = content_to_text(content)
 
         if role == "system":
-            system_instructions.append(content)
+            if notion_text:
+                system_instructions.append(notion_text)
         elif role == "user":
-            user_messages.append(content)
+            user_messages.append(notion_text)
         elif role == "assistant":
             # assistant 消息单独处理
-            transcript.append({
-                "id": str(uuid.uuid4()),
-                "type": "agent-inference",
-                "value": [
-                    {
-                        "type": "text",
-                        "content": content
-                    }
-                ]
-            })
+            transcript.append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "type": "agent-inference",
+                    "value": [{"type": "text", "content": notion_text}],
+                }
+            )
 
     # 将 system 指令合并到第一条 user 消息（与 Lite/Heavy 模式保持一致）
     if user_messages:
         first_user_content = user_messages[0]
         if system_instructions:
             merged_system = "\n".join(system_instructions)
-            first_user_content = f"[System Instructions: {merged_system}]\n\n{first_user_content}"
+            first_user_content = (
+                f"[System Instructions: {merged_system}]\n\n{first_user_content}"
+            )
 
-        transcript.append({
-            "id": str(uuid.uuid4()),
-            "type": "user",
-            "value": [[first_user_content]],
-            "userId": account.get("user_id", ""),
-            "createdAt": datetime.now().astimezone().isoformat()
-        })
+        transcript.append(
+            {
+                "id": str(uuid.uuid4()),
+                "type": "user",
+                "value": [[first_user_content]],
+                "userId": account.get("user_id", ""),
+                "createdAt": datetime.now().astimezone().isoformat(),
+            }
+        )
 
         # 添加剩余的 user 消息
         for content in user_messages[1:]:
-            transcript.append({
-                "id": str(uuid.uuid4()),
-                "type": "user",
-                "value": [[content]],
-                "userId": account.get("user_id", ""),
-                "createdAt": datetime.now().astimezone().isoformat()
-            })
+            transcript.append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "type": "user",
+                    "value": [[content]],
+                    "userId": account.get("user_id", ""),
+                    "createdAt": datetime.now().astimezone().isoformat(),
+                }
+            )
 
     return transcript

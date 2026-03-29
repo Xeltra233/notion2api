@@ -6,7 +6,11 @@ MODEL_MAP: dict[str, str] = {
     "gpt-5.4": "oval-kumquat-medium",
 }
 
-NOTION_MODEL_REVERSE_MAP: dict[str, str] = {value: key for key, value in MODEL_MAP.items()}
+SEARCH_MODEL_SUFFIX = "-search"
+
+NOTION_MODEL_REVERSE_MAP: dict[str, str] = {
+    value: key for key, value in MODEL_MAP.items()
+}
 
 DISPLAY_NAMES: dict[str, str] = {
     "claude-opus4.6": "Claude Opus 4.6",
@@ -29,7 +33,8 @@ DEFAULT_MODEL = "claude-sonnet4.6"
 
 
 def get_notion_model(model_name: str) -> str:
-    return MODEL_MAP.get(model_name, MODEL_MAP[DEFAULT_MODEL])
+    standard_name = get_standard_model(model_name)
+    return MODEL_MAP.get(standard_name, MODEL_MAP[DEFAULT_MODEL])
 
 
 def is_gemini_model(model_name: str) -> bool:
@@ -47,22 +52,33 @@ def get_thread_type(model_name: str) -> str:
 
 
 def get_standard_model(model_name: str) -> str:
+    if model_name.endswith(SEARCH_MODEL_SUFFIX):
+        model_name = model_name[: -len(SEARCH_MODEL_SUFFIX)]
     if model_name in MODEL_MAP:
         return model_name
     return NOTION_MODEL_REVERSE_MAP.get(model_name, DEFAULT_MODEL)
 
 
+def is_search_model(model_name: str) -> bool:
+    return str(model_name or "").endswith(SEARCH_MODEL_SUFFIX)
+
+
 def list_available_models() -> list[str]:
-    return list(MODEL_MAP.keys())
+    models = list(MODEL_MAP.keys())
+    search_models = [f"{model}{SEARCH_MODEL_SUFFIX}" for model in models]
+    return models + search_models
 
 
 def is_supported_model(model_name: str) -> bool:
-    return model_name in MODEL_MAP
+    return get_standard_model(model_name) in MODEL_MAP
 
 
 def get_display_name(model_name: str) -> str:
     standard_name = get_standard_model(model_name)
-    return DISPLAY_NAMES.get(standard_name, standard_name)
+    base_name = DISPLAY_NAMES.get(standard_name, standard_name)
+    if is_search_model(model_name):
+        return f"{base_name} Search"
+    return base_name
 
 
 def get_model_icon(model_name: str) -> str:

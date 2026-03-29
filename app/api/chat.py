@@ -1,4 +1,5 @@
 import asyncio
+import base64
 from difflib import SequenceMatcher
 import json
 import re
@@ -9,17 +10,29 @@ from typing import Any, Dict, Generator, Iterable, List, Tuple
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from app.conversation import compress_round_if_needed, compress_sliding_window_round, build_lite_transcript
+from app.conversation import (
+    build_lite_transcript,
+    build_standard_transcript,
+    compress_round_if_needed,
+    compress_sliding_window_round,
+    content_to_text,
+)
 from app.config import is_lite_mode
 from app.limiter import limiter
 from app.logger import logger
-from app.model_registry import is_supported_model, list_available_models
+from app.model_registry import (
+    is_search_model,
+    is_supported_model,
+    list_available_models,
+)
 from app.notion_client import NotionUpstreamError
+from app.usage import estimate_token_count
 from app.schemas import (
     ChatCompletionRequest,
     ChatCompletionResponse,
     ChatMessage,
     ChatMessageResponseChoice,
+    ResponsesRequest,
 )
 
 router = APIRouter()
@@ -39,6 +52,440 @@ RECALL_INTENT_KEYWORDS = [
     "找一下",
     "搜索记忆",
 ]
+
+USER_CONTENT_TYPES = {"text", "image_url"}
+SEARCH_TOOL_NAMES = {"search", "web_search", "browser.search", "web_search_preview"}
+MAX_DATA_IMAGE_BYTES = 5 * 1024 * 1024
+MAX_IMAGE_PARTS_PER_MESSAGE = 4
+ALLOWED_DATA_IMAGE_MIME_PREFIXES = (
+    "data:image/png;base64,",
+    "data:image/jpeg;base64,",
+    "data:image/jpg;base64,",
+    "data:image/webp;base64,",
+    "data:image/gif;base64,",
+)
+
+
+def _wants_search_tools(tools: Any) -> bool:
+    if not isinstance(tools, list):
+        return False
+    for tool in tools:
+        if not isinstance(tool, dict):
+            continue
+        tool_type = str(tool.get("type", "") or "").strip().lower()
+        if tool_type in SEARCH_TOOL_NAMES:
+            return True
+        if tool_type == "function":
+            function_def = tool.get("function")
+            if isinstance(function_def, dict):
+                name = str(function_def.get("name", "") or "").strip().lower()
+                if name in SEARCH_TOOL_NAMES:
+                    return True
+    return False
+
+
+def _search_enabled(req_body: ChatCompletionRequest) -> bool:
+    if is_search_model(req_body.model):
+        return True
+    if _wants_search_tools(req_body.tools):
+        return True
+    metadata = req_body.metadata or {}
+    if isinstance(metadata, dict) and bool(
+        metadata.get("web_search") or metadata.get("search")
+    ):
+        return True
+    return False
+
+
+def _looks_truncated(text: str) -> bool:
+    stripped = str(text or "").rstrip()
+    if not stripped:
+        return False
+    if stripped.endswith(
+        ("...", "...)", "，", ",", ":", "：", "-", "(", "[", "{", " and", " or", " to")
+    ):
+        return True
+    tail = stripped[-1]
+    if tail.isalnum():
+        lines = [line.strip() for line in stripped.splitlines() if line.strip()]
+        if lines and len(lines[-1]) > 24:
+            return True
+    return False
+
+
+def _build_retry_prompt(original_prompt: Any, partial_text: str) -> str:
+    prompt_text = content_to_text(original_prompt).strip()
+    partial = str(partial_text or "").strip()
+    if not partial:
+        return prompt_text
+    return (
+        f"{prompt_text}\n\n"
+        "The previous answer may have been cut off. Continue from the last sentence without repeating the earlier completed content.\n\n"
+        f"Partial answer:\n{partial}"
+    )
+
+
+def _max_attempts_for_request(
+    req_body: ChatCompletionRequest, client_count: int
+) -> int:
+    base_limit = 4 if _search_enabled(req_body) else 3
+    return min(base_limit, max(1, client_count))
+
+
+def _validate_media_url(url: str, *, param: str) -> None:
+    raw = str(url or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail=f"{param} cannot be empty.")
+    if raw.startswith(("http://", "https://")):
+        return
+    if raw.startswith("data:image/"):
+        _validate_data_image_url(raw, param=param)
+        return
+    raise HTTPException(
+        status_code=400, detail=f"{param} must be an http(s) URL or data URI."
+    )
+
+
+def _validate_data_image_url(url: str, *, param: str) -> None:
+    lowered = url.lower()
+    if not lowered.startswith(ALLOWED_DATA_IMAGE_MIME_PREFIXES):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{param} only supports base64 data URIs for png, jpeg, jpg, webp, or gif images."
+            ),
+        )
+
+    try:
+        encoded = url.split(",", 1)[1]
+    except IndexError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{param} is not a valid base64 data URI.",
+        ) from exc
+
+    try:
+        decoded = base64.b64decode(encoded, validate=True)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{param} contains invalid base64 image data.",
+        ) from exc
+
+    if not decoded:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{param} image payload cannot be empty.",
+        )
+
+    if len(decoded) > MAX_DATA_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{param} image payload is too large. Limit is {MAX_DATA_IMAGE_BYTES // (1024 * 1024)}MB after decoding."
+            ),
+        )
+
+
+def _normalize_message_content(content: Any, *, role: str, param_prefix: str) -> Any:
+    if isinstance(content, str):
+        if role in {"user", "system", "developer"} and not content.strip():
+            raise HTTPException(
+                status_code=400, detail=f"{param_prefix} cannot be empty."
+            )
+        return content
+
+    if not isinstance(content, list):
+        raise HTTPException(
+            status_code=400, detail=f"{param_prefix} must be a string or content array."
+        )
+
+    if not content:
+        raise HTTPException(
+            status_code=400, detail=f"{param_prefix} cannot be an empty array."
+        )
+
+    normalized: List[Dict[str, Any]] = []
+    has_visible_part = False
+    image_part_count = 0
+
+    for part_idx, part in enumerate(content):
+        if hasattr(part, "model_dump"):
+            part = part.model_dump()
+        elif hasattr(part, "dict"):
+            part = part.dict()
+        if not isinstance(part, dict):
+            raise HTTPException(
+                status_code=400, detail=f"{param_prefix}.{part_idx} must be an object."
+            )
+
+        part_type = str(part.get("type", "") or "").strip().lower()
+        if role == "user":
+            if part_type not in USER_CONTENT_TYPES:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{param_prefix}.{part_idx}.type '{part_type}' is not supported.",
+                )
+        elif part_type != "text":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Only user messages support non-text content blocks. Invalid block at {param_prefix}.{part_idx}.",
+            )
+
+        if part_type == "text":
+            text = str(part.get("text", "") or "")
+            if not text.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{param_prefix}.{part_idx}.text cannot be empty.",
+                )
+            normalized.append({"type": "text", "text": text})
+            has_visible_part = True
+            continue
+
+        image_payload = part.get("image_url")
+        if not isinstance(image_payload, dict):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{param_prefix}.{part_idx}.image_url must be an object.",
+            )
+        url = str(image_payload.get("url", "") or "").strip()
+        _validate_media_url(url, param=f"{param_prefix}.{part_idx}.image_url.url")
+        image_part_count += 1
+        if image_part_count > MAX_IMAGE_PARTS_PER_MESSAGE:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"{param_prefix} supports at most {MAX_IMAGE_PARTS_PER_MESSAGE} image attachments per message."
+                ),
+            )
+        normalized.append({"type": "image_url", "image_url": {"url": url}})
+        has_visible_part = True
+
+    if role in {"user", "system", "developer"} and not has_visible_part:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{param_prefix} must contain at least one non-empty content block.",
+        )
+
+    return normalized
+
+
+def _normalize_request_messages(messages: List[ChatMessage]) -> List[ChatMessage]:
+    normalized_messages: List[ChatMessage] = []
+    for idx, msg in enumerate(messages):
+        normalized_content = _normalize_message_content(
+            msg.content,
+            role=msg.role,
+            param_prefix=f"messages[{idx}].content",
+        )
+        normalized_messages.append(
+            ChatMessage(
+                role=msg.role, content=normalized_content, thinking=msg.thinking
+            )
+        )
+    return normalized_messages
+
+
+def _build_messages_from_responses_input(
+    req_body: ResponsesRequest,
+) -> List[ChatMessage]:
+    instructions = str(req_body.instructions or "").strip()
+    normalized_messages: List[ChatMessage] = []
+    if instructions:
+        normalized_messages.append(ChatMessage(role="system", content=instructions))
+
+    payload = req_body.input
+    if isinstance(payload, str):
+        normalized_messages.append(ChatMessage(role="user", content=payload))
+        return _normalize_request_messages(normalized_messages)
+
+    if isinstance(payload, list):
+        if payload and all(
+            isinstance(item, dict) and "role" in item for item in payload
+        ):
+            for item in payload:
+                normalized_messages.append(
+                    ChatMessage(
+                        role=str(item.get("role", "user")),
+                        content=item.get("content", ""),
+                        thinking=item.get("thinking"),
+                    )
+                )
+            return _normalize_request_messages(normalized_messages)
+
+        normalized_messages.append(ChatMessage(role="user", content=payload))
+        return _normalize_request_messages(normalized_messages)
+
+    raise HTTPException(
+        status_code=400,
+        detail="responses.input must be a string, content array, or messages array.",
+    )
+
+
+def _chat_request_from_responses(req_body: ResponsesRequest) -> ChatCompletionRequest:
+    return ChatCompletionRequest(
+        model=req_body.model,
+        messages=_build_messages_from_responses_input(req_body),
+        stream=req_body.stream,
+        temperature=req_body.temperature,
+        top_p=req_body.top_p,
+        max_tokens=req_body.max_output_tokens,
+        metadata=req_body.metadata,
+        user=req_body.user,
+        tools=req_body.tools,
+        tool_choice=req_body.tool_choice,
+        conversation_id=None,
+    )
+
+
+def _build_responses_output_text(output_text: str) -> List[Dict[str, Any]]:
+    return [{"type": "output_text", "text": output_text, "annotations": []}]
+
+
+def _build_responses_output_payload(output_text: str) -> List[Dict[str, Any]]:
+    return [
+        {
+            "id": f"msg_{uuid.uuid4().hex}",
+            "type": "message",
+            "status": "completed",
+            "role": "assistant",
+            "content": _build_responses_output_text(output_text),
+        }
+    ]
+
+
+def _build_responses_response(
+    result: ChatCompletionResponse,
+    *,
+    output_text: str,
+) -> Dict[str, Any]:
+    return {
+        "id": result.id,
+        "object": "response",
+        "created_at": result.created,
+        "status": "completed",
+        "model": result.model,
+        "output": _build_responses_output_payload(output_text),
+        "output_text": output_text,
+        "usage": result.usage,
+        "metadata": None,
+        "error": None,
+        "incomplete_details": None,
+    }
+
+
+def _build_responses_stream_event(event_type: str, data: Dict[str, Any]) -> str:
+    return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _wrap_chat_stream_as_responses_stream(
+    chat_stream: StreamingResponse,
+    *,
+    model: str,
+) -> StreamingResponse:
+    response_id = f"resp_{uuid.uuid4().hex}"
+
+    async def event_generator():
+        created_at = int(time.time())
+        aggregate_text = ""
+        yield _build_responses_stream_event(
+            "response.created",
+            {
+                "type": "response.created",
+                "response": {
+                    "id": response_id,
+                    "object": "response",
+                    "created_at": created_at,
+                    "status": "in_progress",
+                    "model": model,
+                    "output": [],
+                    "output_text": "",
+                },
+            },
+        )
+        yield _build_responses_stream_event(
+            "response.output_item.added",
+            {
+                "type": "response.output_item.added",
+                "output_index": 0,
+                "item": {
+                    "id": f"msg_{uuid.uuid4().hex}",
+                    "type": "message",
+                    "status": "in_progress",
+                    "role": "assistant",
+                    "content": [],
+                },
+            },
+        )
+
+        async for chunk in chat_stream.body_iterator:
+            text_chunk = (
+                chunk.decode("utf-8") if isinstance(chunk, bytes) else str(chunk)
+            )
+            for frame in text_chunk.split("\n\n"):
+                frame = frame.strip()
+                if not frame.startswith("data:"):
+                    continue
+                payload_text = frame[5:].strip()
+                if payload_text == "[DONE]":
+                    continue
+                try:
+                    payload = json.loads(payload_text)
+                except json.JSONDecodeError:
+                    continue
+                choices = payload.get("choices") or []
+                if not choices:
+                    continue
+                delta = choices[0].get("delta") or {}
+                content_delta = str(delta.get("content", "") or "")
+                if content_delta:
+                    aggregate_text += content_delta
+                    yield _build_responses_stream_event(
+                        "response.output_text.delta",
+                        {
+                            "type": "response.output_text.delta",
+                            "delta": content_delta,
+                            "output_index": 0,
+                            "content_index": 0,
+                        },
+                    )
+
+        yield _build_responses_stream_event(
+            "response.output_text.done",
+            {
+                "type": "response.output_text.done",
+                "text": aggregate_text,
+                "output_index": 0,
+                "content_index": 0,
+            },
+        )
+        yield _build_responses_stream_event(
+            "response.completed",
+            {
+                "type": "response.completed",
+                "response": {
+                    "id": response_id,
+                    "object": "response",
+                    "created_at": created_at,
+                    "status": "completed",
+                    "model": model,
+                    "output": _build_responses_output_payload(aggregate_text),
+                    "output_text": aggregate_text,
+                },
+            },
+        )
+        yield "data: [DONE]\n\n"
+
+    headers = dict(chat_stream.headers)
+    headers["Cache-Control"] = "no-cache"
+    headers["Connection"] = "keep-alive"
+    headers["X-Accel-Buffering"] = "no"
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers=headers,
+    )
 
 
 def _build_stream_chunk(
@@ -103,10 +550,24 @@ def _format_search_results_md(search_data: dict[str, Any]) -> str:
                 lines.append(f"> {i}. [{title}]({url})")
             else:
                 lines.append(f"> {i}. {title}")
-    
+
     if lines:
         return "\n".join(lines) + "\n\n"
     return ""
+
+
+def _extract_search_metadata_from_text(text: str) -> dict[str, list[Any]]:
+    content = str(text or "")
+    urls = re.findall(r"https?://[^\]\)\s]+", content)
+    seen = set()
+    sources = []
+    for url in urls:
+        clean_url = url.rstrip(".,;:")
+        if clean_url in seen:
+            continue
+        seen.add(clean_url)
+        sources.append({"title": clean_url, "url": clean_url})
+    return {"queries": [], "sources": sources}
 
 
 def _normalize_stream_item(item: Any) -> dict[str, Any]:
@@ -119,7 +580,10 @@ def _normalize_stream_item(item: Any) -> dict[str, Any]:
             return {"type": "content", "text": str(item.get("text", "") or "")}
         if item_type == "search":
             payload = item.get("data")
-            return {"type": "search", "data": payload if isinstance(payload, dict) else {}}
+            return {
+                "type": "search",
+                "data": payload if isinstance(payload, dict) else {},
+            }
         if item_type == "thinking":
             return {"type": "thinking", "text": str(item.get("text", "") or "")}
         if item_type == "final_content":
@@ -133,7 +597,9 @@ def _normalize_stream_item(item: Any) -> dict[str, Any]:
     return {"type": "unknown"}
 
 
-def _iter_stream_items(first_item: Any, stream_gen: Iterable[Any]) -> Generator[Any, None, None]:
+def _iter_stream_items(
+    first_item: Any, stream_gen: Iterable[Any]
+) -> Generator[Any, None, None]:
     if first_item is not None:
         yield first_item
     for item in stream_gen:
@@ -146,7 +612,7 @@ def _compute_missing_suffix(current_text: str, final_text: str) -> str:
     if not current_text:
         return final_text
     if final_text.startswith(current_text):
-        return final_text[len(current_text):]
+        return final_text[len(current_text) :]
     return ""
 
 
@@ -168,12 +634,16 @@ def _select_best_final_reply(
     if final.startswith(streamed):
         return final, "final_extends_streamed"
     if streamed.startswith(final):
-        if source == "title" or len(final_stripped) <= max(32, int(len(streamed_stripped) * 0.35)):
+        if source == "title" or len(final_stripped) <= max(
+            32, int(len(streamed_stripped) * 0.35)
+        ):
             return streamed, "streamed_beats_short_final"
         return final, "final_prefix_of_streamed"
 
     # Diverged content: usually prefer richer non-title final content.
-    if source == "title" and len(final_stripped) < max(48, int(len(streamed_stripped) * 0.6)):
+    if source == "title" and len(final_stripped) < max(
+        48, int(len(streamed_stripped) * 0.6)
+    ):
         return streamed, "streamed_beats_title"
     if len(final_stripped) >= max(48, int(len(streamed_stripped) * 0.6)):
         return final, "final_diverged_preferred"
@@ -189,7 +659,9 @@ def _normalize_overlap_text(text: str) -> str:
     return normalized
 
 
-def _trim_redundant_thinking(thinking_text: str, final_reply: str) -> tuple[str, str, float]:
+def _trim_redundant_thinking(
+    thinking_text: str, final_reply: str
+) -> tuple[str, str, float]:
     thinking = str(thinking_text or "").strip()
     final = str(final_reply or "").strip()
     if not thinking or not final:
@@ -210,12 +682,9 @@ def _trim_redundant_thinking(thinking_text: str, final_reply: str) -> tuple[str,
             return prefix, "suffix_trimmed", overlap_ratio
         return "", "suffix_cleared", overlap_ratio
 
-    if (
-        overlap_ratio >= 0.92
-        and (
-            normalized_thinking in normalized_final
-            or normalized_final in normalized_thinking
-        )
+    if overlap_ratio >= 0.92 and (
+        normalized_thinking in normalized_final
+        or normalized_final in normalized_thinking
     ):
         return "", "high_overlap_cleared", overlap_ratio
 
@@ -252,7 +721,9 @@ def _build_thinking_replacement(
         # Check for obvious duplication (thinking appears in final reply)
         if thinking_text.strip() in final_reply or final_reply in thinking_text:
             # Clear case of duplication - trim it
-            replacement, decision, overlap_ratio = _trim_redundant_thinking(thinking_text, final_reply)
+            replacement, decision, overlap_ratio = _trim_redundant_thinking(
+                thinking_text, final_reply
+            )
             if replacement != str(thinking_text or "").strip():
                 logger.debug(
                     "Non-agent-inference thinking replacement applied",
@@ -278,10 +749,14 @@ def _build_thinking_replacement(
         return None
 
     # 只在几乎没有真实正文增量时做裁决，避免误伤复杂推理场景。
-    if normalized_streamed and len(normalized_streamed) >= max(10, int(len(normalized_final) * 0.35)):
+    if normalized_streamed and len(normalized_streamed) >= max(
+        10, int(len(normalized_final) * 0.35)
+    ):
         return None
 
-    replacement, decision, overlap_ratio = _trim_redundant_thinking(thinking_text, final_reply)
+    replacement, decision, overlap_ratio = _trim_redundant_thinking(
+        thinking_text, final_reply
+    )
     if replacement == str(thinking_text or "").strip():
         return None
 
@@ -309,21 +784,26 @@ def _extract_recall_query(text: str) -> str:
     cleaned = text
     for keyword in RECALL_INTENT_KEYWORDS:
         if keyword.isascii():
-            cleaned = re.sub(rf"\b{re.escape(keyword)}\b", " ", cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(
+                rf"\b{re.escape(keyword)}\b", " ", cleaned, flags=re.IGNORECASE
+            )
         else:
             cleaned = cleaned.replace(keyword, " ")
     cleaned = re.sub(r"[\s，。！？、,.!?;:：]+", " ", cleaned).strip()
     return cleaned or text.strip()
 
 
-def _prepare_messages(req_body: ChatCompletionRequest) -> Tuple[str, List[Tuple[str, str, str]], str]:
+def _prepare_messages(
+    req_body: ChatCompletionRequest,
+) -> Tuple[Any, List[Tuple[str, Any, str]], str]:
     system_messages = []
     dialogue_messages = []
 
     for msg in req_body.messages:
-        if msg.role == "system":
-            if msg.content.strip():
-                system_messages.append(msg.content.strip())
+        if msg.role in {"system", "developer"}:
+            system_text = content_to_text(msg.content).strip()
+            if system_text:
+                system_messages.append(system_text)
             continue
         dialogue_messages.append((msg.role, msg.content, msg.thinking or ""))
 
@@ -334,46 +814,58 @@ def _prepare_messages(req_body: ChatCompletionRequest) -> Tuple[str, List[Tuple[
         )
 
     last_role, user_prompt, _ = dialogue_messages[-1]
-    raw_user_prompt = user_prompt
+    raw_user_prompt = content_to_text(user_prompt)
     history_messages = dialogue_messages[:-1]
 
     if last_role != "user":
-        raise HTTPException(status_code=400, detail="The last message must be from role 'user'.")
-    if not user_prompt.strip():
-        raise HTTPException(status_code=400, detail="The last user message cannot be empty.")
+        raise HTTPException(
+            status_code=400, detail="The last message must be from role 'user'."
+        )
+    if not content_to_text(user_prompt).strip():
+        raise HTTPException(
+            status_code=400, detail="The last user message cannot be empty."
+        )
 
     if system_messages:
         merged_system_prompt = "\n".join(system_messages)
-        user_prompt = f"[System Instructions: {merged_system_prompt}]\n\n{user_prompt}"
+        user_prompt = f"[System Instructions: {merged_system_prompt}]\n\n{content_to_text(user_prompt)}"
 
     return user_prompt, history_messages, raw_user_prompt
 
 
-def _prepare_messages_lite(req_body: ChatCompletionRequest) -> str:
+def _prepare_messages_lite(req_body: ChatCompletionRequest) -> Any:
     """Lite 模式：只提取最后一条 user 消息，支持 system 指令合并"""
     system_messages = []
-    user_prompt = ""
+    user_prompt: Any = ""
 
     for msg in req_body.messages:
-        if msg.role == "system" and msg.content.strip():
-            system_messages.append(msg.content.strip())
+        if msg.role in {"system", "developer"}:
+            system_text = content_to_text(msg.content).strip()
+            if system_text:
+                system_messages.append(system_text)
         elif msg.role == "user":
             user_prompt = msg.content
 
-    if not user_prompt.strip():
-        raise HTTPException(status_code=400, detail="The messages list must contain at least one user message.")
+    if not content_to_text(user_prompt).strip():
+        raise HTTPException(
+            status_code=400,
+            detail="The messages list must contain at least one user message.",
+        )
 
     if system_messages:
-        user_prompt = f"[System Instructions: {' '.join(system_messages)}]\n\n{user_prompt}"
+        user_prompt = f"[System Instructions: {' '.join(system_messages)}]\n\n{content_to_text(user_prompt)}"
 
     return user_prompt
 
 
 def _create_lite_stream_generator(
+    request: Request,
+    req_body: ChatCompletionRequest,
     response_id: str,
     model_name: str,
     first_item: Any,
     stream_gen: Iterable[Any],
+    account_id: str = "",
 ) -> Generator[str, None, None]:
     """Lite 模式流式生成器：只输出 content，忽略 thinking 和 search"""
     streamed_content_accumulator = ""
@@ -390,7 +882,9 @@ def _create_lite_stream_generator(
                 final_text = str(item.get("text", "") or "").strip()
                 if final_text:
                     authoritative_final_content = final_text
-                    authoritative_final_source_type = str(item.get("source_type", "") or "")
+                    authoritative_final_source_type = str(
+                        item.get("source_type", "") or ""
+                    )
                 continue
 
             # Lite 模式忽略 thinking 和 search
@@ -454,7 +948,9 @@ def _create_lite_stream_generator(
         )
 
         # 发送缺失的后缀（如果有）
-        missing_suffix = _compute_missing_suffix(streamed_content_accumulator, final_reply)
+        missing_suffix = _compute_missing_suffix(
+            streamed_content_accumulator, final_reply
+        )
         if missing_suffix:
             if not assistant_started:
                 assistant_started = True
@@ -465,7 +961,9 @@ def _create_lite_stream_generator(
                     content=missing_suffix,
                 )
             else:
-                yield _build_stream_chunk(response_id, model_name, content=missing_suffix)
+                yield _build_stream_chunk(
+                    response_id, model_name, content=missing_suffix
+                )
             streamed_content_accumulator += missing_suffix
         elif final_reply != streamed_content_accumulator:
             # 处理分叉内容（使用最终内容）
@@ -479,18 +977,36 @@ def _create_lite_stream_generator(
                         content=final_reply,
                     )
                 else:
-                    yield _build_stream_chunk(response_id, model_name, content=final_reply)
+                    yield _build_stream_chunk(
+                        response_id, model_name, content=final_reply
+                    )
                 streamed_content_accumulator = final_reply
 
+        usage_payload = _build_usage_payload(
+            req_body=req_body,
+            output_text=final_reply or streamed_content_accumulator,
+        )
+        _record_usage_event(
+            request,
+            request_id=response_id,
+            request_type="chat.completions",
+            stream=True,
+            model=model_name,
+            usage=usage_payload,
+            account_id=account_id,
+        )
         yield _build_stream_chunk(response_id, model_name, finish_reason="stop")
         yield "data: [DONE]\n\n"
 
 
 def _create_standard_stream_generator(
+    request: Request,
+    req_body: ChatCompletionRequest,
     response_id: str,
     model_name: str,
     first_item: Any,
     stream_gen: Iterable[Any],
+    account_id: str = "",
 ) -> Generator[str, None, None]:
     """
     Standard 模式流式生成器：使用前端定义的 SSE 事件类型
@@ -518,7 +1034,9 @@ def _create_standard_stream_generator(
                 final_text = str(item.get("text", "") or "").strip()
                 if final_text:
                     authoritative_final_content = final_text
-                    authoritative_final_source_type = str(item.get("source_type", "") or "")
+                    authoritative_final_source_type = str(
+                        item.get("source_type", "") or ""
+                    )
                 continue
 
             # Standard 模式：处理 thinking（使用前端定义的 thinking_chunk 类型）
@@ -574,7 +1092,9 @@ def _create_standard_stream_generator(
         if _is_client_disconnect_error(exc):
             logger.info(
                 "Standard streaming connection closed by client",
-                extra={"request_info": {"event": "standard_stream_client_disconnected"}},
+                extra={
+                    "request_info": {"event": "standard_stream_client_disconnected"}
+                },
             )
             return
         logger.error(
@@ -603,7 +1123,9 @@ def _create_standard_stream_generator(
         )
 
         # 发送缺失的后缀（如果有）
-        missing_suffix = _compute_missing_suffix(streamed_content_accumulator, final_reply)
+        missing_suffix = _compute_missing_suffix(
+            streamed_content_accumulator, final_reply
+        )
         if missing_suffix:
             if not assistant_started:
                 assistant_started = True
@@ -614,7 +1136,9 @@ def _create_standard_stream_generator(
                     content=missing_suffix,
                 )
             else:
-                yield _build_stream_chunk(response_id, model_name, content=missing_suffix)
+                yield _build_stream_chunk(
+                    response_id, model_name, content=missing_suffix
+                )
             streamed_content_accumulator += missing_suffix
         elif final_reply != streamed_content_accumulator:
             # 处理分叉内容（使用最终内容）
@@ -628,7 +1152,9 @@ def _create_standard_stream_generator(
                         content=final_reply,
                     )
                 else:
-                    yield _build_stream_chunk(response_id, model_name, content=final_reply)
+                    yield _build_stream_chunk(
+                        response_id, model_name, content=final_reply
+                    )
                 streamed_content_accumulator = final_reply
 
         # 输出搜索结果（使用前端定义的 search_metadata 类型）
@@ -637,11 +1163,24 @@ def _create_standard_stream_generator(
                 "type": "search_metadata",
                 "searches": {
                     "queries": collected_search_queries,
-                    "sources": collected_search_sources
-                }
+                    "sources": collected_search_sources,
+                },
             }
             yield f"data: {json.dumps(search_metadata, ensure_ascii=False)}\n\n"
 
+        usage_payload = _build_usage_payload(
+            req_body=req_body,
+            output_text=final_reply or streamed_content_accumulator,
+        )
+        _record_usage_event(
+            request,
+            request_id=response_id,
+            request_type="chat.completions",
+            stream=True,
+            model=model_name,
+            usage=usage_payload,
+            account_id=account_id,
+        )
         yield _build_stream_chunk(response_id, model_name, finish_reason="stop")
         yield "data: [DONE]\n\n"
 
@@ -702,9 +1241,68 @@ def _persist_round(
     )
 
 
-def _persist_history_messages(manager, conversation_id: str, history_messages: List[Tuple[str, str]]) -> None:
-    for role, content in history_messages:
-        manager.add_message(conversation_id, role, content)
+def _persist_history_messages(
+    manager, conversation_id: str, history_messages: List[Tuple[str, Any, str]]
+) -> None:
+    for role, content, thinking in history_messages:
+        manager.add_message(conversation_id, role, content, thinking)
+
+
+def _build_usage_payload(
+    *,
+    req_body: ChatCompletionRequest,
+    output_text: str,
+) -> dict[str, int]:
+    prompt_text = "\n".join(content_to_text(message.content) for message in req_body.messages)
+    prompt_tokens = estimate_token_count(prompt_text)
+    completion_tokens = estimate_token_count(output_text)
+    return {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": prompt_tokens + completion_tokens,
+    }
+
+
+def _record_usage_event(
+    request: Request,
+    *,
+    request_id: str,
+    request_type: str,
+    stream: bool,
+    model: str,
+    usage: dict[str, int],
+    account_id: str = "",
+    conversation_id: str = "",
+) -> None:
+    usage_store = getattr(request.app.state, "usage_store", None)
+    if usage_store is None:
+        return
+    try:
+        usage_store.record_event(
+            request_id=request_id,
+            request_type=request_type,
+            stream=stream,
+            model=model,
+            prompt_tokens=int(usage.get("prompt_tokens") or 0),
+            completion_tokens=int(usage.get("completion_tokens") or 0),
+            total_tokens=int(usage.get("total_tokens") or 0),
+            account_id=account_id,
+            conversation_id=conversation_id,
+        )
+    except Exception:
+        logger.warning(
+            "Failed to record usage event",
+            exc_info=True,
+            extra={
+                "request_info": {
+                    "event": "usage_record_failed",
+                    "request_id": request_id,
+                    "request_type": request_type,
+                    "model": model,
+                    "account_id": account_id,
+                }
+            },
+        )
 
 
 def _is_client_disconnect_error(exc: BaseException) -> bool:
@@ -737,7 +1335,7 @@ async def _handle_lite_request(
         )
 
     response_id = f"chatcmpl-{uuid.uuid4().hex}"
-    max_retries = min(3, len(pool.clients))
+    max_retries = _max_attempts_for_request(req_body, len(pool.clients))
 
     for attempt in range(1, max_retries + 1):
         client = None
@@ -745,14 +1343,21 @@ async def _handle_lite_request(
             client = pool.get_client()
 
             # 构建 Lite transcript（无历史记忆）
-            transcript = build_lite_transcript(user_prompt, req_body.model)
+            search_enabled = _search_enabled(req_body)
+            transcript = build_lite_transcript(
+                user_prompt,
+                req_body.model,
+                search_enabled=search_enabled,
+            )
 
             # 调用 Notion API（不使用 thread_id）
             stream_gen = client.stream_response(transcript, thread_id=None)
             first_item = next(stream_gen, None)
 
             if first_item is None:
-                raise NotionUpstreamError("Notion upstream returned empty content.", retriable=True)
+                raise NotionUpstreamError(
+                    "Notion upstream returned empty content.", retriable=True
+                )
 
             # 流式响应
             if req_body.stream:
@@ -763,10 +1368,13 @@ async def _handle_lite_request(
                 }
                 return StreamingResponse(
                     _create_lite_stream_generator(
+                        request,
+                        req_body,
                         response_id,
                         req_body.model,
                         first_item,
                         stream_gen,
+                        account_id=str(getattr(client, "account_id", "") or ""),
                     ),
                     media_type="text/event-stream",
                     headers=stream_headers,
@@ -785,7 +1393,9 @@ async def _handle_lite_request(
                     final_text = str(item.get("text", "") or "").strip()
                     if final_text:
                         authoritative_final_content = final_text
-                        authoritative_final_source_type = str(item.get("source_type", "") or "")
+                        authoritative_final_source_type = str(
+                            item.get("source_type", "") or ""
+                        )
                     continue
 
                 # Lite 模式忽略 thinking 和 search
@@ -806,9 +1416,42 @@ async def _handle_lite_request(
             )
 
             if not full_text.strip():
-                raise NotionUpstreamError("Notion upstream returned empty content.", retriable=True)
+                raise NotionUpstreamError(
+                    "Notion upstream returned empty content.", retriable=True
+                )
 
-            response_text = full_text if full_text.strip() else "[assistant_no_visible_content]"
+            response_text = (
+                full_text if full_text.strip() else "[assistant_no_visible_content]"
+            )
+            usage_payload = _build_usage_payload(
+                req_body=req_body,
+                output_text=response_text,
+            )
+
+            if _looks_truncated(response_text) and attempt < max_retries:
+                logger.warning(
+                    "Lite mode response looks truncated, retrying",
+                    extra={
+                        "request_info": {
+                            "event": "lite_truncation_retry",
+                            "attempt": attempt,
+                            "max_retries": max_retries,
+                            "model": req_body.model,
+                        }
+                    },
+                )
+                user_prompt = _build_retry_prompt(user_prompt, response_text)
+                continue
+
+            _record_usage_event(
+                request,
+                request_id=response_id,
+                request_type="chat.completions",
+                stream=False,
+                model=req_body.model,
+                usage=usage_payload,
+                account_id=str(getattr(client, "account_id", "") or ""),
+            )
             return ChatCompletionResponse(
                 id=response_id,
                 model=req_body.model,
@@ -817,11 +1460,12 @@ async def _handle_lite_request(
                         message=ChatMessage(role="assistant", content=response_text)
                     )
                 ],
+                usage=usage_payload,
             )
 
         except NotionUpstreamError as exc:
-            if client is not None and exc.retriable:
-                pool.mark_failed(client)
+            if client is not None:
+                pool.mark_upstream_error(client, exc.status_code, exc.response_excerpt)
             logger.warning(
                 "Lite mode: Notion upstream failed",
                 extra={
@@ -840,7 +1484,12 @@ async def _handle_lite_request(
         except RuntimeError as exc:
             logger.error(
                 "Lite mode: No available client in account pool",
-                extra={"request_info": {"event": "lite_account_pool_unavailable", "detail": str(exc)}},
+                extra={
+                    "request_info": {
+                        "event": "lite_account_pool_unavailable",
+                        "detail": str(exc),
+                    }
+                },
             )
             return JSONResponse(
                 status_code=503,
@@ -848,9 +1497,9 @@ async def _handle_lite_request(
                     "error": {
                         "message": str(exc),
                         "type": "rate_limit_error",
-                        "code": "account_pool_cooling"
+                        "code": "account_pool_cooling",
                     }
-                }
+                },
             )
         except HTTPException:
             raise
@@ -873,7 +1522,9 @@ async def _handle_lite_request(
                     detail="Unexpected internal error while generating completion.",
                 )
 
-    raise HTTPException(status_code=503, detail="Service unavailable: all upstream retries exhausted.")
+    raise HTTPException(
+        status_code=503, detail="Service unavailable: all upstream retries exhausted."
+    )
 
 
 async def _handle_standard_request(
@@ -889,9 +1540,6 @@ async def _handle_standard_request(
     2. 保留 thinking 输出
     3. 保留搜索结果输出
     """
-    from app.conversation import build_standard_transcript
-    from app.config import is_standard_mode
-
     pool = request.app.state.account_pool
 
     # 验证模型
@@ -903,7 +1551,7 @@ async def _handle_standard_request(
         )
 
     response_id = f"chatcmpl-{uuid.uuid4().hex}"
-    max_retries = min(3, len(pool.clients))
+    max_retries = _max_attempts_for_request(req_body, len(pool.clients))
 
     for attempt in range(1, max_retries + 1):
         client = None
@@ -916,15 +1564,23 @@ async def _handle_standard_request(
                 "user_id": client.user_id,
                 "space_id": client.space_id,
             }
-            messages = [msg.dict() for msg in req_body.messages]
-            transcript = build_standard_transcript(messages, req_body.model, account)
+            messages = [msg.model_dump() for msg in req_body.messages]
+            search_enabled = _search_enabled(req_body)
+            transcript = build_standard_transcript(
+                messages,
+                req_body.model,
+                account,
+                search_enabled=search_enabled,
+            )
 
             # 调用 Notion API（不使用 thread_id，让 Notion ��动处理）
             stream_gen = client.stream_response(transcript, thread_id=None)
             first_item = next(stream_gen, None)
 
             if first_item is None:
-                raise NotionUpstreamError("Notion upstream returned empty content.", retriable=True)
+                raise NotionUpstreamError(
+                    "Notion upstream returned empty content.", retriable=True
+                )
 
             # 流式响应
             if req_body.stream:
@@ -935,10 +1591,13 @@ async def _handle_standard_request(
                 }
                 return StreamingResponse(
                     _create_standard_stream_generator(
+                        request,
+                        req_body,
                         response_id,
                         req_body.model,
                         first_item,
                         stream_gen,
+                        account_id=str(getattr(client, "account_id", "") or ""),
                     ),
                     media_type="text/event-stream",
                     headers=stream_headers,
@@ -959,7 +1618,9 @@ async def _handle_standard_request(
                     final_text = str(item.get("text", "") or "").strip()
                     if final_text:
                         authoritative_final_content = final_text
-                        authoritative_final_source_type = str(item.get("source_type", "") or "")
+                        authoritative_final_source_type = str(
+                            item.get("source_type", "") or ""
+                        )
                     continue
 
                 # Standard 模式：处理 thinking
@@ -990,9 +1651,38 @@ async def _handle_standard_request(
             )
 
             if not full_text.strip():
-                raise NotionUpstreamError("Notion upstream returned empty content.", retriable=True)
+                raise NotionUpstreamError(
+                    "Notion upstream returned empty content.", retriable=True
+                )
 
-            response_text = full_text if full_text.strip() else "[assistant_no_visible_content]"
+            response_text = (
+                full_text if full_text.strip() else "[assistant_no_visible_content]"
+            )
+            usage_payload = _build_usage_payload(
+                req_body=req_body,
+                output_text=response_text,
+            )
+
+            if _looks_truncated(response_text) and attempt < max_retries:
+                logger.warning(
+                    "Standard mode response looks truncated, retrying",
+                    extra={
+                        "request_info": {
+                            "event": "standard_truncation_retry",
+                            "attempt": attempt,
+                            "max_retries": max_retries,
+                            "model": req_body.model,
+                        }
+                    },
+                )
+                messages = list(messages)
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": _build_retry_prompt(raw_user_prompt, response_text),
+                    }
+                )
+                continue
 
             # 构建响应
             response_message = ChatMessage(role="assistant", content=response_text)
@@ -1005,10 +1695,10 @@ async def _handle_standard_request(
             response_obj = ChatCompletionResponse(
                 id=response_id,
                 model=req_body.model,
-                choices=[
-                    ChatMessageResponseChoice(message=response_message)
-                ],
+                choices=[ChatMessageResponseChoice(message=response_message)],
             )
+
+            response_obj.usage = usage_payload
 
             # 如果有搜索结果，添加到扩展字段（前端会读取）
             if search_results:
@@ -1024,14 +1714,27 @@ async def _handle_standard_request(
                     # 添加到自定义字段
                     response_obj.search_metadata = {
                         "queries": all_queries,
-                        "sources": all_sources
+                        "sources": all_sources,
                     }
+            elif is_search_model(req_body.model):
+                fallback_search = _extract_search_metadata_from_text(response_text)
+                if fallback_search["sources"]:
+                    response_obj.search_metadata = fallback_search
 
+            _record_usage_event(
+                request,
+                request_id=response_id,
+                request_type="chat.completions",
+                stream=False,
+                model=req_body.model,
+                usage=usage_payload,
+                account_id=str(getattr(client, "account_id", "") or ""),
+            )
             return response_obj
 
         except NotionUpstreamError as exc:
-            if client is not None and exc.retriable:
-                pool.mark_failed(client)
+            if client is not None:
+                pool.mark_upstream_error(client, exc.status_code, exc.response_excerpt)
             logger.warning(
                 "Standard mode: Notion upstream failed",
                 extra={
@@ -1045,12 +1748,36 @@ async def _handle_standard_request(
                     }
                 },
             )
+            if (
+                attempt == max_retries
+                and _search_enabled(req_body)
+                and req_body.model.endswith("-search")
+            ):
+                fallback_model = req_body.model[: -len("-search")]
+                logger.warning(
+                    "Standard mode search model exhausted retries, falling back to base model",
+                    extra={
+                        "request_info": {
+                            "event": "standard_search_fallback_to_base",
+                            "attempt": attempt,
+                            "search_model": req_body.model,
+                            "base_model": fallback_model,
+                        }
+                    },
+                )
+                req_body.model = fallback_model
+                continue
             if attempt == max_retries or not exc.retriable:
                 raise HTTPException(status_code=503, detail=str(exc)) from exc
         except RuntimeError as exc:
             logger.error(
                 "Standard mode: No available client in account pool",
-                extra={"request_info": {"event": "standard_account_pool_unavailable", "detail": str(exc)}},
+                extra={
+                    "request_info": {
+                        "event": "standard_account_pool_unavailable",
+                        "detail": str(exc),
+                    }
+                },
             )
             return JSONResponse(
                 status_code=503,
@@ -1058,9 +1785,9 @@ async def _handle_standard_request(
                     "error": {
                         "message": str(exc),
                         "type": "rate_limit_error",
-                        "code": "account_pool_cooling"
+                        "code": "account_pool_cooling",
                     }
-                }
+                },
             )
         except HTTPException:
             raise
@@ -1083,7 +1810,9 @@ async def _handle_standard_request(
                     detail="Unexpected internal error while generating completion.",
                 )
 
-    raise HTTPException(status_code=503, detail="Service unavailable: all upstream retries exhausted.")
+    raise HTTPException(
+        status_code=503, detail="Service unavailable: all upstream retries exhausted."
+    )
 
 
 @router.post("/chat/completions", tags=["chat"])
@@ -1103,6 +1832,8 @@ async def create_chat_completion(
     """
     from app.config import is_standard_mode
 
+    req_body.messages = _normalize_request_messages(req_body.messages)
+
     # Lite 模式：单轮问答，无记忆
     if is_lite_mode():
         return await _handle_lite_request(request, req_body, response)
@@ -1116,7 +1847,11 @@ async def create_chat_completion(
     manager = request.app.state.conversation_manager
 
     user_prompt, history_messages, raw_user_prompt = _prepare_messages(req_body)
-    recall_query = _extract_recall_query(raw_user_prompt) if _contains_recall_intent(raw_user_prompt) else None
+    recall_query = (
+        _extract_recall_query(raw_user_prompt)
+        if _contains_recall_intent(raw_user_prompt)
+        else None
+    )
 
     if not is_supported_model(req_body.model):
         available_models = list_available_models()
@@ -1125,7 +1860,9 @@ async def create_chat_completion(
             detail=f"Unsupported model '{req_body.model}'. Available models: {', '.join(available_models)}",
         )
 
-    conversation_id = req_body.conversation_id.strip() if req_body.conversation_id else ""
+    conversation_id = (
+        req_body.conversation_id.strip() if req_body.conversation_id else ""
+    )
     restore_history = False
     if not conversation_id:
         conversation_id = manager.new_conversation()
@@ -1158,8 +1895,12 @@ async def create_chat_completion(
             # 3. 解决"滑动窗口缺失 AI 回复"的 bug
             if history_count > existing_count:
                 _persist_history_messages(manager, conversation_id, history_messages)
-                restored_user_count = sum(1 for role, _ in history_messages if role == "user")
-                restored_assistant_count = sum(1 for role, _ in history_messages if role == "assistant")
+                restored_user_count = sum(
+                    1 for role, _, _ in history_messages if role == "user"
+                )
+                restored_assistant_count = sum(
+                    1 for role, _, _ in history_messages if role == "assistant"
+                )
 
                 logger.info(
                     "Restored history into conversation",
@@ -1178,7 +1919,7 @@ async def create_chat_completion(
                 )
 
     response_id = f"chatcmpl-{uuid.uuid4().hex}"
-    max_retries = min(3, len(pool.clients))
+    max_retries = _max_attempts_for_request(req_body, len(pool.clients))
 
     for attempt in range(1, max_retries + 1):
         client = None
@@ -1190,6 +1931,7 @@ async def create_chat_completion(
                 new_prompt=user_prompt,
                 model_name=req_body.model,
                 recall_query=recall_query,
+                search_enabled=_search_enabled(req_body),
             )
             transcript = transcript_payload["transcript"]
             memory_degraded = bool(transcript_payload.get("memory_degraded"))
@@ -1202,11 +1944,15 @@ async def create_chat_completion(
             first_item = next(stream_gen, None)
 
             # 保存 thread_id（如果是新对话）
-            if not thread_id and hasattr(client, 'current_thread_id'):
-                manager.set_conversation_thread_id(conversation_id, client.current_thread_id)
+            if not thread_id and hasattr(client, "current_thread_id"):
+                manager.set_conversation_thread_id(
+                    conversation_id, client.current_thread_id
+                )
 
             if first_item is None:
-                raise NotionUpstreamError("Notion upstream returned empty content.", retriable=True)
+                raise NotionUpstreamError(
+                    "Notion upstream returned empty content.", retriable=True
+                )
 
             def openai_stream_generator() -> Generator[str, None, None]:
                 streamed_content_accumulator = ""
@@ -1226,7 +1972,9 @@ async def create_chat_completion(
                         if item_type == "search":
                             search_data = item.get("data")
                             if isinstance(search_data, dict) and search_data:
-                                pending_search_md += _format_search_results_md(search_data)
+                                pending_search_md += _format_search_results_md(
+                                    search_data
+                                )
                                 if client_type == "web":
                                     yield _build_local_ui_chunk(
                                         response_id,
@@ -1240,7 +1988,9 @@ async def create_chat_completion(
                             final_text = str(item.get("text", "") or "").strip()
                             if final_text:
                                 authoritative_final_content = final_text
-                                authoritative_final_source_type = str(item.get("source_type", "") or "")
+                                authoritative_final_source_type = str(
+                                    item.get("source_type", "") or ""
+                                )
                             continue
 
                         if item_type == "thinking":
@@ -1252,7 +2002,7 @@ async def create_chat_completion(
                                 # Keep buffer manageable (max 40 recent chunks)
                                 if len(recent_thinking_buffer) > 40:
                                     recent_thinking_buffer.pop(0)
-                                
+
                                 if not assistant_started:
                                     assistant_started = True
                                     yield _build_stream_chunk(
@@ -1280,16 +2030,23 @@ async def create_chat_completion(
                         if recent_thinking_buffer and chunk_text.strip():
                             combined_recent_thinking = "".join(recent_thinking_buffer)
                             chunk_normalized = chunk_text.strip()
-                            
+
                             # Use normalized text without spaces for robust comparison
                             combined_norm = re.sub(r"\s+", "", combined_recent_thinking)
                             chunk_norm = re.sub(r"\s+", "", chunk_normalized)
 
                             # Check for significant overlap - skip duplicate content
                             # We only skip if a sufficiently long chunk matches to avoid swallowing short common characters.
-                            if chunk_norm and len(chunk_norm) > 3 and (
-                                chunk_norm in combined_norm or
-                                (len(chunk_norm) > 10 and chunk_norm[:10] in combined_norm)
+                            if (
+                                chunk_norm
+                                and len(chunk_norm) > 3
+                                and (
+                                    chunk_norm in combined_norm
+                                    or (
+                                        len(chunk_norm) > 10
+                                        and chunk_norm[:10] in combined_norm
+                                    )
+                                )
                             ):
                                 # Skip this chunk as it's likely duplicated thinking content
                                 logger.debug(
@@ -1307,7 +2064,7 @@ async def create_chat_completion(
                         # 在第一个正文内容发出前，把积攒的搜索信息拼上去
                         if pending_search_md and client_type != "web":
                             chunk_text = pending_search_md + chunk_text
-                        
+
                         if pending_search_md:
                             pending_search_md = ""
 
@@ -1321,7 +2078,9 @@ async def create_chat_completion(
                                 content=chunk_text,
                             )
                         else:
-                            yield _build_stream_chunk(response_id, req_body.model, content=chunk_text)
+                            yield _build_stream_chunk(
+                                response_id, req_body.model, content=chunk_text
+                            )
                 except asyncio.CancelledError:
                     logger.info(
                         "Streaming response cancelled by downstream client",
@@ -1347,9 +2106,15 @@ async def create_chat_completion(
                             },
                         )
                         return
-                    if isinstance(exc, NotionUpstreamError) and client is not None and exc.retriable:
-                        pool.mark_failed(client)
-                    log_method = logger.warning if isinstance(exc, NotionUpstreamError) else logger.error
+                    if isinstance(exc, NotionUpstreamError) and client is not None:
+                        pool.mark_upstream_error(
+                            client, exc.status_code, exc.response_excerpt
+                        )
+                    log_method = (
+                        logger.warning
+                        if isinstance(exc, NotionUpstreamError)
+                        else logger.error
+                    )
                     log_method(
                         "Streaming response interrupted",
                         exc_info=True,
@@ -1358,7 +2123,9 @@ async def create_chat_completion(
                                 "event": "stream_interrupted",
                                 "conversation_id": conversation_id,
                                 "attempt": attempt,
-                                "is_upstream_error": isinstance(exc, NotionUpstreamError),
+                                "is_upstream_error": isinstance(
+                                    exc, NotionUpstreamError
+                                ),
                             }
                         },
                     )
@@ -1373,7 +2140,9 @@ async def create_chat_completion(
                             content=error_hint,
                         )
                     else:
-                        yield _build_stream_chunk(response_id, req_body.model, content=error_hint)
+                        yield _build_stream_chunk(
+                            response_id, req_body.model, content=error_hint
+                        )
                 finally:
                     final_reply, reply_decision = _select_best_final_reply(
                         streamed_content_accumulator,
@@ -1381,10 +2150,16 @@ async def create_chat_completion(
                         authoritative_final_source_type,
                     )
 
-                    missing_suffix = _compute_missing_suffix(streamed_content_accumulator, final_reply)
+                    missing_suffix = _compute_missing_suffix(
+                        streamed_content_accumulator, final_reply
+                    )
                     if missing_suffix:
                         suffix_to_emit = missing_suffix
-                        if pending_search_md and client_type != "web" and not streamed_content_accumulator:
+                        if (
+                            pending_search_md
+                            and client_type != "web"
+                            and not streamed_content_accumulator
+                        ):
                             suffix_to_emit = pending_search_md + suffix_to_emit
                             pending_search_md = ""
                         if not assistant_started:
@@ -1396,7 +2171,9 @@ async def create_chat_completion(
                                 content=suffix_to_emit,
                             )
                         else:
-                            yield _build_stream_chunk(response_id, req_body.model, content=suffix_to_emit)
+                            yield _build_stream_chunk(
+                                response_id, req_body.model, content=suffix_to_emit
+                            )
                         streamed_content_accumulator += suffix_to_emit
                     elif final_reply != streamed_content_accumulator:
                         # Diverged bodies cannot be safely "patched" in plain OpenAI deltas.
@@ -1426,7 +2203,9 @@ async def create_chat_completion(
                                     content=emit_text,
                                 )
                             else:
-                                yield _build_stream_chunk(response_id, req_body.model, content=emit_text)
+                                yield _build_stream_chunk(
+                                    response_id, req_body.model, content=emit_text
+                                )
                             streamed_content_accumulator = final_reply
 
                     thinking_replacement = _build_thinking_replacement(
@@ -1473,7 +2252,23 @@ async def create_chat_completion(
                                     }
                                 },
                             )
-                    yield _build_stream_chunk(response_id, req_body.model, finish_reason="stop")
+                    usage_payload = _build_usage_payload(
+                        req_body=req_body,
+                        output_text=final_reply or streamed_content_accumulator,
+                    )
+                    _record_usage_event(
+                        request,
+                        request_id=response_id,
+                        request_type="chat.completions",
+                        stream=True,
+                        model=req_body.model,
+                        usage=usage_payload,
+                        account_id=str(getattr(client, "account_id", "") or ""),
+                        conversation_id=conversation_id,
+                    )
+                    yield _build_stream_chunk(
+                        response_id, req_body.model, finish_reason="stop"
+                    )
                     yield "data: [DONE]\n\n"
 
             if req_body.stream:
@@ -1501,7 +2296,9 @@ async def create_chat_completion(
                     final_text = str(item.get("text", "") or "").strip()
                     if final_text:
                         authoritative_final_content = final_text
-                        authoritative_final_source_type = str(item.get("source_type", "") or "")
+                        authoritative_final_source_type = str(
+                            item.get("source_type", "") or ""
+                        )
                     continue
                 if item_type == "thinking":
                     thinking_text = str(item.get("text", "") or "")
@@ -1521,7 +2318,9 @@ async def create_chat_completion(
             )
             merged_thinking = "".join(thinking_parts).strip()
             if not full_text.strip() and not merged_thinking:
-                raise NotionUpstreamError("Notion upstream returned empty content.", retriable=True)
+                raise NotionUpstreamError(
+                    "Notion upstream returned empty content.", retriable=True
+                )
 
             _persist_round(
                 manager,
@@ -1535,7 +2334,40 @@ async def create_chat_completion(
             if memory_degraded:
                 response.headers["X-Memory-Status"] = "degraded"
 
-            response_text = full_text if full_text.strip() else "[assistant_no_visible_content]"
+            response_text = (
+                full_text if full_text.strip() else "[assistant_no_visible_content]"
+            )
+            usage_payload = _build_usage_payload(
+                req_body=req_body,
+                output_text=response_text,
+            )
+
+            if _looks_truncated(response_text) and attempt < max_retries:
+                logger.warning(
+                    "Heavy mode response looks truncated, retrying",
+                    extra={
+                        "request_info": {
+                            "event": "heavy_truncation_retry",
+                            "attempt": attempt,
+                            "max_retries": max_retries,
+                            "conversation_id": conversation_id,
+                            "model": req_body.model,
+                        }
+                    },
+                )
+                user_prompt = _build_retry_prompt(user_prompt, response_text)
+                continue
+
+            _record_usage_event(
+                request,
+                request_id=response_id,
+                request_type="chat.completions",
+                stream=False,
+                model=req_body.model,
+                usage=usage_payload,
+                account_id=str(getattr(client, "account_id", "") or ""),
+                conversation_id=conversation_id,
+            )
             return ChatCompletionResponse(
                 id=response_id,
                 model=req_body.model,
@@ -1544,10 +2376,11 @@ async def create_chat_completion(
                         message=ChatMessage(role="assistant", content=response_text)
                     )
                 ],
+                usage=usage_payload,
             )
         except NotionUpstreamError as exc:
-            if client is not None and exc.retriable:
-                pool.mark_failed(client)
+            if client is not None:
+                pool.mark_upstream_error(client, exc.status_code, exc.response_excerpt)
             logger.warning(
                 "Notion upstream failed",
                 extra={
@@ -1567,7 +2400,12 @@ async def create_chat_completion(
         except RuntimeError as exc:
             logger.error(
                 "No available client in account pool",
-                extra={"request_info": {"event": "account_pool_unavailable", "detail": str(exc)}},
+                extra={
+                    "request_info": {
+                        "event": "account_pool_unavailable",
+                        "detail": str(exc),
+                    }
+                },
             )
             # 返回标准的 OpenAI 错误格式，让客户端（如 Cherry Studio）能直观显示报错
             return JSONResponse(
@@ -1576,9 +2414,9 @@ async def create_chat_completion(
                     "error": {
                         "message": str(exc),
                         "type": "rate_limit_error",
-                        "code": "account_pool_cooling"
+                        "code": "account_pool_cooling",
                     }
-                }
+                },
             )
         except HTTPException:
             raise
@@ -1602,7 +2440,48 @@ async def create_chat_completion(
                     detail="Unexpected internal error while generating completion.",
                 )
 
-    raise HTTPException(status_code=503, detail="Service unavailable: all upstream retries exhausted.")
+
+@router.post("/responses", tags=["chat"])
+async def create_responses(
+    request: Request,
+    req_body: ResponsesRequest,
+    background_tasks: BackgroundTasks,
+    response: Response,
+):
+    chat_req = _chat_request_from_responses(req_body)
+    result = await create_chat_completion(
+        request=request,
+        req_body=chat_req,
+        background_tasks=background_tasks,
+        response=response,
+    )
+
+    if isinstance(result, StreamingResponse):
+        response_id = response.headers.get("X-Response-Id") or f"resp_{uuid.uuid4().hex}"
+        response.headers["X-Response-Id"] = response_id
+        return _wrap_chat_stream_as_responses_stream(result, model=chat_req.model)
+
+    if isinstance(result, ChatCompletionResponse):
+        assistant_message = result.choices[0].message if result.choices else None
+        output_text = ""
+        if assistant_message is not None:
+            output_text = content_to_text(assistant_message.content)
+        _record_usage_event(
+            request,
+            request_id=f"resp_{result.id}",
+            request_type="responses",
+            stream=False,
+            model=result.model,
+            usage=result.usage,
+            conversation_id=response.headers.get("X-Conversation-Id") or "",
+        )
+        return _build_responses_response(result, output_text=output_text)
+
+    return result
+
+    raise HTTPException(
+        status_code=503, detail="Service unavailable: all upstream retries exhausted."
+    )
 
 
 @router.delete("/conversations/{conversation_id}", tags=["chat"])

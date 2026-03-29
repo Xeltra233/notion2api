@@ -13,6 +13,8 @@ venv/
 # Environment variables (SECURITY RISK)
 .env
 .env.*
+accounts*.json
+*.accounts.json
 
 # Data & Database
 data/

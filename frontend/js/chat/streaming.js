@@ -29,7 +29,7 @@ window.NotionAI.Chat.Streaming = {
             ))
             .map(msg => ({
                 role: msg.role,
-                content: String(msg.content || ''),
+                content: Array.isArray(msg.content) ? msg.content : String(msg.content || ''),
                 thinking: String(msg.thinking || '')
             }));
 
@@ -70,10 +70,17 @@ window.NotionAI.Chat.Streaming = {
             }
 
             if (!response.ok) {
+                let detail = '';
+                try {
+                    const payload = await response.json();
+                    detail = payload?.detail || '';
+                } catch (parseError) {
+                    detail = '';
+                }
                 if (response.status === 401) {
                     throw new Error("API KEY doesn't match.");
                 }
-                throw new Error(`HTTP Error: ${response.status}`);
+                throw new Error(detail || `HTTP Error: ${response.status}`);
             }
 
             // Process stream

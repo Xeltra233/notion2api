@@ -12,13 +12,20 @@ window.NotionAI.Core.State = {
     _state: {
         baseUrl: localStorage.getItem('claude_base_url') || window.location.origin,
         apiKey: '',
+        adminUsername: sessionStorage.getItem('claude_admin_username') || 'admin',
+        adminPassword: '',
+        adminSessionToken: sessionStorage.getItem('claude_admin_session') || '',
+        adminSessionExpiresAt: Number(sessionStorage.getItem('claude_admin_session_expires_at') || 0),
+        adminMustChangePassword: sessionStorage.getItem('claude_admin_must_change_password') === 'true',
         theme: localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
         chats: JSON.parse(localStorage.getItem('claude_chats')) || [],
         currentChatId: null,
         isGenerating: false,
         controller: null,
         modelDisplayNames: {},
-        chatToRename: null
+        chatToRename: null,
+        pendingAttachments: [],
+        attachmentHint: ''
     },
 
     /**
@@ -44,6 +51,39 @@ window.NotionAI.Core.State = {
             localStorage.removeItem('claude_api_key');
             sessionStorage.removeItem('claude_api_key');
         }
+    },
+
+    persistAdminSession({ username = '', sessionToken = '', sessionExpiresAt = 0, mustChangePassword = false } = {}) {
+        localStorage.removeItem('claude_admin_password');
+        if (username) {
+            sessionStorage.setItem('claude_admin_username', username);
+        } else {
+            sessionStorage.removeItem('claude_admin_username');
+        }
+        if (sessionToken) {
+            sessionStorage.setItem('claude_admin_session', sessionToken);
+        } else {
+            sessionStorage.removeItem('claude_admin_session');
+        }
+        if (sessionExpiresAt) {
+            sessionStorage.setItem('claude_admin_session_expires_at', String(sessionExpiresAt));
+        } else {
+            sessionStorage.removeItem('claude_admin_session_expires_at');
+        }
+        sessionStorage.setItem('claude_admin_must_change_password', mustChangePassword ? 'true' : 'false');
+    },
+
+    clearAdminSession() {
+        localStorage.removeItem('claude_admin_password');
+        sessionStorage.removeItem('claude_admin_password');
+        sessionStorage.removeItem('claude_admin_username');
+        sessionStorage.removeItem('claude_admin_session');
+        sessionStorage.removeItem('claude_admin_session_expires_at');
+        sessionStorage.removeItem('claude_admin_must_change_password');
+        this._state.adminPassword = '';
+        this._state.adminSessionToken = '';
+        this._state.adminSessionExpiresAt = 0;
+        this._state.adminMustChangePassword = false;
     },
 
     /**

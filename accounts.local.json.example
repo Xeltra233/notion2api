@@ -1,0 +1,10 @@
+[
+  {
+    "token_v2": "your_token",
+    "space_id": "your_space",
+    "user_id": "your_uid",
+    "space_view_id": "your_view",
+    "user_name": "your_name",
+    "user_email": "your_email"
+  }
+]

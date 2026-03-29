@@ -8,6 +8,28 @@ window.NotionAI = window.NotionAI || {};
 window.NotionAI.Chat = window.NotionAI.Chat || {};
 
 window.NotionAI.Chat.Renderer = {
+    getUserMessageText(content) {
+        if (typeof content === 'string') {
+            return content;
+        }
+        if (!Array.isArray(content)) {
+            return '';
+        }
+        return content
+            .filter(part => part && part.type === 'text' && typeof part.text === 'string')
+            .map(part => part.text)
+            .join('\n\n');
+    },
+
+    getUserMessageImages(content) {
+        if (!Array.isArray(content)) {
+            return [];
+        }
+        return content
+            .filter(part => part && part.type === 'image_url' && part.image_url && typeof part.image_url.url === 'string')
+            .map(part => part.image_url.url)
+            .filter(Boolean);
+    },
     /**
      * Creates a message element wrapper
      * @param {string} role - Message role ('user' or 'assistant')
@@ -206,7 +228,34 @@ window.NotionAI.Chat.Renderer = {
         const { wrapper, bubble } = this.createMessageElement(role, resolvedModelDisplayName);
 
         if (role === 'user') {
-            bubble.textContent = content;
+            const textContent = this.getUserMessageText(content);
+            const imageUrls = this.getUserMessageImages(content);
+            if (textContent) {
+                const textBlock = document.createElement('div');
+                textBlock.className = 'whitespace-pre-wrap leading-relaxed';
+                textBlock.textContent = textContent;
+                bubble.appendChild(textBlock);
+            }
+            if (imageUrls.length) {
+                const grid = document.createElement('div');
+                grid.className = 'user-image-grid';
+                imageUrls.forEach((url) => {
+                    const img = document.createElement('img');
+                    img.src = url;
+                    img.alt = 'User upload';
+                    img.addEventListener('click', () => {
+                        const modal = document.getElementById('imagePreviewModal');
+                        const preview = document.getElementById('imagePreviewContent');
+                        if (modal && preview) {
+                            preview.src = url;
+                            modal.classList.remove('hidden');
+                            modal.classList.add('flex');
+                        }
+                    });
+                    grid.appendChild(img);
+                });
+                bubble.appendChild(grid);
+            }
         } else {
             const refs = this.appendAssistantContent(bubble, content, isFinished, resolvedModelDisplayName);
             Object.assign(wrapper, refs);

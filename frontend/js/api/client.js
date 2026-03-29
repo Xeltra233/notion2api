@@ -18,6 +18,7 @@ window.NotionAI.API.Client = {
     async post(endpoint, data, options = {}) {
         const baseUrl = window.NotionAI.Core.State.get('baseUrl');
         const apiKey = window.NotionAI.Core.State.get('apiKey');
+        const adminSessionToken = window.NotionAI.Core.State.get('adminSessionToken');
 
         const response = await fetch(`${baseUrl}${endpoint}`, {
             method: 'POST',
@@ -25,6 +26,7 @@ window.NotionAI.API.Client = {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${apiKey}`,
                 'X-Client-Type': window.NotionAI.Core.Constants.CLIENT_TYPE,
+                ...(adminSessionToken ? { 'X-Admin-Session': adminSessionToken } : {}),
                 ...options.headers
             },
             body: JSON.stringify(data),
@@ -42,13 +44,76 @@ window.NotionAI.API.Client = {
     async delete(endpoint) {
         const baseUrl = window.NotionAI.Core.State.get('baseUrl');
         const apiKey = window.NotionAI.Core.State.get('apiKey');
+        const adminSessionToken = window.NotionAI.Core.State.get('adminSessionToken');
 
         const response = await fetch(`${baseUrl}${endpoint}`, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
-                'X-Client-Type': window.NotionAI.Core.Constants.CLIENT_TYPE
+                'X-Client-Type': window.NotionAI.Core.Constants.CLIENT_TYPE,
+                ...(adminSessionToken ? { 'X-Admin-Session': adminSessionToken } : {})
             }
+        });
+
+        return response;
+    },
+
+    async get(endpoint, options = {}) {
+        const baseUrl = window.NotionAI.Core.State.get('baseUrl');
+        const apiKey = window.NotionAI.Core.State.get('apiKey');
+        const adminSessionToken = window.NotionAI.Core.State.get('adminSessionToken');
+
+        const response = await fetch(`${baseUrl}${endpoint}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'X-Client-Type': window.NotionAI.Core.Constants.CLIENT_TYPE,
+                ...(adminSessionToken ? { 'X-Admin-Session': adminSessionToken } : {}),
+                ...options.headers
+            },
+            ...options
+        });
+
+        return response;
+    },
+
+    async patch(endpoint, data, options = {}) {
+        const baseUrl = window.NotionAI.Core.State.get('baseUrl');
+        const apiKey = window.NotionAI.Core.State.get('apiKey');
+        const adminSessionToken = window.NotionAI.Core.State.get('adminSessionToken');
+
+        const response = await fetch(`${baseUrl}${endpoint}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`,
+                'X-Client-Type': window.NotionAI.Core.Constants.CLIENT_TYPE,
+                ...(adminSessionToken ? { 'X-Admin-Session': adminSessionToken } : {}),
+                ...options.headers
+            },
+            body: JSON.stringify(data),
+            ...options
+        });
+
+        return response;
+    },
+
+    async put(endpoint, data, options = {}) {
+        const baseUrl = window.NotionAI.Core.State.get('baseUrl');
+        const apiKey = window.NotionAI.Core.State.get('apiKey');
+        const adminSessionToken = window.NotionAI.Core.State.get('adminSessionToken');
+
+        const response = await fetch(`${baseUrl}${endpoint}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`,
+                'X-Client-Type': window.NotionAI.Core.Constants.CLIENT_TYPE,
+                ...(adminSessionToken ? { 'X-Admin-Session': adminSessionToken } : {}),
+                ...options.headers
+            },
+            body: JSON.stringify(data),
+            ...options
         });
 
         return response;

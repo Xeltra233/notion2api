@@ -1,246 +1,232 @@
 # Notion2API
 
-> Notion AI to OpenAI-Compatible API Wrapper
+> A Notion-based OpenAI-compatible API service with an admin operations console, account pool, runtime controls, usage reporting, and workspace/register automation.
 
 🌐 English | [中文](./README_CN.md)
 
-Notion2API wraps Notion AI as an OpenAI-compatible API, supporting direct use with Cherry Studio, Zotero, and other third-party clients, as well as existing frontend pages.
+## What this project is now
 
-## Features
+Notion2API is no longer just a thin chat wrapper.
 
-- **Three Operation Modes** - Lite/Standard/Heavy to meet different needs
-- **OpenAI Compatible** - Standard `/v1/chat/completions` endpoint
-- **Streaming Response** - SSE real-time output support
-- **Thinking Panel** - Reasoning process display for all models
-- **Search Feature** - Web search results display
-- **Account Pool** - Multi-account load balancing and failover
-- **Docker Deployment** - Ready-to-use containerized solution
+It now combines:
 
----
+- an OpenAI-compatible API surface for chat clients
+- a multi-account Notion account pool
+- a browser-based admin console
+- session-based admin authentication
+- runtime configuration and proxy diagnostics
+- usage summary and usage event queries
+- refresh / probe / workspace operations
+- register automation and hydration diagnostics
 
-## Mode Comparison
-
-| Feature | Lite | Standard | Heavy |
-|---------|------|----------|-------|
-| **Memory** | ❌ None | ✅ Client-managed | ✅ Server-managed |
-| **Database** | ❌ Not needed | ❌ Not needed | ✅ SQLite |
-| **Thinking** | ❌ Not needed | ✅ Dedicated panel | ✅ Dedicated panel |
-| **Search Results** | ❌ Not needed | ✅ Dedicated panel | ✅ Dedicated panel |
-| **Rate Limit** | 30/min | 25/min | 20/min |
-| **Use Case** | Simple Q&A | Short-mid conversations | Long-term conversations |
-
-To switch modes: change the `APP_MODE` variable in `.env`.
+If you only expect a `/v1/chat/completions` proxy, the project has already grown beyond that scope.
 
 ---
 
-## Quick Start
+## Core capabilities
 
-### 1. Get Notion Credentials
+### API layer
 
-Open https://www.notion.so/ai and log in, then press `F12` to open DevTools:
+- OpenAI-compatible `/v1/chat/completions`
+- lightweight `/v1/responses` compatibility endpoint
+- streaming responses
+- multimodal-compatible request parsing at the API layer
+- model registry and compatibility handling
 
-**Step 1: Get token_v2**
-1. Switch to the **Application** tab
-2. Expand **Storage → Cookies → https://www.notion.so** on the left
-3. Find `token_v2` and copy its Value
+### Account pool and operations
 
-**Step 2: Get other information**
-1. Switch to the **Console** tab
-2. Copy and paste the code from `scripts/extract_notion_info.js`, then press Enter
-3. The script will automatically retrieve `space_id`, `user_id`, and 5 other fields
-4. Copy the output, replace `YOUR_TOKEN_V2_HERE` with the token_v2 from Step 1
-5. Paste into the `.env` file
+- multi-account load balancing
+- safe vs raw admin account views
+- account export / import / replace flows
+- per-account refresh, probe, workspace sync, workspace creation
+- action logs and audit-oriented metadata
 
-### 2. Configure Environment Variables
+### Admin console
+
+- browser-based admin workspace
+- `admin session` login flow
+- forced password rotation for default admin credentials
+- overview / usage / accounts / runtime / diagnostics sections
+- masked vs raw data exposure semantics
+
+### Runtime and diagnostics
+
+- runtime config editing
+- proxy health inspection
+- refresh diagnostics
+- workspace diagnostics
+- request template inspection
+- auto-register status and queue visibility
+
+### Usage reporting
+
+- `/v1/admin/usage/summary`
+- `/v1/admin/usage/events`
+- filtering by time, model, account, and request type
+
+---
+
+## Admin security model
+
+Admin routes are no longer protected by a reusable plain password header alone.
+
+Current admin flow:
+
+1. `POST /v1/admin/login` with username/password
+2. receive a short-lived `admin session`
+3. send `X-Admin-Session` on admin requests
+4. if default credentials are still in use, sensitive admin actions are blocked until password rotation is completed
+
+Important behavior:
+
+- `/v1/admin/accounts/safe` returns masked account data
+- `/v1/admin/accounts` and `/v1/admin/accounts/{account_id}` are explicit raw views
+- `/v1/admin/accounts/export` is masked by default; `?raw=true` is explicit
+- utility/status endpoints expose `response_mode`
+- config/report/snapshot style endpoints expose `redaction_mode`
+
+---
+
+## Quick start
+
+### 1. Prepare credentials
+
+Open https://www.notion.so/ai and log in, then use DevTools to collect the required values.
+
+Minimal account fields:
+
+- `token_v2`
+- `space_id`
+- `user_id`
+
+You can store accounts either:
+
+- directly in `.env` with `NOTION_ACCOUNTS`
+- or in a local JSON file with `NOTION_ACCOUNTS_FILE`
+
+Example:
 
 ```bash
-# Copy example config
 cp .env.example .env
 
-# Edit .env and fill in your credentials
 NOTION_ACCOUNTS='[{"token_v2":"your_token","space_id":"your_space","user_id":"your_uid","space_view_id":"your_view","user_name":"your_name","user_email":"your_email"}]'
-APP_MODE=standard  # lite / standard / heavy
+APP_MODE=standard
 ```
 
-**⚠️ If using Heavy mode**:
+Or:
 
-Heavy mode requires `SILICONFLOW_API_KEY` (for conversation summary compression):
-1. Visit https://siliconflow.cn to register an account (free)
-2. Get your API Key
-3. Add it to `.env`:
-   ```bash
-   SILICONFLOW_API_KEY=your_api_key_here
-   APP_MODE=heavy
-   ```
+```bash
+NOTION_ACCOUNTS_FILE=./accounts.local.json
+APP_MODE=standard
+```
 
-### 3. Start the Service
+See `accounts.local.json.example` for the expected file format.
 
-#### Docker Deployment (Recommended)
+### 2. Start the service
+
+#### Docker
 
 ```bash
 docker-compose up -d
-# Access http://localhost:8000
 ```
 
-#### Local Run
+#### Local
 
 ```bash
 pip install -r requirements.txt
 uvicorn app.server:app --host 0.0.0.0 --port 8000
 ```
 
----
+Default local entry:
 
-## Supported Models
-
-| Model Name | Description |
-|---|---|
-| `claude-sonnet4.6` | Best balance of performance and speed! (**Most recommended**, most optimized, most reliable) |
-| `claude-opus4.6` | Stronger reasoning, but not recommended for frequent use |
-| `gemini-3.1pro` | Google model, currently suspended officially but **still accessible here**, no web search support |
-| `gpt-5.2` / `gpt-5.4` | Latest OpenAI models, also great |
-
-View full list: `GET http://localhost:8000/v1/models`
+- app: `http://localhost:8000`
+- models: `GET /v1/models`
+- admin console: open the bundled frontend and sign in from the settings/admin area
 
 ---
 
-## API Usage
-This project supports custom API keys with no format requirements.
+## Main admin endpoints
 
-### Python Example
+### Auth
 
-```python
-from openai import OpenAI
+- `POST /v1/admin/login`
+- `POST /v1/admin/change-password`
 
-client = OpenAI(
-    base_url="http://localhost:8000/v1",
-    api_key="optional_api_key"
-)
+### Accounts
 
-response = client.chat.completions.create(
-    model="claude-sonnet4.6",
-    messages=[{"role": "user", "content": "Hello"}],
-    stream=True
-)
+- `GET /v1/admin/accounts/safe`
+- `GET /v1/admin/accounts`
+- `GET /v1/admin/accounts/{account_id}`
+- `PATCH /v1/admin/accounts/{account_id}`
+- `DELETE /v1/admin/accounts/{account_id}`
+- `GET /v1/admin/accounts/export`
+- `POST /v1/admin/accounts/import`
+- `POST /v1/admin/accounts/replace`
 
-for chunk in response:
-    print(chunk.choices[0].delta.content or "", end="")
-```
+### Runtime / diagnostics
 
----
+- `GET /v1/admin/config`
+- `PUT /v1/admin/config/settings`
+- `GET /v1/admin/config/proxy-health`
+- `GET /v1/admin/oauth/refresh-status`
+- `GET /v1/admin/oauth/refresh-diagnostics`
+- `GET /v1/admin/workspaces/create-status`
+- `GET /v1/admin/workspaces/diagnostics`
+- `GET /v1/admin/request-templates`
 
-## Web UI
-(Custom design inspired by Claude style, supports Standard and Heavy modes)
+### Usage
 
-Access `http://localhost:8000` to use the built-in Web UI:
-
-- **Main Content Area** - Displays AI responses
-- **Thinking Panel** - Shows reasoning process (collapsible)
-- **Search Panel** - Shows search sources (collapsible)
-- **Star Feature** - Bookmark valuable conversations to the top
-
----
-
-## Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `APP_MODE` | Operation mode: lite/standard/heavy | `heavy` |
-| `NOTION_ACCOUNTS` | Notion credentials JSON array | Required |
-| `API_KEY` | Client authentication key | Optional (recommended) |
-| `DB_PATH` | SQLite database path | `./data/conversations.db` |
-| `HOST_PORT` | Host port | `8000` |
-| `SILICONFLOW_API_KEY` | Required for Heavy mode, used for early conversation summary compression | Optional |
+- `GET /v1/admin/usage/summary`
+- `GET /v1/admin/usage/events`
 
 ---
 
-## Docker Deployment
+## Frontend admin console
 
-### Using docker-compose (Recommended)
+The frontend now includes an operations-oriented admin workspace instead of only a basic settings view.
 
-```bash
-# 1. Configure .env file
-cp .env.example .env
+Current sections include:
 
-# 2. Start service
-docker-compose up -d
+- Overview
+- Usage
+- Accounts
+- Runtime
+- Diagnostics
 
-# 3. View logs
-docker-compose logs -f
+The frontend also supports:
 
-# 4. Stop service
-docker-compose down
-```
-
-### Custom Port
-
-Modify the `HOST_PORT` variable in `.env`:
-```bash
-HOST_PORT=8080  # Use port 8080
-```
+- admin login state restore within the current browser session
+- forced default-password rotation guidance
+- callback parsing for OAuth import flows
+- masked/safe rendering for admin data by default
+- usage filters and event list rendering
 
 ---
 
-## FAQ
+## Verification scripts
 
-> For detailed error solutions, see [Issues & Troubleshooting](./issues.md)
+This repository now includes a larger set of non-manual verification scripts for admin, runtime, account, export, and usage behavior.
 
-### 1. Thinking panel not showing?
+Examples:
 
-Make sure you are using `APP_MODE=standard` or `heavy`. Lite mode does not support Thinking.
+- `scripts/verify_admin_session_auth_flow.py`
+- `scripts/verify_usage_admin_endpoints.py`
+- `scripts/verify_register_admin_protection.py`
+- `scripts/verify_refresh_action_success.py`
+- `scripts/verify_create_workspace_success.py`
+- `scripts/verify_refresh_probe_success.py`
+- `scripts/verify_workspace_probe_success.py`
+- `scripts/verify_safe_accounts_view.py`
+- `scripts/verify_admin_redaction_modes.py`
 
-### 2. How to switch modes?
-
-Modify `APP_MODE` in `.env`, then restart the service:
-```bash
-APP_MODE=standard  # Switch to standard
-docker-compose restart
-```
-
-### 3. How to configure multiple accounts?
-(Multiple accounts improve stability, Beta version)
-
-`NOTION_ACCOUNTS` supports array format:
-```json
-[
-  {"token_v2":"token1","space_id":"space1",...},
-  {"token_v2":"token2","space_id":"space2",...}
-]
-```
+These scripts are intended to validate backend behavior without relying only on manual UI checks.
 
 ---
-
-## Compatibility Test
-(Note: Due to Notion's own AI call rate, there is usually a ~3 second delay from sending a query to receiving an answer. Clients with high latency requirements, such as Immersive Translate, are not recommended.)
-
-| Client | Status | Notes |
-|--------|--------|-------|
-| Cherry Studio | ✅ Full support | Recommended |
-| Zotero Translation | ✅ Full support | Slightly slow, but sonnet model is accurate |
-| Immersive Translate | Not recommended | Very slow |
-
----
-
-## License
-
-MIT License
-
----
-
-## Star History
-
-If this project helps you, please give it a Star ⭐
 
 ## Notes
-This project was built with assistance from Claude Code and Codex.
 
-**Heavy Mode Details**:
-- Sliding window: retains the most recent **8 rounds** of conversation (16 messages) by default
-- Summary compression: content beyond the window is automatically compressed into a summary
-- Full archive: all history is permanently stored in the SQLite database
-
-**Future Improvements**:
-- If you need a custom sliding window size (e.g., 10 or 20 rounds), feel free to submit an Issue
-- We will add environment variable configuration options based on demand
-
-Issues and suggestions are welcome!
+- local account JSON files are meant to stay uncommitted
+- safe views are the default for admin list/export flows
+- raw views and raw exports are explicit and auditable
+- default admin credentials should be rotated immediately after first login
+- the project still supports chat usage, but operational administration is now a first-class part of the product

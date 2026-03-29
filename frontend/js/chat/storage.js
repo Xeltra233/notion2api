@@ -36,10 +36,35 @@ window.NotionAI.Chat.Storage = {
         const currentChatId = window.NotionAI.Core.State.get('currentChatId');
         const chat = chats.find(c => c.id === currentChatId);
         if (chat) {
-            chat.messages.push(message);
+            chat.messages.push(this.sanitizeMessageForStorage(message));
             window.NotionAI.Core.State.set('chats', chats);
             this.saveChats();
         }
+    },
+
+    sanitizeMessageForStorage(message) {
+        if (!message || typeof message !== 'object') {
+            return message;
+        }
+        const cloned = { ...message };
+        if (Array.isArray(cloned.content)) {
+            cloned.content = cloned.content.map((part) => {
+                if (!part || typeof part !== 'object') {
+                    return part;
+                }
+                if (part.type === 'image_url' && part.image_url && typeof part.image_url.url === 'string') {
+                    return {
+                        type: 'image_url',
+                        image_url: { url: part.image_url.url }
+                    };
+                }
+                if (part.type === 'text') {
+                    return { type: 'text', text: String(part.text || '') };
+                }
+                return part;
+            });
+        }
+        return cloned;
     },
 
     /**

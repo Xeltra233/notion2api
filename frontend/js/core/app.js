@@ -23,6 +23,17 @@ function init() {
 
     // Load models
     window.NotionAI.API.Models.loadModels();
+    if (window.NotionAI.Core.State.get('adminSessionToken')) {
+        const restoredMessage = window.NotionAI.Core.State.get('adminMustChangePassword')
+            ? '已恢复 admin session。使用后台面板前请先更新默认凭证。'
+            : '当前浏览器会话的 admin session 已恢复。';
+        window.NotionAI.API.Settings.refreshAdminPanel(restoredMessage);
+    }
+    window.NotionAI.API.Settings.consumeOAuthCallbackParams();
+    window.NotionAI.API.Settings.autoFinalizeOAuthIfPossible();
+    window.NotionAI.API.Settings.bindActionHistoryFilters();
+    window.NotionAI.API.Settings.bindUsageFilters();
+    window.NotionAI.API.Settings.bindConsoleNavigation();
 
     // Render initial UI
     window.NotionAI.Chat.Manager.renderChatList();
@@ -64,6 +75,18 @@ function bindEventListeners() {
     document.getElementById('mobileBackdrop').addEventListener('click', () => {
         window.NotionAI.UI.Sidebar.close();
     });
+    document.getElementById('imagePreviewClose').addEventListener('click', () => {
+        const modal = document.getElementById('imagePreviewModal');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    });
+    document.getElementById('imagePreviewModal').addEventListener('click', (e) => {
+        if (e.target.id === 'imagePreviewModal') {
+            const modal = document.getElementById('imagePreviewModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+    });
 
     // Input
     document.getElementById('chatInput').addEventListener('input', () => {
@@ -73,6 +96,32 @@ function bindEventListeners() {
         window.NotionAI.UI.Input.handleKeydown(e, handleSend);
     });
     document.getElementById('sendBtn').addEventListener('click', handleSend);
+    document.getElementById('imageUploadBtn').addEventListener('click', () => {
+        document.getElementById('imageUploadInput').click();
+    });
+    document.getElementById('imageUploadInput').addEventListener('change', async (e) => {
+        try {
+            await window.NotionAI.UI.Input.addFiles(e.target.files);
+        } catch (error) {
+            console.error('Image upload failed:', error);
+            window.NotionAI.UI.Input.setAttachmentHint(error.message || 'Image upload failed.');
+        }
+    });
+    const composer = document.getElementById('chatInput').closest('.w-full');
+    if (composer) {
+        composer.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+        composer.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            try {
+                await window.NotionAI.UI.Input.addFiles(e.dataTransfer?.files || []);
+            } catch (error) {
+                console.error('Drag upload failed:', error);
+                window.NotionAI.UI.Input.setAttachmentHint(error.message || 'Image drag upload failed.');
+            }
+        });
+    }
 
     // Memory banner
     document.getElementById('memoryBannerClose').addEventListener('click', () => {
@@ -88,6 +137,163 @@ function bindEventListeners() {
     });
     document.getElementById('saveSettingsBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.save();
+    });
+    document.getElementById('adminUpdateCredentialsBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.updateAdminCredentialsOnly();
+    });
+    document.getElementById('adminSignOutBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.signOutAdminSession();
+    });
+    document.getElementById('adminRefreshBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.refreshAdminPanel('后台面板已刷新。');
+    });
+    document.getElementById('adminApplyFiltersBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.refreshAdminPanel('筛选条件已应用。');
+    });
+    document.getElementById('adminClearFiltersBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.clearAdminFilters();
+        window.NotionAI.API.Settings.refreshAdminPanel('筛选条件已清空。');
+    });
+    document.getElementById('adminQuickInvalidBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.applyQuickFilter('invalid');
+    });
+    document.getElementById('adminQuickProbeFailuresBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.applyQuickFilter('probe_failures');
+    });
+    document.getElementById('adminQuickRefreshBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.applyQuickFilter('needs_refresh');
+    });
+    document.getElementById('adminQuickWorkspaceBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.applyQuickFilter('no_workspace');
+    });
+    document.getElementById('adminQuickPendingHydrationBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.applyPendingHydrationFilter();
+    });
+    document.getElementById('adminQuickHydrationDueBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.applyHydrationDueFilter();
+    });
+    document.getElementById('adminQuickEducationBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.applyQuickFilter('education');
+    });
+    document.getElementById('adminQuickUsableBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.applyQuickFilter('usable');
+    });
+    document.getElementById('adminBulkProbeBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.bulkActionOnFiltered('probe', '批量探测已完成。');
+    });
+    document.getElementById('adminBulkRefreshBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.bulkActionOnFiltered('refresh', '批量刷新已完成。');
+    });
+    document.getElementById('adminBulkRefreshProbeBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.bulkActionOnFiltered('refresh_probe', '批量刷新探测已完成。');
+    });
+    document.getElementById('adminBulkEnableBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.bulkActionOnFiltered('enable', '批量启用已完成。');
+    });
+    document.getElementById('adminBulkDisableBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.bulkActionOnFiltered('disable', '批量停用已完成。');
+    });
+    document.getElementById('adminBulkSyncWorkspaceBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.bulkActionOnFiltered('sync_workspace', '批量工作区同步已完成。');
+    });
+    document.getElementById('adminBulkHydrationRetryBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.bulkActionOnFiltered('register_hydration_retry', '批量补全重试已完成。');
+    });
+    document.getElementById('adminBulkCreateWorkspaceBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.bulkActionOnFiltered('create_workspace', '已触发批量创建工作区。');
+    });
+    document.getElementById('adminBulkWorkspaceProbeBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.bulkActionOnFiltered('workspace_probe', '批量工作区探测已完成。');
+    });
+    document.getElementById('adminProbeBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.runAdminAction('/v1/admin/accounts/probe', '探测已完成。');
+    });
+    document.getElementById('adminRefreshTokensBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.runAdminAction('/v1/admin/accounts/refresh', '刷新尝试已完成。');
+    });
+    document.getElementById('adminWorkspaceSyncBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.runAdminAction('/v1/admin/accounts/workspaces/sync', '工作区同步已完成。');
+    });
+    document.getElementById('adminWorkspaceCreateBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.runAdminAction('/v1/admin/accounts/workspaces/create', '已触发工作区创建流程。');
+    });
+    document.getElementById('adminAddAccountBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.addAccountFromForm();
+    });
+    document.getElementById('adminClearAccountFormBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.clearAccountForm();
+    });
+    document.getElementById('adminImportAccountsBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.bulkImportAccounts();
+    });
+    document.getElementById('adminReplaceAccountsBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.bulkReplaceAccounts();
+    });
+    document.getElementById('adminExportAccountsBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.exportAccountsToTextarea();
+    });
+    document.getElementById('adminPrevPageBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.changeAdminPage(-1);
+    });
+    document.getElementById('adminNextPageBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.changeAdminPage(1);
+    });
+    document.getElementById('runtimeLoadBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.loadRuntimeConfigIntoForm();
+    });
+    document.getElementById('runtimeSaveBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.saveRuntimeConfigFromForm();
+    });
+    document.getElementById('runtimeCheckProxyBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.checkRuntimeProxyHealth();
+    });
+    document.getElementById('runtimeTriggerAutoRegisterBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.triggerAutoRegisterNow();
+    });
+    document.getElementById('runtimeRefreshAutoRegisterBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.refreshAutoRegisterStatus();
+    });
+    document.getElementById('runtimeToggleSecretsBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.toggleRuntimeSecrets();
+    });
+    document.getElementById('oauthStartBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.startOAuthFlow();
+    });
+    document.getElementById('oauthRefreshStatusBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.loadOAuthRefreshStatus();
+    });
+    document.getElementById('workspaceCreateStatusBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.loadWorkspaceCreateStatus();
+    });
+    document.getElementById('oauthRefreshDiagnosticsBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.loadOAuthRefreshDiagnostics();
+    });
+    document.getElementById('workspaceDiagnosticsBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.loadWorkspaceDiagnostics();
+    });
+    document.getElementById('requestTemplatesBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.loadRequestTemplates();
+    });
+    document.getElementById('showGenericTemplatesBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.loadRequestTemplates();
+    });
+    document.getElementById('copyRequestTemplateBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.copyRequestTemplateOutput();
+    });
+    document.getElementById('adminReportBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.loadAdminReport();
+    });
+    document.getElementById('adminSnapshotBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.loadAdminSnapshot();
+    });
+    document.getElementById('oauthFinalizeBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.finalizeOAuthFromForm();
+    });
+    document.getElementById('oauthParseCallbackBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.parseManualCallbackUrl();
+    });
+    document.getElementById('oauthImportCallbackBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.parseAndFinalizeCallbackUrl();
     });
 
     // Rename modal
@@ -221,8 +427,11 @@ function toggleModelDropdown() {
 async function handleSend() {
     if (STATE.isGenerating) return;
 
-    const text = window.NotionAI.UI.Input.getValue();
-    if (!text) return;
+    const content = window.NotionAI.UI.Input.buildMessageContent();
+    const plainText = typeof content === 'string'
+        ? content
+        : window.NotionAI.Chat.Renderer.getUserMessageText(content);
+    if (!plainText && (!Array.isArray(content) || !content.length)) return;
 
     // Get or create chat
     let chat = STATE.chats.find(c => c.id === STATE.currentChatId);
@@ -231,7 +440,7 @@ async function handleSend() {
     if (isNewChat) {
         chat = {
             id: STATE.currentChatId,
-            title: text.length > 12 ? text.substring(0, 12) + '...' : text,
+            title: plainText.length > 12 ? plainText.substring(0, 12) + '...' : (plainText || 'Image chat'),
             messages: [],
             conversationId: null
         };
@@ -259,8 +468,8 @@ async function handleSend() {
     document.getElementById('inputGradientMask').classList.remove('opacity-0');
 
     // Add user message
-    chat.messages.push({ role: 'user', content: text });
-    window.NotionAI.Chat.Renderer.appendMessage('user', text, true);
+    chat.messages.push(window.NotionAI.Chat.Storage.sanitizeMessageForStorage({ role: 'user', content }));
+    window.NotionAI.Chat.Renderer.appendMessage('user', content, true);
     window.NotionAI.Chat.Storage.saveChats();
     window.NotionAI.Chat.Manager.renderChatList();
     window.NotionAI.Utils.DOM.scrollToBottom();

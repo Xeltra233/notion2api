@@ -70,10 +70,54 @@ API Error: 405 Method Not Allowed
    - 不要在 `/v1/chat/completions` 上使用 GET、PUT、DELETE
 
 3. **关于 Claude Code**
-   - Claude Code 使用 Anthropic 原生 API 格式，与 Notion2API **不兼容**
-   - Notion2API 只提供 OpenAI 兼容的文本聊天功能
-   - 它无法读取文件、执行命令或使用工具
-   - **不支持 Claude Code** - 请使用 OpenCode 或其他兼容工具
+    - Claude Code 使用 Anthropic 原生 API 格式，与 Notion2API **不兼容**
+    - Notion2API 提供 OpenAI 兼容的聊天接口
+    - 用户消息现在支持纯文本，或 OpenAI 风格的多模态 `content` 数组（当前支持 `text` 和 `image_url`）
+    - 图片输入目前已能被 API 层接收，但发往 Notion 上游时仍会先降级为包含图片 URL 的文本提示
+    - 它无法读取文件、执行命令或使用工具
+    - **不支持 Claude Code** - 请使用 OpenCode 或其他兼容工具
+
+### Q2.1: 400 Bad Request - 多模态内容格式错误
+
+**常见原因：**
+- `messages[].content` 是数组，但包含了当前不支持的 block 类型
+- `image_url.url` 为空，或不是 `http(s)` URL / `data:image/...` URI
+- 非 user 消息使用了非文本 block
+
+**支持格式示例：**
+
+```json
+{
+  "role": "user",
+  "content": [
+    {"type": "text", "text": "请描述这张图片"},
+    {"type": "image_url", "image_url": {"url": "https://example.com/demo.png"}}
+  ]
+}
+```
+
+**注意：**
+- 当前支持的用户内容块类型：`text`、`image_url`
+- `system`、`developer`、`assistant` 仍建议使用纯文本或仅 `text` block
+
+### Q2.2: `/v1/responses` 输入被拒绝
+
+`POST /v1/responses` 目前接受以下几种 `input` 形态：
+
+- `input: "纯文本"`
+- `input: [content blocks]`
+- `input: [message objects]`
+
+合法 content block 示例：
+
+```json
+[
+  {"type": "text", "text": "请描述这张图片"},
+  {"type": "image_url", "image_url": {"url": "https://example.com/demo.png"}}
+]
+```
+
+如果传 message objects，则仍需遵循 `/v1/chat/completions` 的 `role/content` 规则。
 
 ---
 
@@ -110,6 +154,37 @@ API Error: 405 Method Not Allowed
 - 服务运行时不要退出 Notion 账号登录
 
 ---
+
+## Q4: Admin 接口现在返回脱敏值，这是 bug 吗？
+
+**不是。** 这是后台接口安全收敛后的预期行为。
+
+**当前规则：**
+- `/v1/admin/accounts/safe` 默认返回安全视图，敏感字段会被 masked
+- `/v1/admin/accounts` 与 `/v1/admin/accounts/{account_id}` 是显式原始管理视图
+- `/v1/admin/accounts/export` 默认也是安全导出；只有显式 `?raw=true` 才返回原始导出
+- `/v1/admin/config`、`/v1/admin/snapshot`、`/v1/admin/report` 会返回脱敏后的 settings/accounts 视图
+- alerts / operations / request templates / diagnostics 这类工具接口会通过 `response_mode` 标记自己的语义，而不是返回明文 secret
+
+**如何判断当前返回的是什么：**
+- 看 `view_mode`
+- 看 `export_mode`
+- 看 `redaction_mode`
+- 看 `response_mode`
+- 看 `contains_secrets`
+
+**常见误解：**
+1. **字段被 masked 不是字段丢了**
+   - 后端通常还会补 `has_*` presence 标记，例如 `has_api_key`、`has_token_v2`
+2. **列表是 safe，不代表单账号详情也是 safe**
+   - 管理页默认先用 safe 列表，再在需要编辑某个账号时单独读取 raw 详情
+3. **操作日志不是异常日志**
+   - 原始列表读取、原始导出等敏感操作会进入 `operations` / `logs`，属于审计信息
+
+**排查建议：**
+- 先确认自己调用的是 safe 视图还是 raw 视图
+- 再检查响应体里的模式字段，而不是只看某个 token 是否被打码
+- 如果前端展示异常，优先确认它是否按新的模式字段读取后端响应
 
 ## 更多问题待续...
 

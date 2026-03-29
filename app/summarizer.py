@@ -1,6 +1,6 @@
 import httpx
 
-from app.config import SILICONFLOW_API_KEY
+from app.config import get_siliconflow_api_key
 
 
 class SummarizerUnavailableError(Exception):
@@ -18,10 +18,12 @@ SYSTEM_PROMPT = (
 
 
 def is_summarizer_configured() -> bool:
-    return bool(SILICONFLOW_API_KEY.strip())
+    return bool(get_siliconflow_api_key().strip())
 
 
-def _build_user_prompt(old_summaries: list[str], user_msg: str, assistant_msg: str) -> str:
+def _build_user_prompt(
+    old_summaries: list[str], user_msg: str, assistant_msg: str
+) -> str:
     prompt_parts = []
     if old_summaries:
         prompt_parts.append("【已有上下文摘要（仅供参考，勿重复）】")
@@ -36,33 +38,39 @@ def _build_user_prompt(old_summaries: list[str], user_msg: str, assistant_msg: s
     return "\n".join(prompt_parts)
 
 
-async def _call_summarizer(model: str, old_summaries: list[str], user_msg: str, assistant_msg: str) -> str:
+async def _call_summarizer(
+    model: str, old_summaries: list[str], user_msg: str, assistant_msg: str
+) -> str:
     timeout = httpx.Timeout(connect=5.0, read=20.0, write=20.0, pool=20.0)
+    api_key = get_siliconflow_api_key().strip()
     headers = {
-        "Authorization": f"Bearer {SILICONFLOW_API_KEY}",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
     payload = {
         "model": model,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": _build_user_prompt(old_summaries, user_msg, assistant_msg)},
+            {
+                "role": "user",
+                "content": _build_user_prompt(old_summaries, user_msg, assistant_msg),
+            },
         ],
         "temperature": 0.2,
     }
 
     async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(SILICONFLOW_ENDPOINT, headers=headers, json=payload)
+        response = await client.post(
+            SILICONFLOW_ENDPOINT, headers=headers, json=payload
+        )
 
     if response.status_code != 200:
-        raise SummarizerUnavailableError(f"Summarizer upstream returned status {response.status_code}")
+        raise SummarizerUnavailableError(
+            f"Summarizer upstream returned status {response.status_code}"
+        )
 
     data = response.json()
-    content = (
-        data.get("choices", [{}])[0]
-        .get("message", {})
-        .get("content", "")
-    )
+    content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
     summary = str(content).strip()
     if not summary:
         raise SummarizerUnavailableError("Summarizer returned empty summary")

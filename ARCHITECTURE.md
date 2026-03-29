@@ -109,10 +109,35 @@ APP_MODE=standard  # lite / standard / heavy
 ### Main Endpoints
 ```
 POST /v1/chat/completions    # OpenAI-compatible chat endpoint
-GET  /v1/models               # List available models
-GET  /health                  # Health check
-GET  /                        # Web UI (frontend)
+POST /v1/responses           # Lightweight OpenAI Responses-compatible endpoint
+GET  /v1/models              # List available models
+GET  /health                 # Minimal public health check
+GET  /                       # Web UI (frontend)
 ```
+
+### Admin Response Semantics / 管理接口响应语义
+
+- `view_mode`: distinguishes safe vs raw account/config-style payloads
+- `redaction_mode`: marks payloads that are intentionally masked/redacted
+- `response_mode`: describes utility payload intent such as `audit_log`, `status_summary`, `safe_summary`, or `template_preview`
+- `contains_secrets`: explicit boolean for non-secret utility endpoints
+
+Current conventions:
+
+- `/v1/admin/accounts/safe` → `view_mode: safe`
+- `/v1/admin/accounts`, `/v1/admin/accounts/{account_id}` → `view_mode: raw`
+- `/v1/admin/accounts/export` → `export_mode` + matching `view_mode`
+- `/v1/admin/config`, `/v1/admin/snapshot`, `/v1/admin/report` → `redaction_mode: safe`
+- `/v1/admin/operations` → `response_mode: audit_log`
+
+### Chat Input Compatibility
+- `messages[].content` supports plain strings and OpenAI-style content arrays
+- Supported user content blocks: `text`, `image_url`
+- Supported media references for `image_url.url`: `http(s)` URLs and `data:image/...` URIs
+- Current Notion upstream handling downgrades image inputs into text prompts that include image URLs until native Notion image transcript support is verified
+- `/v1/responses` reuses the same normalization path via `input` -> chat messages conversion
+- `/v1/responses` streaming is wrapped from chat SSE into Responses-style stream events (`response.created`, `response.output_text.delta`, `response.completed`)
+- Compatibility passthrough fields currently accepted: `top_p`, `max_tokens`, `max_output_tokens`, `metadata`, `user`
 
 ### Streaming Support
 All chat responses support SSE (Server-Sent Events) streaming.
@@ -154,8 +179,12 @@ All chat responses support SSE (Server-Sent Events) streaming.
 ## Security Considerations / 安全考虑
 
 - **API_KEY**: Optional Bearer token authentication for `/v1/*` endpoints
+- **Admin Gate**: High-risk admin/register flows additionally require an `X-Admin-Session` token obtained from `/v1/admin/login`
 - **Rate Limiting**: Per-IP rate limits (varies by mode)
-- **CORS**: Enabled for all origins (configure for production)
+- **CORS**: Default runtime origins are no longer wide-open; configure explicit origins for production
+- **Public Health**: `/health` is intentionally minimal and avoids per-account detail leakage
+- **Admin Redaction Model**: Safe admin surfaces return masked secrets plus presence flags, while explicit raw flows are separated and audited
+- **Raw Admin Audit**: Raw account list reads and raw exports are appended to operation logs for operator visibility
 - **SSL**: Use reverse proxy (nginx/caddy) for HTTPS in production
 
 ---
