@@ -164,9 +164,9 @@ Client-side API authentication and admin authentication are intentionally separa
 
 For normal `/v1/...` client requests:
 
-- if `API_KEY` is blank in `.env`, global Bearer validation is disabled
+- if `API_KEY` is blank in Runtime, global Bearer validation is disabled
 - if `API_KEY` is set, clients must send `Authorization: Bearer <your-key>`
-- this allows deployments to run in either open local mode or protected custom-key mode
+- this allows deployments to run in either open local mode or enabling a custom API key from the Runtime panel
 
 ### Admin auth
 
@@ -201,7 +201,6 @@ cp .env.example .env
 
 NOTION_ACCOUNTS_FILE=./accounts.local.json
 ADMIN_PASSWORD=change-me-now
-API_KEY=
 ```
 
 If you prefer inline accounts, you can also do this:
@@ -209,7 +208,6 @@ If you prefer inline accounts, you can also do this:
 ```bash
 NOTION_ACCOUNTS='[{"token_v2":"your_token","space_id":"your_space","user_id":"your_uid","space_view_id":"your_view","user_name":"your_name","user_email":"your_email"}]'
 ADMIN_PASSWORD=change-me-now
-API_KEY=your-custom-key
 ```
 
 See `accounts.local.json.example` for the expected file format.
@@ -223,7 +221,6 @@ By default, you should only need a very small set of env values:
 | `NOTION_ACCOUNTS_FILE` | Preferred path: load the account pool from an uncommitted local JSON file |
 | `NOTION_ACCOUNTS` | Fallback path: inline the account pool JSON directly in env |
 | `ADMIN_PASSWORD` | Bootstrap password for the first admin login; rotate it immediately in the admin panel |
-| `API_KEY` | Optional client Bearer key; leave blank to disable client auth |
 | `HOST` / `PORT` / `HOST_PORT` | Only change these when you need custom bind or Docker-exposed ports |
 
 Beyond that, most runtime behavior is better managed in **Admin > Runtime**.

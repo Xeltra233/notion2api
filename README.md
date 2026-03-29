@@ -164,9 +164,9 @@ API 同时支持纯文本消息，以及 OpenAI 风格的多模态 `content` 数
 
 对于普通 `/v1/...` 客户端请求：
 
-- 如果 `.env` 里的 `API_KEY` 为空，则全局 Bearer 校验关闭
+- 如果 Runtime 里的 `API_KEY` 为空，则全局 Bearer 校验关闭
 - 如果设置了 `API_KEY`，客户端必须发送 `Authorization: Bearer <your-key>`
-- 这意味着部署时既可以走本地开放模式，也可以同步 `.env` 中自定义的 API key
+- 这意味着部署时既可以走本地开放模式，也可以在后台 Runtime 中启用自定义 API key
 
 ### 后台认证
 
@@ -201,7 +201,6 @@ cp .env.example .env
 
 NOTION_ACCOUNTS_FILE=./accounts.local.json
 ADMIN_PASSWORD=change-me-now
-API_KEY=
 ```
 
 如果你更喜欢直接内联账号，也可以这样：
@@ -209,7 +208,6 @@ API_KEY=
 ```bash
 NOTION_ACCOUNTS='[{"token_v2":"your_token","space_id":"your_space","user_id":"your_uid","space_view_id":"your_view","user_name":"your_name","user_email":"your_email"}]'
 ADMIN_PASSWORD=change-me-now
-API_KEY=your-custom-key
 ```
 
 文件格式见 `accounts.local.json.example`。
@@ -223,7 +221,6 @@ API_KEY=your-custom-key
 | `NOTION_ACCOUNTS_FILE` | 推荐做法：从本地未提交 JSON 文件加载账号池 |
 | `NOTION_ACCOUNTS` | 备选做法：直接在 env 里内联账号池 JSON |
 | `ADMIN_PASSWORD` | 首次后台登录的 bootstrap 密码；登录后应立即在后台完成轮换 |
-| `API_KEY` | 可选的客户端 Bearer key；留空可关闭客户端鉴权 |
 | `HOST` / `PORT` / `HOST_PORT` | 只有在你需要自定义监听或 Docker 暴露端口时再改 |
 
 除了这些，绝大多数运行时行为更适合在 **Admin > Runtime** 里直接配置。
