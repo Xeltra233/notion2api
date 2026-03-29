@@ -1,55 +1,89 @@
 # Notion2API
 
-> 一个基于 Notion 的 OpenAI 兼容 API 服务，同时包含后台运维控制台、账号池、运行时配置、usage 查询，以及 workspace / register 自动化能力。
+> 一个基于 Notion 的 OpenAI 兼容 API 服务，现在已经同时包含后台运维控制台、账号池、运行时配置、usage 查询、OAuth / register 工具链、workspace 运维，以及多模态聊天能力。
 
 🌐 [English](./README.md) | 中文
 
 ## 这个项目现在是什么
 
-Notion2API 已经不只是一个简单的聊天壳。
+Notion2API 已经不只是一个简单的 `/v1/chat/completions` 代理壳。
 
 它现在同时包含：
 
-- OpenAI 兼容 API
+- OpenAI 兼容聊天 API
+- 轻量 `/v1/responses` 兼容层
+- 带图片输入支持的多模态请求解析
 - 多账号 Notion 账号池
-- 浏览器后台控制台
-- 基于 `admin session` 的后台鉴权
-- 运行时配置与代理诊断
+- 浏览器后台运维控制台
+- 基于 `admin session` 的后台鉴权与密码轮换
+- 运行时配置编辑与代理诊断
 - usage 汇总与明细查询
-- refresh / probe / workspace 运维动作
-- register 自动化与补全诊断
+- OAuth callback / register 自动化工具链
+- workspace 同步 / 探测 / 创建能力
+- 一批无人工验证脚本
 
-如果你原本只把它当成 `/v1/chat/completions` 代理，现在它的产品形态已经更接近“带后台的运维系统”。
+如果你原本只把它理解成一个上游代理，现在它更接近一个“带控制台和运维面板的产品化系统”。
 
 ---
 
-## 核心能力
+## 功能总览
 
-### API 层
+### 1. OpenAI 兼容 API 面
 
-- OpenAI 兼容的 `/v1/chat/completions`
-- 轻量 `/v1/responses` 兼容接口
+- `POST /v1/chat/completions`
+- `POST /v1/responses`
+- `GET /v1/models`
 - 流式响应
-- API 层对多模态请求结构的兼容解析
-- 模型注册与兼容处理
+- 模型注册与兼容归一化
+- 对 OpenAI 风格请求体的校验与解析
 
-### 账号池与运维动作
+### 2. 多模态与图片输入支持
+
+API 同时支持纯文本消息，以及 OpenAI 风格的多模态 `content` 数组。
+
+当前支持的用户内容类型：
+
+- `text`
+- `image_url`
+
+当前支持的图片引用形式：
+
+- 普通 `http://` / `https://` 图片 URL
+- `data:image/...;base64,...` 形式的数据 URI
+
+前端聊天输入区也已经支持图片上传 / 拖拽上传，并会在本地聊天流程里保留这些图片引用。
+
+### 3. 账号池与账号运维
 
 - 多账号负载均衡
+- 账号启用 / 停用状态管理
 - safe / raw 两种后台账号视图
 - 账号导出 / 导入 / 替换
 - 单账号 refresh、probe、workspace 同步、workspace 创建
-- 带审计语义的动作日志与返回元数据
+- 后台动作的审计型元数据返回
 
-### 后台控制台
+### 4. 后台运维控制台
 
-- 浏览器中的后台工作区
-- `admin session` 登录流
+自带前端已经不再只是一个简单设置弹窗，而是一个更接近运维面板的后台工作区，包含：
+
+- Overview
+- Usage
+- Accounts
+- Runtime
+- Diagnostics
+
+主要后台体验包括：
+
+- 当前浏览器会话内的后台登录恢复
 - 默认后台凭证强制轮换
-- overview / usage / accounts / runtime / diagnostics 分区
-- 默认脱敏的数据暴露策略
+- 默认按 safe / 脱敏方式渲染数据
+- 运行状态卡片与账号健康视图
+- usage 筛选与事件列表
+- OAuth callback 导入解析
 
-### 运行时与诊断
+### 5. 运行时配置与诊断
+
+后端提供了一批给运维使用的运行时配置与诊断面：
 
 - 运行时配置编辑
 - 代理健康检查
@@ -57,12 +91,47 @@ Notion2API 已经不只是一个简单的聊天壳。
 - workspace 诊断
 - 请求模板查看
 - auto-register 状态与队列可见性
+- workspace create dry-run 状态暴露
 
-### Usage 查询
+### 6. Usage 查询能力
 
-- `/v1/admin/usage/summary`
-- `/v1/admin/usage/events`
-- 支持按时间、模型、账号、请求类型筛选
+后台 usage 接口同时支持汇总和事件明细：
+
+- `GET /v1/admin/usage/summary`
+- `GET /v1/admin/usage/events`
+
+当前可按以下维度筛选：
+
+- 时间范围
+- 模型
+- 账号
+- 请求类型
+
+这样后台就不只是“看账号状态”，也能回答真实的运营问题。
+
+### 7. OAuth、register 与 callback 工具链
+
+项目现在已经包含更完整的 OAuth 风格账号导入与 register 自动化能力：
+
+- OAuth start payload 生成
+- 面向 localhost 的 callback bridge 支持
+- 后台里的 callback 解析 / finalize 流程
+- refresh-status 与 refresh-diagnostics 视图
+- auto-register 状态可视化
+- hydration retry 与 register 门禁逻辑
+
+后台的目标不只是“触发操作”，而是帮助你判断账号到底是需要 refresh、重新授权、补全 hydration，还是 workspace 修复。
+
+### 8. Workspace 运维能力
+
+项目把 workspace 相关能力单独做成了可观察、可诊断的运维面：
+
+- workspace 同步
+- workspace 诊断
+- workspace create 状态
+- workspace 创建请求模板
+- workspace create dry-run 支持
+- 面向 refresh / workspace 的探测脚本
 
 ---
 
@@ -84,6 +153,30 @@ Notion2API 已经不只是一个简单的聊天壳。
 - `/v1/admin/accounts/export` 默认脱敏，只有 `?raw=true` 才返回原始导出
 - 工具 / 状态类接口会返回 `response_mode`
 - config / report / snapshot 一类接口会返回 `redaction_mode`
+
+---
+
+## API 认证模型
+
+普通 API 访问和后台运维认证是分开的。
+
+### 客户端 API 认证
+
+对于普通 `/v1/...` 客户端请求：
+
+- 如果 `.env` 里的 `API_KEY` 为空，则全局 Bearer 校验关闭
+- 如果设置了 `API_KEY`，客户端必须发送 `Authorization: Bearer <your-key>`
+- 这意味着部署时既可以走本地开放模式，也可以同步 `.env` 中自定义的 API key
+
+### 后台认证
+
+对于后台操作：
+
+- 使用 `POST /v1/admin/login`
+- 获取 `admin session`
+- 后续请求发送 `X-Admin-Session`
+
+这样可以把运维权限和普通聊天 / 模型访问权限分离开。
 
 ---
 
@@ -111,6 +204,7 @@ cp .env.example .env
 
 NOTION_ACCOUNTS='[{"token_v2":"your_token","space_id":"your_space","user_id":"your_uid","space_view_id":"your_view","user_name":"your_name","user_email":"your_email"}]'
 APP_MODE=standard
+API_KEY=
 ```
 
 或者：
@@ -118,9 +212,32 @@ APP_MODE=standard
 ```bash
 NOTION_ACCOUNTS_FILE=./accounts.local.json
 APP_MODE=standard
+API_KEY=your-custom-key
 ```
 
 文件格式见 `accounts.local.json.example`。
+
+### 推荐关注的环境变量
+
+首页 README 里确实应该把主要 env/config 开关点出来，至少包括这些：
+
+| 变量 | 用途 |
+| --- | --- |
+| `NOTION_ACCOUNTS` | 直接在环境变量里内联配置 Notion 账号池 JSON |
+| `NOTION_ACCOUNTS_FILE` | 从本地 JSON 文件加载账号池；优先级高于 `NOTION_ACCOUNTS` |
+| `API_KEY` | `/v1/chat/completions` 等客户端接口使用的 Bearer key；留空可关闭客户端鉴权 |
+| `APP_MODE` | 应用运行模式，如 `standard`、`lite`、`heavy` |
+| `UPSTREAM_PROXY` / `UPSTREAM_HTTP_PROXY` / `UPSTREAM_HTTPS_PROXY` | 可选的上游代理设置 |
+| `HOST` / `PORT` / `HOST_PORT` | 本地监听与 Docker 暴露端口 |
+| `ALLOWED_ORIGINS` | CORS 允许来源列表 |
+| `DB_PATH` | SQLite 对话持久化路径 |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | 首次后台登录与密码轮换流程使用的初始管理员凭证 |
+| `TEMP_MAIL_PROVIDER` / `TEMP_MAIL_BASE_URL` / `TEMP_MAIL_API_KEY` / `TEMP_MAIL_DOMAIN` | auto-register 的邮箱提供商配置 |
+| `REGISTER_HEADLESS` / `REGISTER_USE_API` | register 自动化行为控制 |
+| `SILICONFLOW_API_KEY` | `heavy` 模式下的可选依赖 |
+| `LOG_LEVEL` / `TZ` | 日志级别与时区设置 |
+
+更完整的模板请直接看 `.env.example`。
 
 ### 2. 启动服务
 
@@ -137,7 +254,7 @@ pip install -r requirements.txt
 uvicorn app.server:app --host 0.0.0.0 --port 8000
 ```
 
-本地默认入口：
+### 3. 打开本地入口
 
 - 服务：`http://localhost:8000`
 - 模型列表：`GET /v1/models`
@@ -145,14 +262,20 @@ uvicorn app.server:app --host 0.0.0.0 --port 8000
 
 ---
 
-## 主要后台接口
+## 主要接口
 
-### 鉴权
+### 公开 / 客户端接口
+
+- `GET /v1/models`
+- `POST /v1/chat/completions`
+- `POST /v1/responses`
+
+### 后台鉴权
 
 - `POST /v1/admin/login`
 - `POST /v1/admin/change-password`
 
-### 账号
+### 后台账号
 
 - `GET /v1/admin/accounts/safe`
 - `GET /v1/admin/accounts`
@@ -163,7 +286,7 @@ uvicorn app.server:app --host 0.0.0.0 --port 8000
 - `POST /v1/admin/accounts/import`
 - `POST /v1/admin/accounts/replace`
 
-### 运行时 / 诊断
+### 后台运行时 / 诊断
 
 - `GET /v1/admin/config`
 - `PUT /v1/admin/config/settings`
@@ -173,8 +296,10 @@ uvicorn app.server:app --host 0.0.0.0 --port 8000
 - `GET /v1/admin/workspaces/create-status`
 - `GET /v1/admin/workspaces/diagnostics`
 - `GET /v1/admin/request-templates`
+- `GET /v1/admin/oauth/callback`
+- `POST /v1/admin/oauth/callback`
 
-### Usage
+### 后台 Usage
 
 - `GET /v1/admin/usage/summary`
 - `GET /v1/admin/usage/events`
@@ -183,9 +308,9 @@ uvicorn app.server:app --host 0.0.0.0 --port 8000
 
 ## 前端后台控制台
 
-前端现在已经不是单纯的设置弹窗，而是更接近运维后台工作区。
+前端现在更接近一个运维后台，而不是单纯的聊天设置页。
 
-当前包含的主要区域：
+当前主要区域包括：
 
 - Overview
 - Usage
@@ -195,17 +320,19 @@ uvicorn app.server:app --host 0.0.0.0 --port 8000
 
 前端还支持：
 
-- 在当前浏览器会话中恢复后台登录状态
+- 当前浏览器会话内恢复后台登录状态
 - 默认后台密码轮换引导
-- OAuth callback 解析与导入
-- 默认按 safe 方式渲染后台数据
+- OAuth callback 导入解析
+- 默认按 safe / 脱敏方式渲染后台数据
 - usage 筛选与事件列表展示
+- workspace 与 runtime 相关动作面板
+- 聊天输入区的图片附件处理
 
 ---
 
 ## 验证脚本
 
-仓库里现在已经补充了一批无人工验证脚本，用于覆盖后台、运行时、账号、导出和 usage 行为。
+仓库里现在已经补充了一批无人工验证脚本，用于覆盖后台、运行时、账号、导出、usage、refresh 与 workspace 行为。
 
 例如：
 
@@ -218,6 +345,8 @@ uvicorn app.server:app --host 0.0.0.0 --port 8000
 - `scripts/verify_workspace_probe_success.py`
 - `scripts/verify_safe_accounts_view.py`
 - `scripts/verify_admin_redaction_modes.py`
+- `scripts/verify_direct_mode_ignores_warp_proxy.py`
+- `scripts/verify_frontend_semantic_fields_backend_contract.py`
 
 这些脚本的目的，是让关键后端行为不只依赖人工点页面验证。
 
@@ -229,4 +358,6 @@ uvicorn app.server:app --host 0.0.0.0 --port 8000
 - 后台列表 / 导出默认使用 safe 视图
 - raw 视图与 raw 导出必须显式触发，并带审计语义
 - 默认后台凭证应在首次登录后立即轮换
+- `API_KEY` 可以留空用于本地开放模式，也可以设置为自定义值启用 Bearer 保护
+- workspace create 目前主要暴露 dry-run 与诊断导向的运维能力
 - 项目仍支持聊天 API 使用，但后台运维已经成为一等功能

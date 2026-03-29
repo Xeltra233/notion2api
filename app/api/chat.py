@@ -1573,7 +1573,7 @@ async def _handle_standard_request(
                 search_enabled=search_enabled,
             )
 
-            # 调用 Notion API（不使用 thread_id，让 Notion ��动处理）
+            # 调用 Notion API（不使用 thread_id，让 Notion 自动处理）
             stream_gen = client.stream_response(transcript, thread_id=None)
             first_item = next(stream_gen, None)
 
