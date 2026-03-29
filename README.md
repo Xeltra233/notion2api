@@ -184,33 +184,24 @@ API 同时支持纯文本消息，以及 OpenAI 风格的多模态 `content` 数
 
 ### 1. 准备最小启动配置
 
-打开 https://www.notion.so/ai 并登录，然后通过 DevTools 获取账号所需字段。
-
-最少需要：
-
-- `token_v2`
-- `space_id`
-- `user_id`
-
-推荐把账号放在本地 JSON 文件里，再通过 `NOTION_ACCOUNTS_FILE` 引入；只有在你明确需要时，再使用内联的 `NOTION_ACCOUNTS`。
+如果你的部署路径是先把后台起起来，再通过 OAuth 或注册机导入账号，那么默认只需要关心后台密码和端口。
 
 最小启动示例：
 
 ```bash
 cp .env.example .env
 
-NOTION_ACCOUNTS_FILE=./accounts.local.json
 ADMIN_PASSWORD=change-me-now
+HOST=0.0.0.0
+PORT=8000
 ```
 
-如果你更喜欢直接内联账号，也可以这样：
+后台登录默认使用：
 
-```bash
-NOTION_ACCOUNTS='[{"token_v2":"your_token","space_id":"your_space","user_id":"your_uid","space_view_id":"your_view","user_name":"your_name","user_email":"your_email"}]'
-ADMIN_PASSWORD=change-me-now
-```
+- 用户名：`admin`
+- 密码：你设置的 `ADMIN_PASSWORD`
 
-文件格式见 `accounts.local.json.example`。
+账号池不再是默认启动前置项。你可以在服务启动后，再通过后台里的 OAuth / register / import 流程补充账号。
 
 ### 最小启动配置说明
 
@@ -218,12 +209,10 @@ ADMIN_PASSWORD=change-me-now
 
 | 变量 | 用途 |
 | --- | --- |
-| `NOTION_ACCOUNTS_FILE` | 推荐做法：从本地未提交 JSON 文件加载账号池 |
-| `NOTION_ACCOUNTS` | 备选做法：直接在 env 里内联账号池 JSON |
 | `ADMIN_PASSWORD` | 首次后台登录的 bootstrap 密码；登录后应立即在后台完成轮换 |
 | `HOST` / `PORT` / `HOST_PORT` | 只有在你需要自定义监听或 Docker 暴露端口时再改 |
 
-除了这些，绝大多数运行时行为更适合在 **Admin > Runtime** 里直接配置。
+如果你已经准备好了账号池，仍然可以继续使用 `NOTION_ACCOUNTS_FILE` 或 `NOTION_ACCOUNTS` 作为兼容入口；但更推荐先启动后台，再在 **Admin > Runtime / Accounts** 中完成后续操作。
 
 ### 高级配置说明
 

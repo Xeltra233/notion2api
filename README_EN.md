@@ -184,33 +184,24 @@ This keeps operator access separate from normal model/chat access.
 
 ### 1. Prepare the minimum startup configuration
 
-Open https://www.notion.so/ai and log in, then use DevTools to collect the account fields you need.
-
-Minimal account fields:
-
-- `token_v2`
-- `space_id`
-- `user_id`
-
-Prefer storing accounts in a local JSON file and pointing `NOTION_ACCOUNTS_FILE` to it. Only fall back to inline `NOTION_ACCOUNTS` when you intentionally want that style.
+If your deployment flow is to bring up the admin console first and import accounts later via OAuth or the register flow, you only need to care about the admin password and the port.
 
 Minimum startup example:
 
 ```bash
 cp .env.example .env
 
-NOTION_ACCOUNTS_FILE=./accounts.local.json
 ADMIN_PASSWORD=change-me-now
+HOST=0.0.0.0
+PORT=8000
 ```
 
-If you prefer inline accounts, you can also do this:
+The default admin login is:
 
-```bash
-NOTION_ACCOUNTS='[{"token_v2":"your_token","space_id":"your_space","user_id":"your_uid","space_view_id":"your_view","user_name":"your_name","user_email":"your_email"}]'
-ADMIN_PASSWORD=change-me-now
-```
+- username: `admin`
+- password: the `ADMIN_PASSWORD` you configured
 
-See `accounts.local.json.example` for the expected file format.
+The account pool is no longer treated as a default startup prerequisite. You can bring the service up first and then add accounts through the admin OAuth / register / import flows.
 
 ### Minimum env surface
 
@@ -218,12 +209,10 @@ By default, you should only need a very small set of env values:
 
 | Variable | Purpose |
 | --- | --- |
-| `NOTION_ACCOUNTS_FILE` | Preferred path: load the account pool from an uncommitted local JSON file |
-| `NOTION_ACCOUNTS` | Fallback path: inline the account pool JSON directly in env |
 | `ADMIN_PASSWORD` | Bootstrap password for the first admin login; rotate it immediately in the admin panel |
 | `HOST` / `PORT` / `HOST_PORT` | Only change these when you need custom bind or Docker-exposed ports |
 
-Beyond that, most runtime behavior is better managed in **Admin > Runtime**.
+If you already have accounts ready, `NOTION_ACCOUNTS_FILE` and `NOTION_ACCOUNTS` are still supported as compatibility paths, but the preferred product flow is to start the admin console first and finish the rest from **Admin > Runtime / Accounts**.
 
 ### Advanced configuration
 
