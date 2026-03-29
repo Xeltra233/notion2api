@@ -652,9 +652,25 @@ window.NotionAI.API.Settings = {
         }
     },
 
+    async loginAdminSession() {
+        const adminUsername = document.getElementById('adminUsernameInput').value.trim() || 'admin';
+        const adminPassword = document.getElementById('adminPasswordInput').value.trim();
+        if (!adminPassword) {
+            this.setAdminNotice('请输入后台密码。');
+            return;
+        }
+        try {
+            await window.NotionAI.API.Admin.login(adminUsername, adminPassword);
+            document.getElementById('adminPasswordInput').value = '';
+            await this.refreshAdminPanel('当前浏览器会话的 admin session 已就绪。');
+        } catch (error) {
+            this.setAdminNotice(error.message || '后台登录失败。');
+        }
+    },
+
     async save() {
-        const baseUrl = document.getElementById('baseUrlInput').value.trim().replace(/\/$/, '');
-        const apiKey = document.getElementById('apiKeyInput').value.trim();
+        const baseUrl = document.getElementById('baseUrlInput')?.value.trim().replace(/\/$/, '') || window.location.origin;
+        const apiKey = document.getElementById('apiKeyInput')?.value.trim() || '';
         const adminUsername = document.getElementById('adminUsernameInput').value.trim() || 'admin';
         const adminPassword = document.getElementById('adminPasswordInput').value.trim();
         const adminNewUsername = (document.getElementById('adminNewUsernameInput')?.value || '').trim();
@@ -1710,12 +1726,12 @@ window.NotionAI.API.Settings = {
         const sessionExpiresAt = Number(window.NotionAI.Core.State.get('adminSessionExpiresAt') || 0);
         const adminUsername = window.NotionAI.Core.State.get('adminUsername') || auth.username || 'admin';
         let state = 'signed_out';
-        let titleText = '需要登录';
-        let detailText = '请使用当前后台用户名和密码，在本浏览器会话中建立 admin session 并打开运维控制台。';
+        let titleText = '登录后台';
+        let detailText = '输入后台用户名和密码后进入管理后台。';
         if (sessionToken) {
             state = 'ready';
-            titleText = '后台已就绪';
-            detailText = `admin session 已就绪${sessionExpiresAt ? `，有效期至 ${this.formatTimestamp(sessionExpiresAt)}` : ''}。现在可以查看运行时、账号、诊断和用量信息。`;
+            titleText = '后台已登录';
+            detailText = `当前浏览器中的登录状态已生效${sessionExpiresAt ? `，有效期至 ${this.formatTimestamp(sessionExpiresAt)}` : ''}。现在可以查看运行时、账号、诊断和用量信息。`;
         }
         const metaItems = [
             ['后台用户', adminUsername],
@@ -1725,6 +1741,7 @@ window.NotionAI.API.Settings = {
         banner.dataset.state = state;
         title.textContent = titleText;
         detail.textContent = detailText;
+        signOutBtn.classList.toggle('hidden', !sessionToken);
         meta.innerHTML = metaItems
             .map(([label, value]) => `<span class="admin-access-meta-item"><strong>${label}</strong><span>${value}</span></span>`)
             .join('');

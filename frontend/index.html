@@ -189,27 +189,15 @@
                                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">配置 API 地址访问并初始化 admin session。</p>
                             </div>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">服务地址</label>
-                            <input type="text" id="baseUrlInput"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent/50 outline-none transition-shadow"
-                                placeholder="http://localhost:8000">
-                        </div>
-                        <div class="mt-4">
-                            <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">API 密钥</label>
-                            <input type="password" id="apiKeyInput"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent/50 outline-none transition-shadow"
-                                placeholder="如果服务端未设置，可在这里填写">
-                        </div>
-                        <div class="pt-4 mt-4 border-t border-black/10 dark:border-white/10 space-y-3">
+                        <div class="pt-2 space-y-3">
                             <div id="adminAccessStatusBanner" class="admin-access-banner" data-state="signed_out">
                                 <div class="admin-access-banner-copy">
-                                    <div class="admin-access-banner-label">访问</div>
-                                    <strong id="adminAccessStatusTitle">需要登录</strong>
-                                    <p id="adminAccessStatusDetail">请使用当前后台用户名和密码，在本浏览器会话中建立 admin session 并打开运维控制台。</p>
+                                    <div class="admin-access-banner-label">登录</div>
+                                    <strong id="adminAccessStatusTitle">登录后台</strong>
+                                    <p id="adminAccessStatusDetail">输入后台用户名和密码后进入管理后台。</p>
                                 </div>
                                 <div class="admin-access-banner-actions">
-                                    <button id="adminSignOutBtn" type="button" class="admin-action-btn admin-action-btn-secondary">退出 admin session</button>
+                                    <button id="adminSignOutBtn" type="button" class="admin-action-btn admin-action-btn-secondary hidden">退出登录</button>
                                 </div>
                             </div>
                             <div id="adminAccessStatusMeta" class="admin-access-meta"></div>
@@ -218,21 +206,24 @@
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
                                 <div id="adminAccessLoginCard" class="admin-access-card">
                                     <div>
-                                        <div class="settings-console-kicker">访问 / 登录</div>
-                                        <h5 class="text-sm font-medium">登录 admin session</h5>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">使用当前后台账号解锁本浏览器会话中的运维控制台和 admin session。</p>
+                                        <div class="settings-console-kicker">登录</div>
+                                        <h5 class="text-sm font-medium">进入管理后台</h5>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">使用当前后台用户名和密码登录。登录后才会显示总览、账号、运行时和诊断模块。</p>
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">后台用户名</label>
                                         <input type="text" id="adminUsernameInput"
                                             class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent/50 outline-none transition-shadow"
-                                            placeholder="默认后台账号">
+                                            placeholder="输入后台用户名">
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">后台密码</label>
                                         <input type="password" id="adminPasswordInput"
                                             class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent/50 outline-none transition-shadow"
-                                            placeholder="默认密码或当前后台密码">
+                                            placeholder="输入后台密码">
+                                    </div>
+                                    <div class="flex flex-wrap gap-3 pt-2">
+                                        <button id="adminLoginBtn" type="button" class="admin-action-btn admin-action-btn-primary">登录后台</button>
                                     </div>
                                 </div>
                                 <div id="adminAccessCredentialCard" class="admin-access-card">

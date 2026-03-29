@@ -286,6 +286,17 @@ function bindEventListeners() {
     document.getElementById('saveSettingsBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.save();
     });
+    document.getElementById('adminLoginBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.loginAdminSession();
+    });
+    ['adminUsernameInput', 'adminPasswordInput'].forEach((id) => {
+        document.getElementById(id).addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                window.NotionAI.API.Settings.loginAdminSession();
+            }
+        });
+    });
     document.getElementById('adminUpdateCredentialsBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.updateAdminCredentialsOnly();
     });
