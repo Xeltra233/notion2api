@@ -15,7 +15,7 @@ It now combines:
 - multimodal request parsing with image support
 - a multi-account Notion account pool
 - a browser-based admin operations console
-- session-based admin authentication with password rotation
+- session-based admin authentication for the admin console
 - runtime config editing and proxy diagnostics
 - usage summary and event queries
 - OAuth callback tooling and register automation
@@ -75,7 +75,7 @@ The bundled frontend is no longer only a simple settings popup. It now exposes a
 Key admin UX behavior:
 
 - browser-session admin login restore
-- forced rotation for default admin credentials
+- admin login state restore and credential update entry points
 - safe/masked rendering by default
 - operational status cards and account health views
 - usage filters and event list rendering
@@ -144,7 +144,7 @@ Current admin flow:
 1. `POST /v1/admin/login` with username/password
 2. receive a short-lived `admin session`
 3. send `X-Admin-Session` on admin requests
-4. if default credentials are still in use, sensitive admin actions are blocked until password rotation is completed
+4. continue using the admin console with the current admin account
 
 Important behavior:
 
@@ -209,7 +209,7 @@ By default, you should only need a very small set of env values:
 
 | Variable | Purpose |
 | --- | --- |
-| `ADMIN_PASSWORD` | Bootstrap password for the first admin login; rotate it immediately in the admin panel |
+| `ADMIN_PASSWORD` | Password for the admin login |
 | `HOST` / `PORT` / `HOST_PORT` | Only change these when you need custom bind or Docker-exposed ports |
 
 If you already have accounts ready, `NOTION_ACCOUNTS_FILE` and `NOTION_ACCOUNTS` are still supported as compatibility paths, but the preferred product flow is to start the admin console first and finish the rest from **Admin > Runtime / Accounts**.
@@ -310,7 +310,7 @@ Current sections include:
 The frontend also supports:
 
 - admin login state restore within the current browser session
-- forced default-password rotation guidance
+- admin credential update entry points
 - callback parsing for OAuth import flows
 - masked/safe rendering for admin data by default
 - usage filters and event list rendering
@@ -346,7 +346,7 @@ These scripts are intended to validate backend behavior without relying only on 
 - local account JSON files are meant to stay uncommitted
 - safe views are the default for admin list/export flows
 - raw views and raw exports are explicit and auditable
-- default admin credentials should be rotated immediately after first login
+- `ADMIN_PASSWORD` is used as the admin login password and can also be changed later in the admin console
 - `API_KEY` can be left blank for local/open deployments or set to a custom value for Bearer protection
 - workspace create currently exposes dry-run and diagnostic-oriented operator tooling
 - the project still supports chat usage, but operational administration is now a first-class part of the product

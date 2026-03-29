@@ -16,7 +16,7 @@ window.NotionAI.Core.State = {
         adminPassword: '',
         adminSessionToken: sessionStorage.getItem('claude_admin_session') || '',
         adminSessionExpiresAt: Number(sessionStorage.getItem('claude_admin_session_expires_at') || 0),
-        adminMustChangePassword: sessionStorage.getItem('claude_admin_must_change_password') === 'true',
+        adminMustChangePassword: false,
         theme: localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
         chats: JSON.parse(localStorage.getItem('claude_chats')) || [],
         currentChatId: null,

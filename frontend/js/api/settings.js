@@ -634,14 +634,10 @@ window.NotionAI.API.Settings = {
         }
 
         try {
-            const loginResult = await window.NotionAI.API.Admin.login(adminUsername, adminPassword);
-            const shouldChangeCredentials = Boolean(adminNewUsername || adminNewPassword || loginResult.must_change_password);
+            await window.NotionAI.API.Admin.login(adminUsername, adminPassword);
+            const shouldChangeCredentials = Boolean(adminNewUsername || adminNewPassword);
             if (!shouldChangeCredentials) {
                 this.setAdminNotice('请输入新的 admin 用户名、新密码，或同时输入两者。');
-                return;
-            }
-            if (loginResult.must_change_password && !adminNewPassword) {
-                this.setAdminNotice('检测到默认 admin 凭证。继续前请输入新密码。');
                 return;
             }
             const changeResult = await window.NotionAI.API.Admin.changePassword({
@@ -684,13 +680,9 @@ window.NotionAI.API.Settings = {
 
         if (adminPassword) {
             try {
-                const loginResult = await window.NotionAI.API.Admin.login(adminUsername, adminPassword);
-                const shouldChangeCredentials = Boolean(adminNewUsername || adminNewPassword || loginResult.must_change_password);
+                await window.NotionAI.API.Admin.login(adminUsername, adminPassword);
+                const shouldChangeCredentials = Boolean(adminNewUsername || adminNewPassword);
                 if (shouldChangeCredentials) {
-                    if (loginResult.must_change_password && !adminNewPassword) {
-                        this.setAdminNotice('检测到默认 admin 凭证。继续前请输入新密码。');
-                        return;
-                    }
                     const changeResult = await window.NotionAI.API.Admin.changePassword({
                         current_password: adminPassword,
                         new_password: adminNewPassword || undefined,
@@ -1594,20 +1586,6 @@ window.NotionAI.API.Settings = {
         } catch (error) {
             this._lastAdminSnapshot = {};
             this.renderAdminAccounts({ accounts: [] });
-            if ((error.message || '').includes('PASSWORD_CHANGE_REQUIRED')) {
-                window.NotionAI.Core.State.set('adminMustChangePassword', true);
-                window.NotionAI.Core.State.persistAdminSession({
-                    username: window.NotionAI.Core.State.get('adminUsername') || 'admin',
-                    sessionToken: window.NotionAI.Core.State.get('adminSessionToken') || '',
-                    sessionExpiresAt: Number(window.NotionAI.Core.State.get('adminSessionExpiresAt') || 0),
-                    mustChangePassword: true
-                });
-                this.renderAdminAccessStatus({ must_change_password: true, updated_at: 0 });
-                this.renderAdminSessionSummary({ must_change_password: true, updated_at: 0 });
-                this.applyAdminConsoleAccessState({ must_change_password: true, updated_at: 0 });
-                this.setAdminNotice('默认后台凭证仍在使用中。请先在访问区设置新密码，再使用后台面板。');
-                return;
-            }
             this.setAdminNotice(error.message || '加载后台账号失败。');
         }
     },
@@ -1710,7 +1688,6 @@ window.NotionAI.API.Settings = {
         const items = [
             ['来源', sourceLabel],
             ['已配置', auth.configured ? '是' : '否'],
-            ['轮换状态', auth.must_change_password ? '需要轮换' : '已完成'],
             ['用户名', auth.username || 'admin'],
         ];
         summary.innerHTML = items
@@ -1730,15 +1707,10 @@ window.NotionAI.API.Settings = {
         const sessionToken = window.NotionAI.Core.State.get('adminSessionToken') || '';
         const sessionExpiresAt = Number(window.NotionAI.Core.State.get('adminSessionExpiresAt') || 0);
         const adminUsername = window.NotionAI.Core.State.get('adminUsername') || auth.username || 'admin';
-        const mustChangePassword = window.NotionAI.Core.State.get('adminMustChangePassword') || Boolean(auth.must_change_password);
         let state = 'signed_out';
         let titleText = '需要登录';
         let detailText = '请使用当前后台用户名和密码，在本浏览器会话中建立 admin session 并打开运维控制台。';
-        if (sessionToken && mustChangePassword) {
-            state = 'rotation_required';
-            titleText = '需要轮换默认凭证';
-            detailText = '当前 admin session 已登录，但在保存新密码前，受限的控制台操作仍会保持锁定。';
-        } else if (sessionToken) {
+        if (sessionToken) {
             state = 'ready';
             titleText = '后台已就绪';
             detailText = `admin session 已就绪${sessionExpiresAt ? `，有效期至 ${this.formatTimestamp(sessionExpiresAt)}` : ''}。现在可以查看运行时、账号、诊断和用量信息。`;
@@ -1757,51 +1729,37 @@ window.NotionAI.API.Settings = {
         signOutBtn.disabled = !sessionToken;
     },
 
-    buildAdminConsoleEmptyState(auth = {}) {
+    buildAdminConsoleEmptyState() {
         const sessionToken = window.NotionAI.Core.State.get('adminSessionToken') || '';
-        const mustChangePassword = window.NotionAI.Core.State.get('adminMustChangePassword') || Boolean(auth.must_change_password);
-        if (sessionToken && !mustChangePassword) {
+        if (sessionToken) {
             return '';
         }
-        const state = sessionToken && mustChangePassword ? 'rotation_required' : 'signed_out';
-        const title = state === 'rotation_required'
-            ? '先完成默认后台密码轮换'
-            : '登录后解锁运维控制台';
-        const copy = state === 'rotation_required'
-            ? '当前浏览器已经拿到 admin session，但在访问区保存新密码前，运行时编辑、用量查询和账号操作仍会保持锁定。'
-            : '总览、用量、账号和诊断模块会保持待命状态，直到当前浏览器使用后台账号完成登录。';
-        return `<div class="admin-empty-state" data-state="${state}"><div class="admin-empty-state-title">${title}</div><div class="admin-empty-state-copy">${copy}</div></div>`;
+        return '<div class="admin-empty-state" data-state="signed_out"><div class="admin-empty-state-title">登录后解锁运维控制台</div><div class="admin-empty-state-copy">总览、用量、账号和诊断模块会保持待命状态，直到当前浏览器使用后台账号完成登录。</div></div>';
     },
 
-    applyAdminConsoleAccessState(auth = {}) {
-        const emptyState = this.buildAdminConsoleEmptyState(auth);
+    applyAdminConsoleAccessState() {
+        const emptyState = this.buildAdminConsoleEmptyState();
         const sessionToken = window.NotionAI.Core.State.get('adminSessionToken') || '';
-        const mustChangePassword = window.NotionAI.Core.State.get('adminMustChangePassword') || Boolean(auth.must_change_password);
-        const accessState = sessionToken ? (mustChangePassword ? 'rotation_required' : 'ready') : 'signed_out';
+        const accessState = sessionToken ? 'ready' : 'signed_out';
         const sectionStatuses = {
             runtimeSectionStatus: {
                 ready: '运行时控制已就绪',
-                rotation_required: '完成密码轮换后解锁运行时控制',
                 signed_out: '登录后台后解锁运行时控制',
             },
             overviewSectionStatus: {
                 ready: '总览已就绪',
-                rotation_required: '完成密码轮换后解锁总览',
                 signed_out: '登录后台后解锁总览',
             },
             usageSectionStatus: {
                 ready: '用量已就绪',
-                rotation_required: '完成密码轮换后解锁用量查询',
                 signed_out: '登录后台后解锁用量查询',
             },
             accountsSectionStatus: {
                 ready: '账号管理已就绪',
-                rotation_required: '完成密码轮换后解锁账号管理',
                 signed_out: '登录后台后解锁账号管理',
             },
             diagnosticsSectionStatus: {
                 ready: '诊断已就绪',
-                rotation_required: '完成密码轮换后解锁诊断',
                 signed_out: '登录后台后解锁诊断',
             },
         };
@@ -1879,11 +1837,7 @@ window.NotionAI.API.Settings = {
             const button = document.getElementById(id);
             if (button) {
                 button.disabled = shouldDisableActions;
-                button.title = shouldDisableActions
-                    ? (accessState === 'rotation_required'
-                        ? '完成后台密码轮换后才能使用此操作。'
-                        : '登录后才能使用此操作。')
-                    : '';
+                button.title = shouldDisableActions ? '登录后才能使用此操作。' : '';
             }
         });
         if (!emptyState) {
@@ -1902,7 +1856,7 @@ window.NotionAI.API.Settings = {
         });
         const usageMeta = document.getElementById('adminUsageEventsMeta');
         if (usageMeta) {
-            usageMeta.textContent = '登录后台并完成凭证轮换后，才可查看用量查询。';
+            usageMeta.textContent = '登录后台后，才可查看用量查询。';
             usageMeta.dataset.locked = 'true';
         }
     },
@@ -1914,11 +1868,10 @@ window.NotionAI.API.Settings = {
         }
         const sessionToken = window.NotionAI.Core.State.get('adminSessionToken') || '';
         const sessionExpiresAt = Number(window.NotionAI.Core.State.get('adminSessionExpiresAt') || 0);
-        const mustChangePassword = window.NotionAI.Core.State.get('adminMustChangePassword') || Boolean(auth.must_change_password);
         const items = [
             ['session', sessionToken ? '活跃' : '缺失'],
             ['session 过期时间', sessionToken ? this.formatTimestamp(sessionExpiresAt) : '未登录'],
-            ['面板访问', mustChangePassword ? '轮换完成前不可用' : (sessionToken ? '已就绪' : '需要登录')],
+            ['面板访问', sessionToken ? '已就绪' : '需要登录'],
             ['更新时间', this.formatTimestamp(auth.updated_at)],
         ];
         summary.innerHTML = items

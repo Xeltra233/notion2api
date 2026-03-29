@@ -29,7 +29,7 @@ try:
                 "username": "admin",
                 "password_hash": "",
                 "password_salt": "",
-                "must_change_password": True,
+                "must_change_password": False,
                 "initialized_from_default": True,
                 "updated_at": 0,
             },
@@ -71,23 +71,9 @@ try:
             json={"username": "admin", "password": "test-admin-password"},
         )
         login.raise_for_status()
-        session_headers = {
-            **auth_headers,
-            "X-Admin-Session": login.json().get("session_token", ""),
-        }
-        rotate = client.post(
-            "/v1/admin/change-password",
-            headers=session_headers,
-            json={
-                "current_password": "test-admin-password",
-                "new_password": "test-admin-password-rotated",
-                "new_username": "ops-admin",
-            },
-        )
-        rotate.raise_for_status()
         admin_headers = {
             **auth_headers,
-            "X-Admin-Session": rotate.json().get("session_token", ""),
+            "X-Admin-Session": login.json().get("session_token", ""),
         }
 
         summary = client.get("/v1/admin/usage/summary", headers=admin_headers)

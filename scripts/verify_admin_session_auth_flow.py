@@ -27,7 +27,7 @@ try:
                 "username": "admin",
                 "password_hash": "",
                 "password_salt": "",
-                "must_change_password": True,
+                "must_change_password": False,
                 "initialized_from_default": True,
                 "updated_at": 0,
             }
@@ -55,7 +55,7 @@ try:
             "X-Admin-Session": session_token,
         }
 
-        blocked_before_change = client.get("/v1/admin/config", headers=session_headers)
+        config_before_change = client.get("/v1/admin/config", headers=session_headers)
         change_password = client.post(
             "/v1/admin/change-password",
             headers=session_headers,
@@ -96,8 +96,8 @@ try:
         "bad_login_status": bad_login.status_code,
         "must_change_password": login_payload.get("must_change_password"),
         "initialized_from_default": login_payload.get("initialized_from_default"),
-        "blocked_before_change_status": blocked_before_change.status_code,
-        "blocked_before_change_detail": blocked_before_change.json().get("detail"),
+        "config_before_change_status": config_before_change.status_code,
+        "config_before_change_redaction_mode": config_before_change.json().get("redaction_mode"),
         "change_password_status": change_password.status_code,
         "changed_username": changed_payload.get("username"),
         "old_session_after_change_status": old_session_after_change.status_code,

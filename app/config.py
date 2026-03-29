@@ -197,14 +197,14 @@ def _normalize_admin_auth(raw: Any) -> dict[str, Any]:
         return _build_admin_auth_payload(
             username=DEFAULT_ADMIN_USERNAME,
             password=default_password,
-            must_change_password=True,
+            must_change_password=False,
             initialized_from_default=True,
         )
     return {
         "username": str(DEFAULT_ADMIN_USERNAME or "admin").strip() or "admin",
         "password_hash": "",
         "password_salt": "",
-        "must_change_password": True,
+        "must_change_password": False,
         "initialized_from_default": True,
         "updated_at": int(time.time()),
     }

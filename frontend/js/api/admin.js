@@ -14,12 +14,12 @@ window.NotionAI.API.Admin = {
         window.NotionAI.Core.State.set('adminPassword', '');
         window.NotionAI.Core.State.set('adminSessionToken', data.session_token || '');
         window.NotionAI.Core.State.set('adminSessionExpiresAt', Number(data.session_expires_at || 0));
-        window.NotionAI.Core.State.set('adminMustChangePassword', Boolean(data.must_change_password));
+        window.NotionAI.Core.State.set('adminMustChangePassword', false);
         window.NotionAI.Core.State.persistAdminSession({
             username: data.username || username,
             sessionToken: data.session_token || '',
             sessionExpiresAt: Number(data.session_expires_at || 0),
-            mustChangePassword: Boolean(data.must_change_password)
+            mustChangePassword: false
         });
         return data;
     },

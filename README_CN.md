@@ -15,7 +15,7 @@ Notion2API 已经不只是一个简单的 `/v1/chat/completions` 代理壳。
 - 带图片输入支持的多模态请求解析
 - 多账号 Notion 账号池
 - 浏览器后台运维控制台
-- 基于 `admin session` 的后台鉴权与密码轮换
+- 基于 `admin session` 的后台鉴权
 - 运行时配置编辑与代理诊断
 - usage 汇总与明细查询
 - OAuth callback / register 自动化工具链
@@ -75,7 +75,7 @@ API 同时支持纯文本消息，以及 OpenAI 风格的多模态 `content` 数
 主要后台体验包括：
 
 - 当前浏览器会话内的后台登录恢复
-- 默认后台凭证强制轮换
+- 当前浏览器会话内的后台登录恢复与凭证更新入口
 - 默认按 safe / 脱敏方式渲染数据
 - 运行状态卡片与账号健康视图
 - usage 筛选与事件列表
@@ -144,7 +144,7 @@ API 同时支持纯文本消息，以及 OpenAI 风格的多模态 `content` 数
 1. 使用用户名 / 密码调用 `POST /v1/admin/login`
 2. 获取一个短期有效的 `admin session`
 3. 后续后台请求携带 `X-Admin-Session`
-4. 如果仍在使用默认后台凭证，则敏感后台操作会被阻止，直到完成密码轮换
+4. 使用当前后台账号继续访问后台控制台
 
 当前关键行为：
 
@@ -209,7 +209,7 @@ PORT=8000
 
 | 变量 | 用途 |
 | --- | --- |
-| `ADMIN_PASSWORD` | 首次后台登录的 bootstrap 密码；登录后应立即在后台完成轮换 |
+| `ADMIN_PASSWORD` | 后台登录密码 |
 | `HOST` / `PORT` / `HOST_PORT` | 只有在你需要自定义监听或 Docker 暴露端口时再改 |
 
 如果你已经准备好了账号池，仍然可以继续使用 `NOTION_ACCOUNTS_FILE` 或 `NOTION_ACCOUNTS` 作为兼容入口；但更推荐先启动后台，再在 **Admin > Runtime / Accounts** 中完成后续操作。
@@ -310,7 +310,7 @@ uvicorn app.server:app --host 0.0.0.0 --port 8000
 前端还支持：
 
 - 当前浏览器会话内恢复后台登录状态
-- 默认后台密码轮换引导
+- 后台登录状态恢复与凭证更新入口
 - OAuth callback 导入解析
 - 默认按 safe / 脱敏方式渲染后台数据
 - usage 筛选与事件列表展示
@@ -346,7 +346,7 @@ uvicorn app.server:app --host 0.0.0.0 --port 8000
 - 本地账号 JSON 文件应保持未提交状态
 - 后台列表 / 导出默认使用 safe 视图
 - raw 视图与 raw 导出必须显式触发，并带审计语义
-- 默认后台凭证应在首次登录后立即轮换
+- `ADMIN_PASSWORD` 用作后台登录密码，也可以在后台中自行修改
 - `API_KEY` 可以留空用于本地开放模式，也可以设置为自定义值启用 Bearer 保护
 - workspace create 目前主要暴露 dry-run 与诊断导向的运维能力
 - 项目仍支持聊天 API 使用，但后台运维已经成为一等功能

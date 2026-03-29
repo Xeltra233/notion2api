@@ -24,10 +24,7 @@ function init() {
     // Load models
     window.NotionAI.API.Models.loadModels();
     if (window.NotionAI.Core.State.get('adminSessionToken')) {
-        const restoredMessage = window.NotionAI.Core.State.get('adminMustChangePassword')
-            ? '已恢复 admin session。使用后台面板前请先更新默认凭证。'
-            : '当前浏览器会话的 admin session 已恢复。';
-        window.NotionAI.API.Settings.refreshAdminPanel(restoredMessage);
+        window.NotionAI.API.Settings.refreshAdminPanel('当前浏览器会话的 admin session 已恢复。');
     }
     window.NotionAI.API.Settings.consumeOAuthCallbackParams();
     window.NotionAI.API.Settings.autoFinalizeOAuthIfPossible();

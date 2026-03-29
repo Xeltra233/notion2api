@@ -37,20 +37,4 @@ def build_admin_session_headers(
         **auth_headers,
         "X-Admin-Session": login_payload.get("session_token", ""),
     }
-    if login_payload.get("must_change_password"):
-        change_response = client.post(
-            "/v1/admin/change-password",
-            headers=session_headers,
-            json={
-                "current_password": password,
-                "new_password": rotated_password,
-                "new_username": rotated_username,
-            },
-        )
-        change_response.raise_for_status()
-        changed_payload = change_response.json()
-        return {
-            **auth_headers,
-            "X-Admin-Session": changed_payload.get("session_token", ""),
-        }
     return session_headers

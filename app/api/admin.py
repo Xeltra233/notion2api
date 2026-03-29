@@ -1000,7 +1000,7 @@ def _build_admin_auth_status(request: Request) -> dict[str, Any]:
     )
     return {
         "username": str(admin_auth.get("username") or ""),
-        "must_change_password": bool(admin_auth.get("must_change_password", True)),
+        "must_change_password": bool(admin_auth.get("must_change_password", False)),
         "initialized_from_default": initialized_from_default,
         "configured": configured,
         "auth_source": auth_source,
@@ -1024,8 +1024,6 @@ def _current_admin_session(
     if session.get("username") != auth_status["username"]:
         sessions.pop(token, None)
         raise HTTPException(status_code=401, detail="Admin session is no longer valid")
-    if auth_status["must_change_password"] and not allow_password_change_required:
-        raise HTTPException(status_code=403, detail="PASSWORD_CHANGE_REQUIRED")
     return session
 
 
@@ -2863,8 +2861,6 @@ async def admin_change_password(
     new_password = str(raw_new_password or "")
     if raw_new_password is not None and new_password and len(new_password) < 8:
         raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
-    if auth_status["must_change_password"] and not new_password:
-        raise HTTPException(status_code=400, detail="New password is required for the first credential rotation")
     current_admin_auth = get_admin_auth()
     updated_auth = update_admin_credentials(
         username=new_username,
