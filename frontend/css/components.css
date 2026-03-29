@@ -704,17 +704,72 @@ html.dark .usage-empty-state {
         grid-template-columns: 1fr;
     }
 
+    .admin-access-banner {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .admin-access-banner-actions {
+        width: 100%;
+    }
+
+    .admin-access-banner-actions .admin-action-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .admin-access-card {
+        border-radius: 18px;
+        padding: 14px;
+    }
+
+    .settings-console-panel {
+        border-radius: 18px;
+        padding: 14px;
+    }
+
     .settings-console-header {
         flex-direction: column;
+        gap: 12px;
     }
 
     .settings-console-nav {
         justify-content: flex-start;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        width: 100%;
+        flex-wrap: nowrap;
+    }
+
+    .settings-console-nav-btn {
+        white-space: nowrap;
     }
 
     .usage-breakdown-row {
         flex-direction: column;
         align-items: flex-start;
+    }
+
+    #settings-section-access .grid.grid-cols-1.lg\:grid-cols-2 {
+        gap: 12px;
+    }
+
+    body[data-admin-auth="signed_out"] .settings-console-header {
+        margin-bottom: 12px;
+    }
+
+    body[data-admin-auth="signed_out"] .settings-console-panel-heading {
+        margin-bottom: 10px;
+    }
+
+    body[data-admin-auth="signed_out"] .admin-access-banner {
+        padding: 14px;
+    }
+
+    body[data-admin-auth="signed_out"] .admin-access-meta,
+    body[data-admin-auth="signed_out"] #adminAuthSourceSummary,
+    body[data-admin-auth="signed_out"] #adminAccessSessionSummary {
+        gap: 6px;
     }
 }
 

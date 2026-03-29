@@ -79,6 +79,8 @@ window.NotionAI.Core.App = window.NotionAI.Core.App || {
             'settings-section-diagnostics'
         ];
 
+        document.body?.setAttribute('data-admin-auth', hasAdminSession ? 'signed_in' : 'signed_out');
+
         if (sidebar) {
             sidebar.classList.toggle('hidden', !hasAdminSession);
         }
