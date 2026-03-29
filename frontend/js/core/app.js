@@ -17,22 +17,32 @@ window.NotionAI.Core.App = window.NotionAI.Core.App || {
 
     getModuleTitle(moduleName) {
         const titles = {
-            access: 'Admin access',
-            overview: 'Overview',
-            usage: 'Usage',
-            accounts: 'Accounts',
-            runtime: 'Runtime',
-            diagnostics: 'Diagnostics',
-            chat: 'Chat'
+            access: '后台登录',
+            overview: '总览',
+            usage: '用量',
+            accounts: '账号',
+            runtime: '运行时',
+            diagnostics: '诊断',
+            chat: '聊天'
         };
-        return titles[moduleName] || 'Admin workspace';
+        return titles[moduleName] || '管理后台';
+    },
+
+    resolveAllowedModule(moduleName) {
+        const requested = String(moduleName || '').trim() || this.getDefaultModule();
+        const hasAdminSession = Boolean(window.NotionAI.Core.State.get('adminSessionToken'));
+        const chatEnabled = Boolean(window.NotionAI.Core.State.get('chatEnabled'));
+        if (!hasAdminSession) {
+            return 'access';
+        }
+        if (requested === 'chat' && !chatEnabled) {
+            return this.getDefaultModule();
+        }
+        return requested;
     },
 
     setActiveModule(moduleName) {
-        const normalized = String(moduleName || '').trim();
-        const requested = normalized || this.getDefaultModule();
-        const chatEnabled = Boolean(window.NotionAI.Core.State.get('chatEnabled'));
-        const nextModule = requested === 'chat' && !chatEnabled ? this.getDefaultModule() : requested;
+        const nextModule = this.resolveAllowedModule(moduleName);
         window.NotionAI.Core.State.persistActiveModule(nextModule);
         this.syncShellFromState();
         if (nextModule === 'chat' && typeof window.NotionAI.API?.Settings?.refreshChatAccessState === 'function') {
@@ -42,8 +52,7 @@ window.NotionAI.Core.App = window.NotionAI.Core.App || {
 
     syncShellFromState() {
         const activeModule = window.NotionAI.Core.State.get('activeModule') || this.getDefaultModule();
-        const chatEnabled = Boolean(window.NotionAI.Core.State.get('chatEnabled'));
-        const resolvedModule = activeModule === 'chat' && !chatEnabled ? this.getDefaultModule() : activeModule;
+        const resolvedModule = this.resolveAllowedModule(activeModule);
         if (resolvedModule !== activeModule) {
             window.NotionAI.Core.State.persistActiveModule(resolvedModule);
         }
