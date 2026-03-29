@@ -25,11 +25,15 @@ from app.config import (
     get_accounts,
     get_admin_auth,
     get_app_mode,
+    get_chat_auth,
+    get_chat_session_ttl_seconds,
     get_config_store,
     should_auto_select_workspace,
     update_admin_credentials,
+    update_chat_password,
     validate_runtime_request_url,
     verify_admin_credentials,
+    verify_chat_password,
 )
 
 
@@ -57,6 +61,10 @@ def _redact_runtime_settings(settings: dict[str, Any]) -> dict[str, Any]:
         raw_value = redacted.get(field, "")
         redacted[field] = _mask_secret(raw_value)
         redacted[f"has_{field}"] = bool(str(raw_value or "").strip())
+    if "chat_password" in redacted:
+        raw_chat_password = redacted.get("chat_password", "")
+        redacted["chat_password"] = _mask_secret(raw_chat_password)
+        redacted["has_chat_password"] = bool(str(raw_chat_password or "").strip())
     return redacted
 
 
@@ -809,6 +817,10 @@ class AdminChangePasswordRequest(BaseModel):
     new_username: str | None = Field(default=None)
 
 
+class ChatLoginRequest(BaseModel):
+    password: str = Field(default="")
+
+
 class RuntimeSettingsRequest(BaseModel):
     app_mode: str = Field(default="standard")
     api_key: str | None = Field(default=None)
@@ -834,6 +846,8 @@ class RuntimeSettingsRequest(BaseModel):
     workspace_request_url: str = Field(default="")
     allow_real_probe_requests: bool = False
     chat_enabled: bool = False
+    chat_password_enabled: bool = False
+    chat_password: str | None = Field(default=None)
     auto_register_enabled: bool = False
     auto_register_idle_only: bool = True
     auto_register_interval_seconds: int = 1800
@@ -987,6 +1001,32 @@ def _create_admin_session(request: Request, username: str) -> dict[str, Any]:
     return session
 
 
+def _prune_chat_sessions(request: Request) -> None:
+    sessions = getattr(request.app.state, "chat_sessions", {})
+    now_ts = int(time.time())
+    expired_tokens = [
+        token
+        for token, session in sessions.items()
+        if int(session.get("expires_at") or 0) <= now_ts
+    ]
+    for token in expired_tokens:
+        sessions.pop(token, None)
+
+
+def _create_chat_session(request: Request) -> dict[str, Any]:
+    _prune_chat_sessions(request)
+    token = secrets.token_urlsafe(32)
+    now_ts = int(time.time())
+    ttl_seconds = int(getattr(request.app.state, "chat_session_ttl_seconds", get_chat_session_ttl_seconds()) or get_chat_session_ttl_seconds())
+    session = {
+        "token": token,
+        "created_at": now_ts,
+        "expires_at": now_ts + max(300, ttl_seconds),
+    }
+    getattr(request.app.state, "chat_sessions", {})[token] = session
+    return session
+
+
 def _build_admin_auth_status(request: Request) -> dict[str, Any]:
     admin_auth = get_admin_auth()
     request.app.state.admin_auth = admin_auth
@@ -1039,6 +1079,47 @@ def _ensure_admin(
         session_token,
         allow_password_change_required=allow_password_change_required,
     )
+
+
+def _build_chat_auth_status(request: Request) -> dict[str, Any]:
+    chat_auth = get_chat_auth()
+    configured = bool(
+        str(chat_auth.get("password_hash") or "").strip()
+        and str(chat_auth.get("password_salt") or "").strip()
+    )
+    enabled = bool(chat_auth.get("enabled", False) and configured)
+    return {
+        "configured": configured,
+        "enabled": enabled,
+        "updated_at": int(chat_auth.get("updated_at") or 0),
+    }
+
+
+def _current_chat_session(request: Request, session_token: str | None) -> dict[str, Any]:
+    token = str(session_token or "").strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Chat session required")
+    _prune_chat_sessions(request)
+    sessions = getattr(request.app.state, "chat_sessions", {})
+    session = sessions.get(token)
+    if not isinstance(session, dict):
+        raise HTTPException(status_code=401, detail="Invalid chat session")
+    return session
+
+
+def _ensure_chat_access(request: Request, session_token: str | None) -> dict[str, Any]:
+    chat_status = _build_chat_auth_status(request)
+    if not chat_status["enabled"]:
+        return {"mode": "open"}
+    admin_session = request.headers.get("X-Admin-Session") or ""
+    if admin_session:
+        try:
+            _ensure_admin(request, admin_session)
+            return {"mode": "admin"}
+        except HTTPException:
+            pass
+    _current_chat_session(request, session_token)
+    return {"mode": "password"}
 
 
 def _rebuild_pool(request: Request) -> None:
@@ -2884,6 +2965,34 @@ async def admin_change_password(
     }
 
 
+@router.post("/chat/login")
+async def chat_login(request: Request, payload: ChatLoginRequest):
+    chat_status = _build_chat_auth_status(request)
+    if not chat_status["enabled"]:
+        return {"ok": True, "session_token": "", "session_expires_at": 0, "enabled": False}
+    password = str(payload.password or "")
+    if not verify_chat_password(password):
+        raise HTTPException(status_code=401, detail="Invalid chat password")
+    session = _create_chat_session(request)
+    return {
+        "ok": True,
+        "enabled": True,
+        "session_token": session["token"],
+        "session_expires_at": session["expires_at"],
+    }
+
+
+@router.get("/chat/access")
+async def get_chat_access(request: Request):
+    chat_status = _build_chat_auth_status(request)
+    return {
+        "ok": True,
+        "chat_enabled": bool(get_config_store().get_config().get("chat_enabled", False)),
+        "password_enabled": chat_status["enabled"],
+        "configured": chat_status["configured"],
+    }
+
+
 @router.get("/admin/config")
 async def get_admin_config(
     request: Request,
@@ -2896,6 +3005,7 @@ async def get_admin_config(
     register_automation, runtime_panel, account_view, proxy_health_payload = (
         _build_runtime_automation_payload(request, store, config)
     )
+    chat_auth = get_chat_auth()
     settings = _redact_runtime_settings(
         {
             "app_mode": config.get("app_mode", get_app_mode()),
@@ -2948,6 +3058,9 @@ async def get_admin_config(
             "workspace_request_url": config.get("workspace_request_url", ""),
             "allow_real_probe_requests": config.get("allow_real_probe_requests", False),
             "chat_enabled": config.get("chat_enabled", False),
+            "chat_password_enabled": bool(chat_auth.get("enabled", False)),
+            "chat_password": "********" if str(chat_auth.get("password_hash") or "").strip() else "",
+            "has_chat_password": bool(str(chat_auth.get("password_hash") or "").strip()),
         }
     )
     return {
@@ -3095,6 +3208,18 @@ async def update_runtime_settings(
         updates["refresh_client_secret"] = payload.refresh_client_secret
     config.update(updates)
     saved = store.save_config(config)
+    if payload.chat_password is not None:
+        chat_password_value = str(payload.chat_password or "").strip()
+        has_existing_chat_password = bool(str(get_chat_auth().get("password_hash") or "").strip())
+        if chat_password_value and chat_password_value != "********":
+            update_chat_password(password=chat_password_value, enabled=payload.chat_password_enabled)
+        elif not chat_password_value:
+            update_chat_password(password="", enabled=False)
+        elif chat_password_value == "********" and has_existing_chat_password:
+            store.update_config({"chat_auth": {**get_chat_auth(), "enabled": bool(payload.chat_password_enabled)}})
+    elif bool(payload.chat_password_enabled) != bool(get_chat_auth().get("enabled", False)):
+        store.update_config({"chat_auth": {**get_chat_auth(), "enabled": bool(payload.chat_password_enabled)}})
+    saved = store.get_config()
     _rebuild_pool(request)
     return {
         "ok": True,

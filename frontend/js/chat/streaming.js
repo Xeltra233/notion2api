@@ -37,6 +37,7 @@ window.NotionAI.Chat.Streaming = {
         STATE.controller = new AbortController();
 
         try {
+            const chatSessionToken = window.NotionAI.Core.State.get('chatSessionToken');
             const response = await fetch(
                 `${window.NotionAI.Core.State.get('baseUrl')}/v1/chat/completions`,
                 {
@@ -44,7 +45,8 @@ window.NotionAI.Chat.Streaming = {
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${window.NotionAI.Core.State.get('apiKey')}`,
-                        'X-Client-Type': window.NotionAI.Core.Constants.CLIENT_TYPE
+                        'X-Client-Type': window.NotionAI.Core.Constants.CLIENT_TYPE,
+                        ...(chatSessionToken ? { 'X-Chat-Session': chatSessionToken } : {})
                     },
                     body: JSON.stringify({
                         model: model,
@@ -78,6 +80,16 @@ window.NotionAI.Chat.Streaming = {
                     detail = '';
                 }
                 if (response.status === 401) {
+                    if (detail === 'Chat session required' || detail === 'Invalid chat session') {
+                        window.NotionAI.Core.State.clearChatSession();
+                        if (typeof window.NotionAI.API?.Settings?.refreshChatAccessState === 'function') {
+                            window.NotionAI.API.Settings.refreshChatAccessState(true);
+                        }
+                        throw new Error('Chat access expired. Please unlock Chat again.');
+                    }
+                    if (detail === 'Invalid chat password') {
+                        throw new Error('Chat password is incorrect.');
+                    }
                     throw new Error("API KEY doesn't match.");
                 }
                 throw new Error(detail || `HTTP Error: ${response.status}`);

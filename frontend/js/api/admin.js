@@ -125,6 +125,30 @@ window.NotionAI.API.Admin = {
         return data;
     },
 
+    async getChatAccess() {
+        const response = await window.NotionAI.API.Client.get('/v1/chat/access');
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.detail || '加载聊天访问状态失败');
+        }
+        return data;
+    },
+
+    async loginChat(password) {
+        const response = await window.NotionAI.API.Client.post('/v1/chat/login', { password }, {
+            headers: { 'X-Chat-Session': '' }
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.detail || '聊天访问登录失败');
+        }
+        window.NotionAI.Core.State.persistChatSession({
+            sessionToken: data.session_token || '',
+            sessionExpiresAt: Number(data.session_expires_at || 0)
+        });
+        return data;
+    },
+
     async saveRuntimeSettings(payload) {
         const response = await window.NotionAI.API.Client.put('/v1/admin/config/settings', payload);
         const data = await response.json().catch(() => ({}));

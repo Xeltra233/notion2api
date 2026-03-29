@@ -35,6 +35,9 @@ window.NotionAI.Core.App = window.NotionAI.Core.App || {
         const nextModule = requested === 'chat' && !chatEnabled ? this.getDefaultModule() : requested;
         window.NotionAI.Core.State.persistActiveModule(nextModule);
         this.syncShellFromState();
+        if (nextModule === 'chat' && typeof window.NotionAI.API?.Settings?.refreshChatAccessState === 'function') {
+            window.NotionAI.API.Settings.refreshChatAccessState(true);
+        }
     },
 
     syncShellFromState() {
@@ -97,6 +100,7 @@ function init() {
     const initialModule = window.NotionAI.Core.State.get('activeModule') || window.NotionAI.Core.App.getDefaultModule();
     window.NotionAI.Core.App.setActiveModule(initialModule);
     window.NotionAI.API.Settings.loadRuntimeConfigIntoForm();
+    window.NotionAI.API.Settings.refreshChatAccessState(true);
     if (window.NotionAI.Core.State.get('adminSessionToken')) {
         window.NotionAI.API.Settings.refreshAdminPanel('当前浏览器会话的 admin session 已恢复。');
     }
@@ -119,8 +123,15 @@ function bindEventListeners() {
                 return;
             }
             window.NotionAI.Core.App.setActiveModule(moduleName);
-            if (moduleName === 'chat' && !STATE.currentChatId) {
-                window.NotionAI.Chat.Manager.startNewChat();
+            if (moduleName === 'chat') {
+                window.NotionAI.API.Settings.refreshChatAccessState(true).then((state) => {
+                    const hasAdminSession = Boolean(window.NotionAI.Core.State.get('adminSessionToken'));
+                    const hasChatSession = Boolean(window.NotionAI.Core.State.get('chatSessionToken'));
+                    const canOpenChat = Boolean(state?.chat_enabled) && (!state?.password_enabled || hasAdminSession || hasChatSession);
+                    if (canOpenChat && !STATE.currentChatId) {
+                        window.NotionAI.Chat.Manager.startNewChat();
+                    }
+                });
             }
             if (window.innerWidth < 768) {
                 window.NotionAI.UI.Sidebar.close();
@@ -131,7 +142,14 @@ function bindEventListeners() {
     // New chat
     document.getElementById('newChatBtn').addEventListener('click', () => {
         window.NotionAI.Core.App.setActiveModule('chat');
-        window.NotionAI.Chat.Manager.startNewChat();
+        window.NotionAI.API.Settings.refreshChatAccessState(true).then((state) => {
+            const hasAdminSession = Boolean(window.NotionAI.Core.State.get('adminSessionToken'));
+            const hasChatSession = Boolean(window.NotionAI.Core.State.get('chatSessionToken'));
+            const canOpenChat = Boolean(state?.chat_enabled) && (!state?.password_enabled || hasAdminSession || hasChatSession);
+            if (canOpenChat) {
+                window.NotionAI.Chat.Manager.startNewChat();
+            }
+        });
     });
 
     // Sidebar
@@ -324,6 +342,18 @@ function bindEventListeners() {
     });
     document.getElementById('runtimeAdvancedToggleBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.toggleRuntimeAdvanced();
+    });
+    document.getElementById('chatAccessUnlockBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.unlockChatAccess();
+    });
+    document.getElementById('chatAccessRefreshBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.refreshChatAccessState();
+    });
+    document.getElementById('chatAccessPasswordInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            window.NotionAI.API.Settings.unlockChatAccess();
+        }
     });
     document.getElementById('oauthStartBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.startOAuthFlow();

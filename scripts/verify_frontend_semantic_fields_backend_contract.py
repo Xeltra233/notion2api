@@ -24,12 +24,18 @@ with TestClient(app) as client:
     operations = client.get("/v1/admin/operations", headers=headers)
     proxy_health = client.get("/v1/admin/config/proxy-health", headers=headers)
     request_templates = client.get("/v1/admin/request-templates", headers=headers)
+    admin_config = client.get("/v1/admin/config", headers=headers)
+    chat_access = client.get("/v1/chat/access", headers=headers)
 
     safe_accounts.raise_for_status()
     alerts.raise_for_status()
     operations.raise_for_status()
     proxy_health.raise_for_status()
     request_templates.raise_for_status()
+    admin_config.raise_for_status()
+    chat_access.raise_for_status()
+
+    settings = admin_config.json().get("settings", {})
 
     print(
         json.dumps(
@@ -39,6 +45,14 @@ with TestClient(app) as client:
                 "operations_response_mode": operations.json().get("response_mode"),
                 "proxy_health_response_mode": proxy_health.json().get("response_mode"),
                 "request_templates_response_mode": request_templates.json().get("response_mode"),
+                "has_chat_enabled_field": "chat_enabled" in settings,
+                "has_chat_password_enabled_field": "chat_password_enabled" in settings,
+                "has_chat_password_field": "chat_password" in settings,
+                "has_has_chat_password_field": "has_chat_password" in settings,
+                "chat_access_ok": chat_access.json().get("ok"),
+                "chat_access_has_chat_enabled": "chat_enabled" in chat_access.json(),
+                "chat_access_has_password_enabled": "password_enabled" in chat_access.json(),
+                "chat_access_has_configured": "configured" in chat_access.json(),
             },
             ensure_ascii=False,
         )

@@ -14,6 +14,7 @@ from app.config import (
     get_admin_session_ttl_seconds,
     get_allowed_origins,
     get_api_key,
+    get_chat_session_ttl_seconds,
     get_config_store,
     is_lite_mode,
     is_standard_mode,
@@ -89,7 +90,9 @@ async def lifespan(app: FastAPI):
     app.state.config_store = get_config_store()
     app.state.admin_auth = get_admin_auth()
     app.state.admin_sessions = {}
+    app.state.chat_sessions = {}
     app.state.admin_session_ttl_seconds = get_admin_session_ttl_seconds()
+    app.state.chat_session_ttl_seconds = get_chat_session_ttl_seconds()
     app.state.admin_request_context = type("RequestContext", (), {"app": app})()
     app.state.account_pool = AccountPool(accounts)
     app.state.usage_store = UsageStore()

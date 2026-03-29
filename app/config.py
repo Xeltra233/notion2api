@@ -25,9 +25,10 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 
 REQUIRED_ACCOUNT_FIELDS = {"token_v2", "space_id", "user_id"}
 DEFAULT_ALLOWED_ORIGINS: list[str] = []
-_ADMIN_AUTH_HASH_NAME = "sha256"
-_ADMIN_AUTH_ITERATIONS = 200000
+_PASSWORD_HASH_NAME = "sha256"
+_PASSWORD_HASH_ITERATIONS = 200000
 _ADMIN_SESSION_TTL_SECONDS = 12 * 60 * 60
+_CHAT_SESSION_TTL_SECONDS = 12 * 60 * 60
 DEFAULT_ALLOWED_ORIGINS: list[str] = []
 
 
@@ -142,14 +143,18 @@ def validate_runtime_request_url(value: Any, field_name: str) -> str:
     return url
 
 
-def _hash_admin_password(password: str, salt: str) -> str:
+def _hash_password(password: str, salt: str) -> str:
     derived = hashlib.pbkdf2_hmac(
-        _ADMIN_AUTH_HASH_NAME,
+        _PASSWORD_HASH_NAME,
         str(password or "").encode("utf-8"),
         str(salt or "").encode("utf-8"),
-        _ADMIN_AUTH_ITERATIONS,
+        _PASSWORD_HASH_ITERATIONS,
     )
     return derived.hex()
+
+
+def _hash_admin_password(password: str, salt: str) -> str:
+    return _hash_password(password, salt)
 
 
 def _build_admin_auth_payload(
@@ -219,6 +224,63 @@ def _admin_password_matches(admin_auth: dict[str, Any], password: str) -> bool:
     return hmac.compare_digest(password_hash, candidate)
 
 
+def _build_chat_auth_payload(
+    *,
+    password: str,
+    enabled: bool,
+    updated_at: int | None = None,
+) -> dict[str, Any]:
+    normalized_password = str(password or "")
+    now_ts = int(updated_at or time.time())
+    if not normalized_password:
+        return {
+            "password_salt": "",
+            "password_hash": "",
+            "enabled": False,
+            "updated_at": now_ts,
+        }
+    salt = secrets.token_hex(16)
+    return {
+        "password_salt": salt,
+        "password_hash": _hash_password(normalized_password, salt),
+        "enabled": bool(enabled),
+        "updated_at": now_ts,
+    }
+
+
+def _normalize_chat_auth(raw: Any) -> dict[str, Any]:
+    if isinstance(raw, dict):
+        password_hash = str(raw.get("password_hash") or "").strip()
+        password_salt = str(raw.get("password_salt") or "").strip()
+        updated_at = raw.get("updated_at")
+        try:
+            normalized_updated_at = int(updated_at) if updated_at is not None else int(time.time())
+        except (TypeError, ValueError):
+            normalized_updated_at = int(time.time())
+        if password_hash and password_salt:
+            return {
+                "password_hash": password_hash,
+                "password_salt": password_salt,
+                "enabled": bool(raw.get("enabled", False)),
+                "updated_at": normalized_updated_at,
+            }
+    return {
+        "password_hash": "",
+        "password_salt": "",
+        "enabled": False,
+        "updated_at": int(time.time()),
+    }
+
+
+def _chat_password_matches(chat_auth: dict[str, Any], password: str) -> bool:
+    password_hash = str(chat_auth.get("password_hash") or "").strip()
+    password_salt = str(chat_auth.get("password_salt") or "").strip()
+    if not password_hash or not password_salt:
+        return False
+    candidate = _hash_password(password, password_salt)
+    return hmac.compare_digest(password_hash, candidate)
+
+
 def _default_config() -> dict[str, Any]:
     return {
         "app_mode": "standard",
@@ -226,6 +288,7 @@ def _default_config() -> dict[str, Any]:
         "allowed_origins": DEFAULT_ALLOWED_ORIGINS.copy(),
         "db_path": DEFAULT_DB_PATH,
         "admin_auth": _normalize_admin_auth(None),
+        "chat_auth": _normalize_chat_auth(None),
         "siliconflow_api_key": "",
         "upstream_proxy": "",
         "upstream_http_proxy": "",
@@ -291,6 +354,7 @@ class RuntimeConfigStore:
             str(raw.get("db_path") or DEFAULT_DB_PATH).strip() or DEFAULT_DB_PATH
         )
         config["admin_auth"] = _normalize_admin_auth(raw.get("admin_auth"))
+        config["chat_auth"] = _normalize_chat_auth(raw.get("chat_auth"))
         config["siliconflow_api_key"] = str(raw.get("siliconflow_api_key") or "")
         config["upstream_proxy"] = str(raw.get("upstream_proxy") or "")
         config["upstream_http_proxy"] = str(raw.get("upstream_http_proxy") or "")
@@ -576,6 +640,31 @@ def update_admin_credentials(
 
 def get_admin_session_ttl_seconds() -> int:
     return _ADMIN_SESSION_TTL_SECONDS
+
+
+def get_chat_session_ttl_seconds() -> int:
+    return _CHAT_SESSION_TTL_SECONDS
+
+
+def get_chat_auth() -> dict[str, Any]:
+    chat_auth = get_runtime_config().get("chat_auth")
+    return _normalize_chat_auth(chat_auth)
+
+
+def is_chat_password_enabled() -> bool:
+    return bool(get_chat_auth().get("enabled", False))
+
+
+def verify_chat_password(password: str) -> bool:
+    return _chat_password_matches(get_chat_auth(), password)
+
+
+def update_chat_password(*, password: str, enabled: bool) -> dict[str, Any]:
+    store = get_config_store()
+    config = store.get_config()
+    config["chat_auth"] = _build_chat_auth_payload(password=password, enabled=enabled)
+    saved = store.save_config(config)
+    return _normalize_chat_auth(saved.get("chat_auth"))
 
 
 def get_api_key() -> str:

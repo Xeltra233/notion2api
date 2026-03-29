@@ -6,6 +6,8 @@ window.NotionAI.API.Settings = {
     _runtimeSecretsVisible: false,
     _runtimeAdvancedVisible: false,
     _expandedActionHistoryKeys: {},
+    _lastChatAccessState: null,
+    _runtimeHasChatPassword: false,
 
     getActionHistoryFilters() {
         return {
@@ -1600,6 +1602,7 @@ window.NotionAI.API.Settings = {
             runtimeProbeIntervalInput: settings.account_probe_interval_seconds ?? 300,
             runtimeAllowedOriginsInput: Array.isArray(settings.allowed_origins) ? settings.allowed_origins.join(', ') : '*',
             runtimeServerApiKeyInput: '',
+            runtimeChatPasswordInput: settings.chat_password || '',
             runtimeSiliconflowApiKeyInput: '',
             runtimeProxyInput: settings.upstream_proxy || '',
             runtimeProxyModeInput: settings.upstream_proxy_mode || 'direct',
@@ -1637,6 +1640,15 @@ window.NotionAI.API.Settings = {
             runtimeAutoRegisterMailApiKeyInput: this._runtimeSecretPresence?.auto_register_mail_api_key,
             runtimeRefreshClientSecretInput: this._runtimeSecretPresence?.refresh_client_secret,
         };
+        this._runtimeHasChatPassword = Boolean(settings.has_chat_password);
+        const chatPasswordInput = document.getElementById('runtimeChatPasswordInput');
+        if (chatPasswordInput) {
+            if (settings.has_chat_password) {
+                chatPasswordInput.placeholder = '已设置 Chat 密码。留空并保存表示保持当前密码；输入新值表示替换。';
+            } else {
+                chatPasswordInput.placeholder = '设置新的 Chat 访问密码';
+            }
+        }
         Object.entries(secretPlaceholders).forEach(([id, hasValue]) => {
             const element = document.getElementById(id);
             if (element && hasValue) {
@@ -1655,6 +1667,7 @@ window.NotionAI.API.Settings = {
             runtimeAutoRegisterHeadlessInput: Boolean(settings.auto_register_headless),
             runtimeAutoRegisterUseApiInput: settings.auto_register_use_api !== false,
             runtimeChatEnabledInput: Boolean(settings.chat_enabled),
+            runtimeChatPasswordEnabledInput: Boolean(settings.chat_password_enabled),
         };
 
         Object.entries(checkboxMappings).forEach(([id, checked]) => {
@@ -1882,6 +1895,8 @@ window.NotionAI.API.Settings = {
             ['Warp', settings.upstream_warp_enabled ? '开启' : '关闭'],
             ['自动注册', settings.auto_register_enabled ? '开启' : '关闭'],
             ['自动注册空闲限制', settings.auto_register_idle_only !== false ? '仅空闲时' : '始终可触发'],
+            ['Chat 模块', settings.chat_enabled ? '开启' : '关闭'],
+            ['Chat 密码', settings.chat_password_enabled ? '开启' : ((settings.has_chat_password || settings.chat_password === '********') ? '已配置未启用' : '未设置')],
             ['服务端密钥', (settings.has_api_key || settings.api_key) ? '已设置' : '为空'],
             ['刷新模式', settings.refresh_execution_mode || 'manual'],
             ['刷新地址', settings.refresh_request_url ? '已设置' : '为空'],
@@ -2067,9 +2082,11 @@ window.NotionAI.API.Settings = {
             this.renderAdminSessionSummary(data.admin_auth || {});
             this.applyAdminConsoleAccessState(data.admin_auth || {});
             window.NotionAI.Core.State.set('chatEnabled', Boolean((data.settings || {}).chat_enabled));
+            window.NotionAI.Core.State.set('chatPasswordEnabled', Boolean((data.settings || {}).chat_password_enabled));
             if (typeof window.NotionAI.Core.App?.syncShellFromState === 'function') {
                 window.NotionAI.Core.App.syncShellFromState();
             }
+            await this.refreshChatAccessState(true);
             this.renderRuntimeProxyHealth(data.proxy_health || {});
             this.renderRegisterAutomationSummary(data.register_automation || {});
             this.renderRegisterAutomationGuidance(data.register_automation_guidance || {});
@@ -2088,6 +2105,7 @@ window.NotionAI.API.Settings = {
         const siliconflowApiKeyValue = document.getElementById('runtimeSiliconflowApiKeyInput').value.trim();
         const autoRegisterMailApiKeyValue = document.getElementById('runtimeAutoRegisterMailApiKeyInput').value.trim();
         const refreshClientSecretValue = document.getElementById('runtimeRefreshClientSecretInput').value.trim();
+        const chatPasswordValue = document.getElementById('runtimeChatPasswordInput').value;
         const payload = {
             app_mode: document.getElementById('runtimeAppModeInput').value || 'standard',
             api_key: apiKeyValue || (this._runtimeSecretPresence?.api_key ? undefined : ''),
@@ -2128,6 +2146,8 @@ window.NotionAI.API.Settings = {
             workspace_request_url: document.getElementById('runtimeWorkspaceRequestUrlInput').value.trim(),
             allow_real_probe_requests: document.getElementById('runtimeAllowRealProbeRequestsInput').checked,
             chat_enabled: document.getElementById('runtimeChatEnabledInput').checked,
+            chat_password_enabled: document.getElementById('runtimeChatPasswordEnabledInput').checked,
+            chat_password: chatPasswordValue || (this._runtimeHasChatPassword ? '********' : ''),
         };
 
         try {
@@ -2146,9 +2166,14 @@ window.NotionAI.API.Settings = {
             this.renderRuntimeProxyChecks({});
             this.renderRuntimeOperationsPanel({});
             window.NotionAI.Core.State.set('chatEnabled', Boolean(payload.chat_enabled));
+            window.NotionAI.Core.State.set('chatPasswordEnabled', Boolean(payload.chat_password_enabled));
+            if (!payload.chat_password_enabled && !payload.chat_enabled) {
+                window.NotionAI.Core.State.clearChatSession();
+            }
             if (typeof window.NotionAI.Core.App?.syncShellFromState === 'function') {
                 window.NotionAI.Core.App.syncShellFromState();
             }
+            await this.refreshChatAccessState(true);
             const hint = document.getElementById('runtimeConfigHint');
             if (hint) {
                 hint.textContent = `运行时配置已保存。后台探测间隔：${payload.account_probe_interval_seconds} 秒。自动创建工作区：${payload.auto_create_workspace ? '开启' : '关闭'}。`;
@@ -2438,6 +2463,92 @@ window.NotionAI.API.Settings = {
                 this.refreshAdminPanel('Usage filters updated.');
             });
         });
+    },
+
+    async refreshChatAccessState(silent = false) {
+        const gate = document.getElementById('chatAccessGate');
+        const content = document.getElementById('chatWorkspaceContent');
+        const title = document.getElementById('chatAccessGateTitle');
+        const copy = document.getElementById('chatAccessGateCopy');
+        const notice = document.getElementById('chatAccessGateNotice');
+        const passwordInput = document.getElementById('chatAccessPasswordInput');
+        const unlockBtn = document.getElementById('chatAccessUnlockBtn');
+        if (!gate || !content || !title || !copy || !notice || !passwordInput || !unlockBtn) {
+            return null;
+        }
+        try {
+            const data = await window.NotionAI.API.Admin.getChatAccess();
+            this._lastChatAccessState = data;
+            const chatEnabled = Boolean(data.chat_enabled);
+            const passwordEnabled = Boolean(data.password_enabled);
+            window.NotionAI.Core.State.set('chatEnabled', chatEnabled);
+            window.NotionAI.Core.State.set('chatPasswordEnabled', passwordEnabled);
+            const hasAdminSession = Boolean(window.NotionAI.Core.State.get('adminSessionToken'));
+            const hasChatSession = Boolean(window.NotionAI.Core.State.get('chatSessionToken'));
+            const unlocked = chatEnabled && (!passwordEnabled || hasAdminSession || hasChatSession);
+            gate.classList.toggle('hidden', unlocked);
+            content.classList.toggle('hidden', !unlocked);
+            content.classList.toggle('flex', unlocked);
+            unlockBtn.disabled = !chatEnabled;
+            passwordInput.disabled = !chatEnabled || !passwordEnabled;
+            if (!chatEnabled) {
+                title.textContent = 'Chat 模块未启用';
+                copy.textContent = '请先在 Runtime 中启用 Chat 模块，左侧才会显示聊天入口。';
+                notice.textContent = '当前无需输入密码，因为 Chat 模块本身还是关闭状态。';
+            } else if (!passwordEnabled) {
+                title.textContent = 'Chat 已开放';
+                copy.textContent = '当前聊天模块不需要独立密码，可以直接进入。';
+                notice.textContent = '如果你希望单独保护聊天入口，可在 Runtime 中启用 Chat 密码。';
+            } else if (hasAdminSession) {
+                title.textContent = 'Admin 已直通 Chat';
+                copy.textContent = '当前浏览器已有 admin session，可直接进入 Chat。';
+                notice.textContent = '如需测试普通用户路径，请先退出后台或换一个浏览器会话。';
+            } else if (hasChatSession) {
+                title.textContent = 'Chat 已解锁';
+                copy.textContent = '当前浏览器已有有效的 Chat session，可直接进入聊天。';
+                notice.textContent = 'Chat session 仅保存在当前浏览器会话中。';
+            } else {
+                title.textContent = '聊天模块已锁定';
+                copy.textContent = '当前聊天模块需要独立密码。输入后仅在本浏览器会话中保留聊天访问 session。';
+                notice.textContent = '如你已是后台管理员，也可以直接进入 Chat，无需再次输入聊天密码。';
+            }
+            if (typeof window.NotionAI.Core.App?.syncShellFromState === 'function') {
+                window.NotionAI.Core.App.syncShellFromState();
+            }
+            if (!silent && chatEnabled && !unlocked && passwordEnabled) {
+                this.setAdminNotice('Chat 模块需要先输入独立密码。');
+            }
+            return data;
+        } catch (error) {
+            if (!silent) {
+                this.setAdminNotice(error.message || '加载聊天访问状态失败。');
+            }
+            return null;
+        }
+    },
+
+    async unlockChatAccess() {
+        const input = document.getElementById('chatAccessPasswordInput');
+        if (!input) {
+            return;
+        }
+        const password = input.value;
+        if (!String(password || '').trim()) {
+            this.setAdminNotice('请输入 Chat 访问密码。');
+            return;
+        }
+        try {
+            await window.NotionAI.API.Admin.loginChat(password);
+            input.value = '';
+            await this.refreshChatAccessState(true);
+            if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
+                window.NotionAI.Core.App.setActiveModule('chat');
+            }
+            this.setAdminNotice('Chat 已解锁。');
+        } catch (error) {
+            window.NotionAI.Core.State.clearChatSession();
+            this.setAdminNotice(error.message || 'Chat 解锁失败。');
+        }
     },
 
     bindConsoleNavigation() {

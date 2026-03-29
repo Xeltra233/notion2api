@@ -19,6 +19,9 @@ window.NotionAI.Core.State = {
         adminMustChangePassword: false,
         activeModule: sessionStorage.getItem('claude_active_module') || '',
         chatEnabled: false,
+        chatPasswordEnabled: false,
+        chatSessionToken: sessionStorage.getItem('claude_chat_session') || '',
+        chatSessionExpiresAt: Number(sessionStorage.getItem('claude_chat_session_expires_at') || 0),
         theme: localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
         chats: JSON.parse(localStorage.getItem('claude_chats')) || [],
         currentChatId: null,
@@ -86,6 +89,28 @@ window.NotionAI.Core.State = {
         this._state.adminSessionToken = '';
         this._state.adminSessionExpiresAt = 0;
         this._state.adminMustChangePassword = false;
+    },
+
+    persistChatSession({ sessionToken = '', sessionExpiresAt = 0 } = {}) {
+        if (sessionToken) {
+            sessionStorage.setItem('claude_chat_session', sessionToken);
+        } else {
+            sessionStorage.removeItem('claude_chat_session');
+        }
+        if (sessionExpiresAt) {
+            sessionStorage.setItem('claude_chat_session_expires_at', String(sessionExpiresAt));
+        } else {
+            sessionStorage.removeItem('claude_chat_session_expires_at');
+        }
+        this._state.chatSessionToken = sessionToken;
+        this._state.chatSessionExpiresAt = Number(sessionExpiresAt || 0);
+    },
+
+    clearChatSession() {
+        sessionStorage.removeItem('claude_chat_session');
+        sessionStorage.removeItem('claude_chat_session_expires_at');
+        this._state.chatSessionToken = '';
+        this._state.chatSessionExpiresAt = 0;
     },
 
     persistActiveModule(moduleName) {

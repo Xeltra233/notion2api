@@ -7,7 +7,7 @@ import time
 import uuid
 from typing import Any, Dict, Generator, Iterable, List, Tuple
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.conversation import (
@@ -34,6 +34,7 @@ from app.schemas import (
     ChatMessageResponseChoice,
     ResponsesRequest,
 )
+from app.api.admin import _ensure_chat_access
 
 router = APIRouter()
 
@@ -1821,6 +1822,7 @@ async def create_chat_completion(
     req_body: ChatCompletionRequest,
     background_tasks: BackgroundTasks,
     response: Response,
+    x_chat_session: str | None = Header(default=None, alias="X-Chat-Session"),
 ):
     """
     创建聊天请求，严格兼容 OpenAI API。
@@ -1832,6 +1834,7 @@ async def create_chat_completion(
     """
     from app.config import is_standard_mode
 
+    _ensure_chat_access(request, x_chat_session)
     req_body.messages = _normalize_request_messages(req_body.messages)
 
     # Lite 模式：单轮问答，无记忆
@@ -2447,6 +2450,7 @@ async def create_responses(
     req_body: ResponsesRequest,
     background_tasks: BackgroundTasks,
     response: Response,
+    x_chat_session: str | None = Header(default=None, alias="X-Chat-Session"),
 ):
     chat_req = _chat_request_from_responses(req_body)
     result = await create_chat_completion(
@@ -2454,6 +2458,7 @@ async def create_responses(
         req_body=chat_req,
         background_tasks=background_tasks,
         response=response,
+        x_chat_session=x_chat_session,
     )
 
     if isinstance(result, StreamingResponse):
@@ -2485,7 +2490,12 @@ async def create_responses(
 
 
 @router.delete("/conversations/{conversation_id}", tags=["chat"])
-async def delete_conversation(conversation_id: str, request: Request):
+async def delete_conversation(
+    conversation_id: str,
+    request: Request,
+    x_chat_session: str | None = Header(default=None, alias="X-Chat-Session"),
+):
+    _ensure_chat_access(request, x_chat_session)
     manager = request.app.state.conversation_manager
     deleted = manager.delete_conversation(conversation_id)
     if not deleted:

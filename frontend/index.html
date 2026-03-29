@@ -292,6 +292,9 @@
                                 <input id="runtimeServerApiKeyInput" type="text" placeholder="服务端 API Key（敏感）"
                                     class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
                                 <label class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 sm:col-span-2"><input id="runtimeChatEnabledInput" type="checkbox">启用 Chat 模块（开启后左侧大按钮才显示聊天）</label>
+                                <label class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 sm:col-span-2"><input id="runtimeChatPasswordEnabledInput" type="checkbox">启用独立 Chat 密码（进入聊天前单独验证，不复用 admin 密码）</label>
+                                <input id="runtimeChatPasswordInput" type="password" placeholder="新的 Chat 访问密码；留空表示保持当前设置，清空并保存表示关闭"
+                                    class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
                                 <select id="runtimeProxyModeInput"
                                     class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
                                     <option value="direct">代理模式：直连</option>
@@ -720,6 +723,24 @@
                     </div>
                 </div>
 
+                <div id="chatAccessGate" class="flex-1 flex items-center justify-center px-4 sm:px-6 py-10">
+                    <div class="w-full max-w-md bg-white dark:bg-[#1f1f1f] border border-black/10 dark:border-white/10 rounded-2xl p-6 shadow-sm space-y-4">
+                        <div>
+                            <div class="settings-console-kicker">Chat Access</div>
+                            <h3 id="chatAccessGateTitle" class="text-lg font-medium mt-1">聊天模块已锁定</h3>
+                            <p id="chatAccessGateCopy" class="text-sm text-gray-500 dark:text-gray-400 mt-2">当前聊天模块需要独立密码。输入后仅在本浏览器会话中保留聊天访问 session。</p>
+                        </div>
+                        <input id="chatAccessPasswordInput" type="password" placeholder="输入 Chat 访问密码"
+                            class="w-full bg-gray-50 dark:bg-[#161616] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-3 text-sm outline-none">
+                        <div class="flex gap-2">
+                            <button id="chatAccessUnlockBtn" type="button" class="admin-action-btn admin-action-btn-primary">进入 Chat</button>
+                            <button id="chatAccessRefreshBtn" type="button" class="admin-action-btn">刷新状态</button>
+                        </div>
+                        <div id="chatAccessGateNotice" class="text-xs text-gray-500 dark:text-gray-400">如你已是后台管理员，也可以直接进入 Chat，无需再次输入聊天密码。</div>
+                    </div>
+                </div>
+
+                <div id="chatWorkspaceContent" class="hidden flex-1 flex-col min-h-0">
                 <div id="chatContainer"
                     class="flex-1 overflow-y-auto w-full max-w-[52rem] mx-auto px-4 sm:px-6 pb-36 pt-6 flex flex-col gap-6 relative z-10 scroll-smooth">
                     <!-- Messages inserted here dynamically -->
@@ -795,6 +816,7 @@
                         </div>
                         <div id="attachmentHint" class="text-center mt-2 text-[11px] text-gray-400 dark:text-gray-500 min-h-[16px]"></div>
                     </div>
+                </div>
                 </div>
             </div>
         </section>

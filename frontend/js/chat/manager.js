@@ -8,6 +8,14 @@ window.NotionAI = window.NotionAI || {};
 window.NotionAI.Chat = window.NotionAI.Chat || {};
 
 window.NotionAI.Chat.Manager = {
+    canAccessChat() {
+        const chatEnabled = Boolean(window.NotionAI.Core.State.get('chatEnabled'));
+        const passwordEnabled = Boolean(window.NotionAI.Core.State.get('chatPasswordEnabled'));
+        const hasAdminSession = Boolean(window.NotionAI.Core.State.get('adminSessionToken'));
+        const hasChatSession = Boolean(window.NotionAI.Core.State.get('chatSessionToken'));
+        return chatEnabled && (!passwordEnabled || hasAdminSession || hasChatSession);
+    },
+
     /**
      * Starts a new chat session
      */
@@ -16,6 +24,9 @@ window.NotionAI.Chat.Manager = {
 
         if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
             window.NotionAI.Core.App.setActiveModule('chat');
+        }
+        if (!this.canAccessChat()) {
+            return;
         }
 
         const currentChatId = Date.now().toString();
@@ -67,6 +78,9 @@ window.NotionAI.Chat.Manager = {
 
         if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
             window.NotionAI.Core.App.setActiveModule('chat');
+        }
+        if (!this.canAccessChat()) {
+            return;
         }
 
         window.NotionAI.Core.State.set('currentChatId', chatId);
