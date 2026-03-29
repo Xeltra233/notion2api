@@ -359,98 +359,125 @@
                         <div>
                             <div class="settings-console-kicker">运行时</div>
                             <h4 class="text-sm font-medium">运行时配置</h4>
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">无需环境变量，直接编辑当前服务的运行时设置。</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">大多数运行时设置都可以直接在这里管理；少量启动项仍建议保留在 env / 部署层。</p>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <select id="runtimeAppModeInput"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                <option value="lite">轻量模式</option>
-                                <option value="standard">标准模式</option>
-                                <option value="heavy">重度模式</option>
-                            </select>
-                            <input id="runtimeProbeIntervalInput" type="number" min="30" step="30" placeholder="探测间隔秒数"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="runtimeAllowedOriginsInput" type="text" placeholder="允许的来源，多个用逗号分隔"
-                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="runtimeServerApiKeyInput" type="text" placeholder="服务端 API Key"
-                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="runtimeSiliconflowApiKeyInput" type="text" placeholder="SiliconFlow 密钥"
-                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="runtimeProxyInput" type="text" placeholder="上游代理地址"
-                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <select id="runtimeProxyModeInput"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                <option value="direct">代理模式：直连</option>
-                                <option value="http">代理模式：HTTP</option>
-                                <option value="https">代理模式：HTTPS</option>
-                                <option value="socks5">代理模式：SOCKS5</option>
-                                <option value="warp">代理模式：Warp</option>
-                                <option value="mixed">代理模式：混合</option>
-                            </select>
-                            <input id="runtimeHttpProxyInput" type="text" placeholder="上游 HTTP 代理"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="runtimeHttpsProxyInput" type="text" placeholder="上游 HTTPS 代理"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="runtimeSocks5ProxyInput" type="text" placeholder="上游 SOCKS5 代理"
-                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="runtimeWarpProxyInput" type="text" placeholder="Warp 本地代理（例如 warp-yg 暴露端口）"
-                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="runtimeTemplateSpaceInput" type="text" placeholder="工作区模板 space id"
-                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="runtimeRefreshRequestUrlInput" type="text" placeholder="刷新请求地址"
-                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="runtimeRefreshClientIdInput" type="text" placeholder="刷新客户端 ID"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="runtimeRefreshClientSecretInput" type="text" placeholder="刷新客户端密钥"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="runtimeWorkspaceRequestUrlInput" type="text" placeholder="工作区请求地址"
-                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="runtimeAutoRegisterMailBaseUrlInput" type="text" placeholder="自动注册邮箱服务地址"
-                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="runtimeAutoRegisterMailApiKeyInput" type="text" placeholder="自动注册邮箱 API Key"
-                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="runtimeAutoRegisterDomainInput" type="text" placeholder="自动注册域名（可选）"
-                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <select id="runtimeAutoRegisterMailProviderInput"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                <option value="freemail">自动注册邮箱：freemail</option>
-                                <option value="moemail">自动注册邮箱：moemail</option>
-                                <option value="duckmail">自动注册邮箱：duckmail</option>
-                                <option value="gptmail">自动注册邮箱：gptmail</option>
-                            </select>
-                            <input id="runtimeAutoRegisterIntervalInput" type="number" min="300" step="60" placeholder="自动注册间隔秒数"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="runtimeAutoRegisterMinSpacingInput" type="number" min="300" step="60" placeholder="自动注册最小间隔秒数"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="runtimeAutoRegisterBusyCooldownInput" type="number" min="300" step="60" placeholder="自动注册忙碌冷却秒数"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="runtimeAutoRegisterBatchSizeInput" type="number" min="1" max="3" step="1" placeholder="自动注册批次大小"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                        <div class="runtime-config-callout">
+                            <div class="runtime-config-callout-title">最小启动路径</div>
+                            <div class="runtime-config-callout-copy">默认只需要账号来源、`ADMIN_PASSWORD` 和可选的 `API_KEY`。代理、自动注册、workspace 与 refresh 这类高级行为，优先在这里配置。</div>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-gray-600 dark:text-gray-300">
-                            <label class="flex items-center gap-2"><input id="runtimeAutoCreateWorkspaceInput" type="checkbox">自动创建工作区</label>
-                            <label class="flex items-center gap-2"><input id="runtimeAutoSelectWorkspaceInput" type="checkbox">自动选择工作区</label>
-                            <label class="flex items-center gap-2"><input id="runtimeWorkspaceDryRunInput" type="checkbox">工作区干跑模式</label>
-                            <label class="flex items-center gap-2"><input id="runtimeWarpEnabledInput" type="checkbox">优先使用 Warp 代理</label>
-                            <label class="flex items-center gap-2"><input id="runtimeAutoRegisterEnabledInput" type="checkbox">启用自动注册</label>
-                            <label class="flex items-center gap-2"><input id="runtimeAutoRegisterIdleOnlyInput" type="checkbox">仅在空闲时自动注册</label>
-                            <label class="flex items-center gap-2"><input id="runtimeAutoRegisterHeadlessInput" type="checkbox">自动注册使用无头模式</label>
-                            <label class="flex items-center gap-2"><input id="runtimeAutoRegisterUseApiInput" type="checkbox">优先走 API 而非浏览器</label>
+                        <div class="runtime-config-section">
+                            <div class="runtime-config-section-header">
+                                <div>
+                                    <div class="runtime-config-section-title">基础设置</div>
+                                    <div class="runtime-config-section-copy">首次使用时优先关注这些设置。`ALLOWED_ORIGINS` 属于启动期配置，修改后通常仍需重启服务。</div>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <select id="runtimeAppModeInput"
+                                    class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <option value="lite">轻量模式</option>
+                                    <option value="standard">标准模式</option>
+                                    <option value="heavy">重度模式</option>
+                                </select>
+                                <input id="runtimeProbeIntervalInput" type="number" min="30" step="30" placeholder="探测间隔秒数"
+                                    class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                <input id="runtimeAllowedOriginsInput" type="text" placeholder="允许的来源，多个用逗号分隔（通常需重启）"
+                                    class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                <input id="runtimeServerApiKeyInput" type="text" placeholder="服务端 API Key（敏感）"
+                                    class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                <select id="runtimeProxyModeInput"
+                                    class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <option value="direct">代理模式：直连</option>
+                                    <option value="http">代理模式：HTTP</option>
+                                    <option value="https">代理模式：HTTPS</option>
+                                    <option value="socks5">代理模式：SOCKS5</option>
+                                    <option value="warp">代理模式：Warp</option>
+                                    <option value="mixed">代理模式：混合</option>
+                                </select>
+                                <input id="runtimeProxyInput" type="text" placeholder="上游代理地址（可选）"
+                                    class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                <label class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 sm:col-span-2"><input id="runtimeWarpEnabledInput" type="checkbox">优先使用 Warp 代理（高级代理场景再开启）</label>
+                            </div>
                         </div>
-                        <label class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300"><input id="runtimeAllowRealProbeRequestsInput" type="checkbox">允许真实探测请求（验证前保持阻止）</label>
-                        <select id="runtimeRefreshExecutionModeInput"
-                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <option value="manual">刷新模式：手动</option>
-                            <option value="dry_run">刷新模式：模板干跑</option>
-                            <option value="live_template">刷新模式：模板实跑</option>
-                        </select>
-                        <select id="runtimeWorkspaceExecutionModeInput"
-                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <option value="manual">工作区模式：手动</option>
-                            <option value="dry_run">工作区模式：模板干跑</option>
-                            <option value="live_template">工作区模式：模板实跑</option>
-                        </select>
-                        <div class="text-[11px] text-gray-500 dark:text-gray-400" id="runtimeConfigHint">保存运行时配置后，会立即更新当前服务设置，并在下一轮后台探测中生效。Warp 本地代理可填写 warp-yg 等工具暴露的端口。</div>
+                        <div class="runtime-config-section">
+                            <div class="runtime-config-section-header">
+                                <div>
+                                    <div class="runtime-config-section-title">高级设置</div>
+                                    <div class="runtime-config-section-copy">这些设置通常只在自动注册、refresh、workspace 或外部 provider 集成时才需要调整。</div>
+                                </div>
+                                <button id="runtimeAdvancedToggleBtn" type="button" class="admin-action-btn">展开高级设置</button>
+                            </div>
+                            <div id="runtimeAdvancedFields" class="runtime-advanced-fields hidden">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <input id="runtimeSiliconflowApiKeyInput" type="text" placeholder="SiliconFlow 密钥（敏感）"
+                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <input id="runtimeHttpProxyInput" type="text" placeholder="上游 HTTP 代理"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <input id="runtimeHttpsProxyInput" type="text" placeholder="上游 HTTPS 代理"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <input id="runtimeSocks5ProxyInput" type="text" placeholder="上游 SOCKS5 代理"
+                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <input id="runtimeWarpProxyInput" type="text" placeholder="Warp 本地代理（例如 warp-yg 暴露端口）"
+                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <input id="runtimeTemplateSpaceInput" type="text" placeholder="工作区模板 space id"
+                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <input id="runtimeRefreshRequestUrlInput" type="text" placeholder="刷新请求地址"
+                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <input id="runtimeRefreshClientIdInput" type="text" placeholder="刷新客户端 ID"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <input id="runtimeRefreshClientSecretInput" type="text" placeholder="刷新客户端密钥（敏感）"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <input id="runtimeWorkspaceRequestUrlInput" type="text" placeholder="工作区请求地址"
+                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <input id="runtimeAutoRegisterMailBaseUrlInput" type="text" placeholder="自动注册邮箱服务地址"
+                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <input id="runtimeAutoRegisterMailApiKeyInput" type="text" placeholder="自动注册邮箱 API Key（敏感）"
+                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <input id="runtimeAutoRegisterDomainInput" type="text" placeholder="自动注册域名（可选）"
+                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <select id="runtimeAutoRegisterMailProviderInput"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <option value="freemail">自动注册邮箱：freemail</option>
+                                        <option value="moemail">自动注册邮箱：moemail</option>
+                                        <option value="duckmail">自动注册邮箱：duckmail</option>
+                                        <option value="gptmail">自动注册邮箱：gptmail</option>
+                                    </select>
+                                    <input id="runtimeAutoRegisterIntervalInput" type="number" min="300" step="60" placeholder="自动注册间隔秒数"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <input id="runtimeAutoRegisterMinSpacingInput" type="number" min="300" step="60" placeholder="自动注册最小间隔秒数"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <input id="runtimeAutoRegisterBusyCooldownInput" type="number" min="300" step="60" placeholder="自动注册忙碌冷却秒数"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <input id="runtimeAutoRegisterBatchSizeInput" type="number" min="1" max="3" step="1" placeholder="自动注册批次大小"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-gray-600 dark:text-gray-300 mt-3">
+                                    <label class="flex items-center gap-2"><input id="runtimeAutoCreateWorkspaceInput" type="checkbox">自动创建工作区</label>
+                                    <label class="flex items-center gap-2"><input id="runtimeAutoSelectWorkspaceInput" type="checkbox">自动选择工作区</label>
+                                    <label class="flex items-center gap-2"><input id="runtimeWorkspaceDryRunInput" type="checkbox">工作区干跑模式</label>
+                                    <label class="flex items-center gap-2"><input id="runtimeAutoRegisterEnabledInput" type="checkbox">启用自动注册</label>
+                                    <label class="flex items-center gap-2"><input id="runtimeAutoRegisterIdleOnlyInput" type="checkbox">仅在空闲时自动注册</label>
+                                    <label class="flex items-center gap-2"><input id="runtimeAutoRegisterHeadlessInput" type="checkbox">自动注册使用无头模式</label>
+                                    <label class="flex items-center gap-2"><input id="runtimeAutoRegisterUseApiInput" type="checkbox">优先走 API 而非浏览器</label>
+                                    <label class="flex items-center gap-2"><input id="runtimeAllowRealProbeRequestsInput" type="checkbox">允许真实探测请求</label>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                                    <select id="runtimeRefreshExecutionModeInput"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <option value="manual">刷新模式：手动</option>
+                                        <option value="dry_run">刷新模式：模板干跑</option>
+                                        <option value="live_template">刷新模式：模板实跑</option>
+                                    </select>
+                                    <select id="runtimeWorkspaceExecutionModeInput"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <option value="manual">工作区模式：手动</option>
+                                        <option value="dry_run">工作区模式：模板干跑</option>
+                                        <option value="live_template">工作区模式：模板实跑</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-[11px] text-gray-500 dark:text-gray-400" id="runtimeConfigHint">保存运行时配置后，会立即更新当前服务设置。多数运行时参数会直接生效；`ALLOWED_ORIGINS` 这类启动期配置通常仍需重启。Warp 本地代理可填写 warp-yg 等工具暴露的端口。</div>
                         <div class="flex flex-wrap gap-2">
                             <button id="runtimeLoadBtn" type="button" class="admin-action-btn">加载配置</button>
                             <button id="runtimeSaveBtn" type="button" class="admin-action-btn">保存配置</button>

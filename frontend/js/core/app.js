@@ -256,6 +256,9 @@ function bindEventListeners() {
     document.getElementById('runtimeToggleSecretsBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.toggleRuntimeSecrets();
     });
+    document.getElementById('runtimeAdvancedToggleBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.toggleRuntimeAdvanced();
+    });
     document.getElementById('oauthStartBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.startOAuthFlow();
     });

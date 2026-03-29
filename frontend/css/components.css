@@ -539,6 +539,55 @@ html.dark .admin-account-row {
     margin-bottom: 4px;
 }
 
+.runtime-config-callout {
+    border: 1px solid rgba(218, 119, 86, 0.18);
+    border-radius: 16px;
+    background: rgba(255, 247, 237, 0.75);
+    padding: 12px 14px;
+}
+
+.runtime-config-callout-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #7c2d12;
+    margin-bottom: 4px;
+}
+
+.runtime-config-callout-copy,
+.runtime-config-section-copy {
+    font-size: 11px;
+    line-height: 1.6;
+    color: #6b7280;
+}
+
+.runtime-config-section {
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.52);
+    padding: 14px;
+}
+
+.runtime-config-section-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.runtime-config-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #6b7280;
+    margin-bottom: 4px;
+}
+
+.runtime-advanced-fields.hidden {
+    display: none;
+}
+
 .usage-hero-panel,
 .usage-breakdown-panel {
     border: 1px solid rgba(0, 0, 0, 0.08);

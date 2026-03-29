@@ -182,9 +182,9 @@ API 同时支持纯文本消息，以及 OpenAI 风格的多模态 `content` 数
 
 ## 快速开始
 
-### 1. 准备 Notion 凭据
+### 1. 准备最小启动配置
 
-打开 https://www.notion.so/ai 并登录，然后通过 DevTools 获取所需字段。
+打开 https://www.notion.so/ai 并登录，然后通过 DevTools 获取账号所需字段。
 
 最少需要：
 
@@ -192,52 +192,55 @@ API 同时支持纯文本消息，以及 OpenAI 风格的多模态 `content` 数
 - `space_id`
 - `user_id`
 
-账号可以用两种方式提供：
+推荐把账号放在本地 JSON 文件里，再通过 `NOTION_ACCOUNTS_FILE` 引入；只有在你明确需要时，再使用内联的 `NOTION_ACCOUNTS`。
 
-- 直接写入 `.env` 的 `NOTION_ACCOUNTS`
-- 放在本地 JSON 文件里，通过 `NOTION_ACCOUNTS_FILE` 加载
-
-示例：
+最小启动示例：
 
 ```bash
 cp .env.example .env
 
-NOTION_ACCOUNTS='[{"token_v2":"your_token","space_id":"your_space","user_id":"your_uid","space_view_id":"your_view","user_name":"your_name","user_email":"your_email"}]'
-APP_MODE=standard
+NOTION_ACCOUNTS_FILE=./accounts.local.json
+ADMIN_PASSWORD=change-me-now
 API_KEY=
 ```
 
-或者：
+如果你更喜欢直接内联账号，也可以这样：
 
 ```bash
-NOTION_ACCOUNTS_FILE=./accounts.local.json
-APP_MODE=standard
+NOTION_ACCOUNTS='[{"token_v2":"your_token","space_id":"your_space","user_id":"your_uid","space_view_id":"your_view","user_name":"your_name","user_email":"your_email"}]'
+ADMIN_PASSWORD=change-me-now
 API_KEY=your-custom-key
 ```
 
 文件格式见 `accounts.local.json.example`。
 
-### 推荐关注的环境变量
+### 最小启动配置说明
 
-首页 README 里确实应该把主要 env/config 开关点出来，至少包括这些：
+默认情况下，你真正需要关心的 env 不应该很多：
 
 | 变量 | 用途 |
 | --- | --- |
-| `NOTION_ACCOUNTS` | 直接在环境变量里内联配置 Notion 账号池 JSON |
-| `NOTION_ACCOUNTS_FILE` | 从本地 JSON 文件加载账号池；优先级高于 `NOTION_ACCOUNTS` |
-| `API_KEY` | `/v1/chat/completions` 等客户端接口使用的 Bearer key；留空可关闭客户端鉴权 |
-| `APP_MODE` | 应用运行模式，如 `standard`、`lite`、`heavy` |
-| `UPSTREAM_PROXY` / `UPSTREAM_HTTP_PROXY` / `UPSTREAM_HTTPS_PROXY` | 可选的上游代理设置 |
-| `HOST` / `PORT` / `HOST_PORT` | 本地监听与 Docker 暴露端口 |
-| `ALLOWED_ORIGINS` | CORS 允许来源列表 |
-| `DB_PATH` | SQLite 对话持久化路径 |
-| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | 首次后台登录与密码轮换流程使用的初始管理员凭证 |
-| `TEMP_MAIL_PROVIDER` / `TEMP_MAIL_BASE_URL` / `TEMP_MAIL_API_KEY` / `TEMP_MAIL_DOMAIN` | auto-register 的邮箱提供商配置 |
-| `REGISTER_HEADLESS` / `REGISTER_USE_API` | register 自动化行为控制 |
-| `SILICONFLOW_API_KEY` | `heavy` 模式下的可选依赖 |
-| `LOG_LEVEL` / `TZ` | 日志级别与时区设置 |
+| `NOTION_ACCOUNTS_FILE` | 推荐做法：从本地未提交 JSON 文件加载账号池 |
+| `NOTION_ACCOUNTS` | 备选做法：直接在 env 里内联账号池 JSON |
+| `ADMIN_PASSWORD` | 首次后台登录的 bootstrap 密码；登录后应立即在后台完成轮换 |
+| `API_KEY` | 可选的客户端 Bearer key；留空可关闭客户端鉴权 |
+| `HOST` / `PORT` / `HOST_PORT` | 只有在你需要自定义监听或 Docker 暴露端口时再改 |
 
-更完整的模板请直接看 `.env.example`。
+除了这些，绝大多数运行时行为更适合在 **Admin > Runtime** 里直接配置。
+
+### 高级配置说明
+
+以下配置仍然保留兼容，但不再建议作为默认起步路径：
+
+- `APP_MODE`
+- `UPSTREAM_PROXY` / `UPSTREAM_HTTP_PROXY` / `UPSTREAM_HTTPS_PROXY`
+- `ALLOWED_ORIGINS`
+- `TEMP_MAIL_*`
+- `REGISTER_*`
+- `SILICONFLOW_API_KEY`
+- refresh / workspace 相关高级配置
+
+更完整的模板请直接看 `.env.example`。其中部分配置虽然已经能在后台 Runtime 面板里编辑，但像 `ALLOWED_ORIGINS` 这类启动期配置，修改后通常仍需要重启服务才能完全生效。
 
 ### 2. 启动服务
 

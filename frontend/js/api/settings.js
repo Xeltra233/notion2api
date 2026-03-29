@@ -4,6 +4,7 @@ window.NotionAI.API = window.NotionAI.API || {};
 window.NotionAI.API.Settings = {
     _oauthCallbackCache: null,
     _runtimeSecretsVisible: false,
+    _runtimeAdvancedVisible: false,
     _expandedActionHistoryKeys: {},
 
     getActionHistoryFilters() {
@@ -590,6 +591,7 @@ window.NotionAI.API.Settings = {
         document.getElementById('adminUsernameInput').value = adminUsername;
         document.getElementById('adminPasswordInput').value = '';
         this.applySecretVisibility();
+        this.applyRuntimeAdvancedVisibility();
         const redirectInput = document.getElementById('oauthRedirectUriInput');
         if (redirectInput && !redirectInput.value.trim()) {
             redirectInput.value = window.location.origin;
@@ -720,7 +722,7 @@ window.NotionAI.API.Settings = {
 
     applySecretVisibility() {
         const type = this._runtimeSecretsVisible ? 'text' : 'password';
-        ['runtimeServerApiKeyInput', 'runtimeSiliconflowApiKeyInput', 'adminPasswordInput', 'adminNewPasswordInput'].forEach((id) => {
+        ['runtimeServerApiKeyInput', 'runtimeSiliconflowApiKeyInput', 'runtimeAutoRegisterMailApiKeyInput', 'runtimeRefreshClientSecretInput', 'adminPasswordInput', 'adminNewPasswordInput'].forEach((id) => {
             const input = document.getElementById(id);
             if (input) {
                 input.type = type;
@@ -730,6 +732,22 @@ window.NotionAI.API.Settings = {
         if (toggle) {
             toggle.textContent = this._runtimeSecretsVisible ? '隐藏密钥' : '显示密钥';
         }
+    },
+
+    applyRuntimeAdvancedVisibility() {
+        const container = document.getElementById('runtimeAdvancedFields');
+        const toggle = document.getElementById('runtimeAdvancedToggleBtn');
+        if (container) {
+            container.classList.toggle('hidden', !this._runtimeAdvancedVisible);
+        }
+        if (toggle) {
+            toggle.textContent = this._runtimeAdvancedVisible ? '收起高级设置' : '展开高级设置';
+        }
+    },
+
+    toggleRuntimeAdvanced() {
+        this._runtimeAdvancedVisible = !this._runtimeAdvancedVisible;
+        this.applyRuntimeAdvancedVisibility();
     },
 
     toggleRuntimeSecrets() {
@@ -1680,6 +1698,7 @@ window.NotionAI.API.Settings = {
         });
 
         this.renderRuntimeConfigSummary(settings);
+        this.applyRuntimeAdvancedVisibility();
     },
 
     renderAdminAuthSource(auth = {}) {

@@ -182,9 +182,9 @@ This keeps operator access separate from normal model/chat access.
 
 ## Quick start
 
-### 1. Prepare Notion credentials
+### 1. Prepare the minimum startup configuration
 
-Open https://www.notion.so/ai and log in, then use DevTools to collect the required values.
+Open https://www.notion.so/ai and log in, then use DevTools to collect the account fields you need.
 
 Minimal account fields:
 
@@ -192,52 +192,55 @@ Minimal account fields:
 - `space_id`
 - `user_id`
 
-You can store accounts either:
+Prefer storing accounts in a local JSON file and pointing `NOTION_ACCOUNTS_FILE` to it. Only fall back to inline `NOTION_ACCOUNTS` when you intentionally want that style.
 
-- directly in `.env` with `NOTION_ACCOUNTS`
-- or in a local JSON file with `NOTION_ACCOUNTS_FILE`
-
-Example:
+Minimum startup example:
 
 ```bash
 cp .env.example .env
 
-NOTION_ACCOUNTS='[{"token_v2":"your_token","space_id":"your_space","user_id":"your_uid","space_view_id":"your_view","user_name":"your_name","user_email":"your_email"}]'
-APP_MODE=standard
+NOTION_ACCOUNTS_FILE=./accounts.local.json
+ADMIN_PASSWORD=change-me-now
 API_KEY=
 ```
 
-Or:
+If you prefer inline accounts, you can also do this:
 
 ```bash
-NOTION_ACCOUNTS_FILE=./accounts.local.json
-APP_MODE=standard
+NOTION_ACCOUNTS='[{"token_v2":"your_token","space_id":"your_space","user_id":"your_uid","space_view_id":"your_view","user_name":"your_name","user_email":"your_email"}]'
+ADMIN_PASSWORD=change-me-now
 API_KEY=your-custom-key
 ```
 
 See `accounts.local.json.example` for the expected file format.
 
-### Recommended environment variables
+### Minimum env surface
 
-The homepage README should call out the main env/config knobs explicitly. The most important ones are:
+By default, you should only need a very small set of env values:
 
 | Variable | Purpose |
 | --- | --- |
-| `NOTION_ACCOUNTS` | Inline JSON array for the Notion account pool |
-| `NOTION_ACCOUNTS_FILE` | Local JSON file path for the account pool; takes precedence over `NOTION_ACCOUNTS` |
-| `API_KEY` | Client Bearer key for `/v1/chat/completions` and related `/v1` access; leave blank to disable client auth |
-| `APP_MODE` | App mode such as `standard`, `lite`, or `heavy` |
-| `UPSTREAM_PROXY` / `UPSTREAM_HTTP_PROXY` / `UPSTREAM_HTTPS_PROXY` | Optional upstream proxy routing |
-| `HOST` / `PORT` / `HOST_PORT` | Local binding and Docker-exposed ports |
-| `ALLOWED_ORIGINS` | CORS allowlist |
-| `DB_PATH` | SQLite path for persisted conversation data |
-| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Initial admin bootstrap credentials used for first login / rotation flow |
-| `TEMP_MAIL_PROVIDER` / `TEMP_MAIL_BASE_URL` / `TEMP_MAIL_API_KEY` / `TEMP_MAIL_DOMAIN` | Auto-register mail provider settings |
-| `REGISTER_HEADLESS` / `REGISTER_USE_API` | Register automation behavior |
-| `SILICONFLOW_API_KEY` | Optional dependency for `heavy` mode |
-| `LOG_LEVEL` / `TZ` | Logging and timezone settings |
+| `NOTION_ACCOUNTS_FILE` | Preferred path: load the account pool from an uncommitted local JSON file |
+| `NOTION_ACCOUNTS` | Fallback path: inline the account pool JSON directly in env |
+| `ADMIN_PASSWORD` | Bootstrap password for the first admin login; rotate it immediately in the admin panel |
+| `API_KEY` | Optional client Bearer key; leave blank to disable client auth |
+| `HOST` / `PORT` / `HOST_PORT` | Only change these when you need custom bind or Docker-exposed ports |
 
-If you need the full template, check `.env.example` directly.
+Beyond that, most runtime behavior is better managed in **Admin > Runtime**.
+
+### Advanced configuration
+
+The following settings are still supported for compatibility, but they are no longer the recommended default starting path:
+
+- `APP_MODE`
+- `UPSTREAM_PROXY` / `UPSTREAM_HTTP_PROXY` / `UPSTREAM_HTTPS_PROXY`
+- `ALLOWED_ORIGINS`
+- `TEMP_MAIL_*`
+- `REGISTER_*`
+- `SILICONFLOW_API_KEY`
+- refresh / workspace advanced settings
+
+For the complete template, check `.env.example`. Some settings can already be edited from the Runtime panel, but startup-time settings such as `ALLOWED_ORIGINS` should still be treated as requiring a restart to fully apply.
 
 ### 2. Start the service
 
