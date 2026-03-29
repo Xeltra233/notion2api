@@ -301,6 +301,40 @@ html.dark .memory-banner {
     transition: max-width 0.4s ease;
 }
 
+body[data-admin-auth="signed_out"] main {
+    width: 100%;
+    min-height: 100dvh;
+}
+
+body[data-admin-auth="signed_out"] .topbar-shell {
+    min-height: 72px;
+    padding-left: 28px;
+    padding-right: 28px;
+}
+
+body[data-admin-auth="signed_out"] #headerTitle {
+    font-size: 26px;
+    line-height: 1.2;
+    max-width: none;
+}
+
+body[data-admin-auth="signed_out"] #adminWorkspaceView {
+    padding: 32px 28px 40px;
+}
+
+body[data-admin-auth="signed_out"] #settingsModal {
+    max-width: 980px;
+}
+
+body[data-admin-auth="signed_out"] #settingsModalContent {
+    min-height: min(760px, calc(100dvh - 156px)) !important;
+    border-radius: 32px;
+}
+
+body[data-admin-auth="signed_out"] #settings-section-access {
+    padding: 32px;
+}
+
 @media (max-width: 768px) {
     body[data-admin-auth="signed_out"] {
         display: block;
@@ -312,18 +346,18 @@ html.dark .memory-banner {
         position: fixed;
     }
 
-    body[data-admin-auth="signed_out"] main {
-        width: 100%;
-        min-height: 100dvh;
+    body[data-admin-auth="signed_out"] .topbar-shell {
+        min-height: 64px;
+        padding-left: 18px;
+        padding-right: 18px;
     }
 
-    body[data-admin-auth="signed_out"] .topbar-shell {
-        padding-left: 16px;
-        padding-right: 16px;
+    body[data-admin-auth="signed_out"] #headerTitle {
+        font-size: 22px;
     }
 
     body[data-admin-auth="signed_out"] #adminWorkspaceView {
-        padding: 16px;
+        padding: 18px 16px 24px;
     }
 
     body[data-admin-auth="signed_out"] #settingsModal {
@@ -332,11 +366,11 @@ html.dark .memory-banner {
 
     body[data-admin-auth="signed_out"] #settingsModalContent {
         min-height: auto !important;
-        border-radius: 24px;
+        border-radius: 26px;
     }
 
     body[data-admin-auth="signed_out"] #settings-section-access {
-        padding: 18px;
+        padding: 22px;
     }
 
     .app-grid {
