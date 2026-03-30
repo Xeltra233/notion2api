@@ -704,8 +704,14 @@ window.NotionAI.API.Settings = {
     },
 
     async loginAdminSession() {
+        const baseUrl = document.getElementById('baseUrlInput')?.value.trim().replace(/\/$/, '') || window.location.origin;
+        const apiKey = document.getElementById('apiKeyInput')?.value.trim() || '';
         const adminUsername = document.getElementById('adminUsernameInput').value.trim() || 'admin';
         const adminPassword = document.getElementById('adminPasswordInput').value.trim();
+        window.NotionAI.Core.State.set('baseUrl', baseUrl);
+        window.NotionAI.Core.State.set('apiKey', apiKey);
+        localStorage.setItem('claude_base_url', baseUrl);
+        window.NotionAI.Core.State.persistApiKey(apiKey);
         if (!adminPassword) {
             this.setAdminNotice('请输入后台密码。');
             return;
@@ -2242,6 +2248,9 @@ window.NotionAI.API.Settings = {
     },
 
     async loadRuntimeConfigIntoForm() {
+        if (!window.NotionAI.Core.State.get('adminSessionToken')) {
+            return;
+        }
         try {
             const data = await window.NotionAI.API.Admin.loadConfig();
             this.applyRuntimeSettingsToForm(data.settings || {});
@@ -2687,6 +2696,23 @@ window.NotionAI.API.Settings = {
         const passwordInput = document.getElementById('chatAccessPasswordInput');
         const unlockBtn = document.getElementById('chatAccessUnlockBtn');
         if (!gate || !content || !title || !copy || !notice || !passwordInput || !unlockBtn) {
+            return null;
+        }
+        const apiKey = String(window.NotionAI.Core.State.get('apiKey') || '').trim();
+        if (!apiKey) {
+            window.NotionAI.Core.State.set('chatEnabled', false);
+            window.NotionAI.Core.State.set('chatPasswordEnabled', false);
+            gate.classList.remove('hidden');
+            content.classList.add('hidden');
+            content.classList.remove('flex');
+            unlockBtn.disabled = true;
+            passwordInput.disabled = true;
+            title.textContent = '请先填写 API Key';
+            copy.textContent = '登录后台或进入 Chat 前，先在访问区域填写服务地址和 API Key。';
+            notice.textContent = '当前未配置 API Key，暂不请求聊天访问状态。';
+            if (typeof window.NotionAI.Core.App?.syncShellFromState === 'function') {
+                window.NotionAI.Core.App.syncShellFromState();
+            }
             return null;
         }
         try {
