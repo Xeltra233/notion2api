@@ -5,9 +5,14 @@ window.NotionAI.API.Settings = {
     _oauthCallbackCache: null,
     _runtimeSecretsVisible: false,
     _runtimeAdvancedVisible: false,
+    _runtimeProxyAdvancedVisible: false,
+    _adminAccountComposerOpen: false,
+    _adminAccountComposerMode: 'manual',
     _expandedActionHistoryKeys: {},
     _lastChatAccessState: null,
     _runtimeHasChatPassword: false,
+    _adminMaxShowAllAccounts: 200,
+    _lastAdminPagination: null,
 
     getActionHistoryFilters() {
         return {
@@ -20,6 +25,9 @@ window.NotionAI.API.Settings = {
     },
 
     getAdminFilters() {
+        const rawPageSize = String(document.getElementById('adminPageSizeInput')?.value || '24');
+        const requestedShowAll = rawPageSize === 'all';
+        const effectivePageSize = requestedShowAll ? String(this._adminMaxShowAllAccounts) : rawPageSize;
         return {
             q: document.getElementById('adminSearchInput')?.value.trim() || '',
             state: document.getElementById('adminStateFilterInput')?.value.trim() || '',
@@ -27,8 +35,8 @@ window.NotionAI.API.Settings = {
             enabled: document.getElementById('adminEnabledFilterInput')?.value || '',
             sort_by: document.getElementById('adminSortByInput')?.value || 'updated_at',
             sort_order: document.getElementById('adminSortOrderInput')?.value || 'desc',
-            page: document.getElementById('adminPageInput')?.value || '1',
-            page_size: document.getElementById('adminPageSizeInput')?.value || '20',
+            page: requestedShowAll ? '1' : (document.getElementById('adminPageInput')?.value || '1'),
+            page_size: effectivePageSize,
         };
     },
 
@@ -88,6 +96,42 @@ window.NotionAI.API.Settings = {
         this.refreshAdminPanel(`已加载第 ${input.value} 页。`);
     },
 
+    setAdminPageSize(value) {
+        const pageSizeInput = document.getElementById('adminPageSizeInput');
+        const pageInput = document.getElementById('adminPageInput');
+        if (!pageSizeInput || !pageInput) {
+            return;
+        }
+        pageSizeInput.value = String(value || '24');
+        pageInput.value = '1';
+        this.refreshAdminPanel('已更新账号列表显示数量。');
+    },
+
+    syncAdminPageSizeControl(total = 0) {
+        const select = document.getElementById('adminAccountsPageSizeSelect');
+        const pageSizeInput = document.getElementById('adminPageSizeInput');
+        if (!select || !pageSizeInput) {
+            return;
+        }
+        const rawValue = String(pageSizeInput.value || '24');
+        if (rawValue === 'all' && total > this._adminMaxShowAllAccounts) {
+            pageSizeInput.value = '24';
+            select.value = '24';
+            this.showAdminAccountsRenderNotice(`账号数为 ${total}，已禁止“全部显示”，避免当前页面一次渲染过多内容。`);
+            return;
+        }
+        select.value = rawValue;
+    },
+
+    showAdminAccountsRenderNotice(message = '') {
+        const notice = document.getElementById('adminAccountsRenderNotice');
+        if (!notice) {
+            return;
+        }
+        notice.textContent = message;
+        notice.classList.toggle('hidden', !message);
+    },
+
     clearAdminFilters() {
         ['adminSearchInput', 'adminStateFilterInput', 'adminPlanFilterInput'].forEach((id) => {
             const input = document.getElementById(id);
@@ -113,8 +157,13 @@ window.NotionAI.API.Settings = {
         }
         const pageSize = document.getElementById('adminPageSizeInput');
         if (pageSize) {
-            pageSize.value = '20';
+            pageSize.value = '24';
         }
+        const pageSizeSelect = document.getElementById('adminAccountsPageSizeSelect');
+        if (pageSizeSelect) {
+            pageSizeSelect.value = '24';
+        }
+        this.showAdminAccountsRenderNotice('');
         const actionAccount = document.getElementById('adminActionHistoryAccountFilter');
         if (actionAccount) {
             actionAccount.value = '';
@@ -587,17 +636,15 @@ window.NotionAI.API.Settings = {
         const baseUrl = window.NotionAI.Core.State.get('baseUrl');
         const apiKey = window.NotionAI.Core.State.get('apiKey');
         const adminUsername = window.NotionAI.Core.State.get('adminUsername') || 'admin';
-        const saveScopeHint = document.getElementById('settingsSaveScopeHint');
 
         document.getElementById('baseUrlInput').value = baseUrl;
         document.getElementById('apiKeyInput').value = apiKey;
         document.getElementById('adminUsernameInput').value = adminUsername;
         document.getElementById('adminPasswordInput').value = '';
-        if (saveScopeHint) {
-            saveScopeHint.classList.toggle('hidden', Boolean(localStorage.getItem('claude_runtime_config_saved')));
-        }
         this.applySecretVisibility();
         this.applyRuntimeAdvancedVisibility();
+        this.applyRuntimeProxyAdvancedVisibility();
+        this.applyAccountComposerState();
         const redirectInput = document.getElementById('oauthRedirectUriInput');
         if (redirectInput && !redirectInput.value.trim()) {
             redirectInput.value = window.location.origin;
@@ -667,59 +714,12 @@ window.NotionAI.API.Settings = {
             await window.NotionAI.API.Admin.login(adminUsername, adminPassword);
             document.getElementById('adminPasswordInput').value = '';
             await this.refreshAdminPanel('当前浏览器会话的 admin session 已就绪。');
+            if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
+                window.NotionAI.Core.App.setActiveModule('overview');
+            }
         } catch (error) {
             this.setAdminNotice(error.message || '后台登录失败。');
         }
-    },
-
-    async save() {
-        const baseUrl = document.getElementById('baseUrlInput')?.value.trim().replace(/\/$/, '') || window.location.origin;
-        const apiKey = document.getElementById('apiKeyInput')?.value.trim() || '';
-        const adminUsername = document.getElementById('adminUsernameInput').value.trim() || 'admin';
-        const adminPassword = document.getElementById('adminPasswordInput').value.trim();
-        const adminNewUsername = (document.getElementById('adminNewUsernameInput')?.value || '').trim();
-        const adminNewPassword = (document.getElementById('adminNewPasswordInput')?.value || '').trim();
-
-        window.NotionAI.Core.State.set('baseUrl', baseUrl);
-        window.NotionAI.Core.State.set('apiKey', apiKey);
-        window.NotionAI.Core.State.set('adminUsername', adminUsername);
-        window.NotionAI.Core.State.set('adminPassword', '');
-
-        localStorage.setItem('claude_base_url', baseUrl);
-        window.NotionAI.Core.State.persistApiKey(apiKey);
-
-        if (adminPassword) {
-            try {
-                await window.NotionAI.API.Admin.login(adminUsername, adminPassword);
-                const shouldChangeCredentials = Boolean(adminNewUsername || adminNewPassword);
-                if (shouldChangeCredentials) {
-                    const changeResult = await window.NotionAI.API.Admin.changePassword({
-                        current_password: adminPassword,
-                        new_password: adminNewPassword || undefined,
-                        new_username: adminNewUsername || adminUsername,
-                    });
-                    const changedUsername = String(changeResult.username || adminNewUsername || adminUsername).trim() || adminUsername;
-                    document.getElementById('adminUsernameInput').value = changedUsername;
-                    document.getElementById('adminPasswordInput').value = '';
-                    const newUsernameInput = document.getElementById('adminNewUsernameInput');
-                    if (newUsernameInput) {
-                        newUsernameInput.value = '';
-                    }
-                    const newPasswordInput = document.getElementById('adminNewPasswordInput');
-                    if (newPasswordInput) {
-                        newPasswordInput.value = '';
-                    }
-                }
-                await this.saveRuntimeConfigFromForm(true);
-                await this.refreshAdminPanel(shouldChangeCredentials ? '当前浏览器会话的后台凭证已更新。' : '当前浏览器会话的 admin session 已就绪。');
-            } catch (error) {
-                this.setAdminNotice(error.message || '后台登录失败。');
-                return;
-            }
-        }
-
-        this.close();
-        window.NotionAI.API.Models.loadModels();
     },
 
     applySecretVisibility() {
@@ -750,6 +750,90 @@ window.NotionAI.API.Settings = {
     toggleRuntimeAdvanced() {
         this._runtimeAdvancedVisible = !this._runtimeAdvancedVisible;
         this.applyRuntimeAdvancedVisibility();
+    },
+
+    applyRuntimeProxyAdvancedVisibility() {
+        const container = document.getElementById('runtimeProxyAdvancedFields');
+        const toggle = document.getElementById('runtimeProxyAdvancedToggleBtn');
+        if (container) {
+            container.classList.toggle('hidden', !this._runtimeProxyAdvancedVisible);
+        }
+        if (toggle) {
+            toggle.textContent = this._runtimeProxyAdvancedVisible ? '收起代理细项' : '展开代理细项';
+        }
+    },
+
+    toggleRuntimeProxyAdvanced() {
+        this._runtimeProxyAdvancedVisible = !this._runtimeProxyAdvancedVisible;
+        this.applyRuntimeProxyAdvancedVisibility();
+    },
+
+    applyAccountComposerState() {
+        const composer = document.getElementById('adminAccountComposer');
+        const toggle = document.getElementById('adminToggleAccountComposerBtn');
+        if (composer) {
+            composer.classList.toggle('hidden', !this._adminAccountComposerOpen);
+        }
+        if (toggle) {
+            toggle.textContent = this._adminAccountComposerOpen ? '收起新增入口' : '打开新增入口';
+        }
+        const sections = {
+            manual: 'adminAccountManualSection',
+            json: 'adminAccountJsonSection',
+            file: 'adminAccountFileSection',
+            oauth: 'adminAccountOauthSection',
+        };
+        Object.entries(sections).forEach(([mode, id]) => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.classList.toggle('hidden', this._adminAccountComposerMode !== mode || !this._adminAccountComposerOpen);
+            }
+        });
+        const buttons = {
+            manual: 'adminAccountModeManualBtn',
+            json: 'adminAccountModeJsonBtn',
+            file: 'adminAccountModeFileBtn',
+            oauth: 'adminAccountModeOauthBtn',
+        };
+        Object.entries(buttons).forEach(([mode, id]) => {
+            const button = document.getElementById(id);
+            if (button) {
+                button.classList.toggle('admin-action-btn-primary', this._adminAccountComposerMode === mode);
+            }
+        });
+    },
+
+    toggleAccountComposer(forceOpen) {
+        this._adminAccountComposerOpen = typeof forceOpen === 'boolean' ? forceOpen : !this._adminAccountComposerOpen;
+        this.applyAccountComposerState();
+    },
+
+    setAccountComposerMode(mode = 'manual', open = true) {
+        this._adminAccountComposerMode = mode;
+        if (open) {
+            this._adminAccountComposerOpen = true;
+        }
+        this.applyAccountComposerState();
+    },
+
+    async parseBulkAccountsFromFile() {
+        const input = document.getElementById('adminAccountFileInput');
+        const file = input?.files?.[0];
+        if (!file) {
+            throw new Error('请先选择 JSON 文件。');
+        }
+        const raw = await file.text();
+        return this.parseBulkAccountsText(raw);
+    },
+
+    openOAuthImporter(startImmediately = false) {
+        if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
+            window.NotionAI.Core.App.setActiveModule('diagnostics');
+        }
+        this.setAdminNotice('已切到诊断模块的 OAuth 导入区。');
+        if (startImmediately) {
+            this.startOAuthFlow();
+        }
     },
 
     toggleRuntimeSecrets() {
@@ -850,20 +934,20 @@ window.NotionAI.API.Settings = {
         }
         const summary = data.summary || {};
         const items = [
-            ['请求数', summary.request_count ?? 0, '当前范围内记录的请求总数'],
-            ['输入 Token', summary.prompt_tokens ?? 0, '输入 token 估算值'],
-            ['输出 Token', summary.completion_tokens ?? 0, '输出 token 估算值'],
-            ['总 Token', summary.total_tokens ?? 0, '输入与输出 token 总量'],
-            ['平均每次请求', summary.avg_total_tokens ?? 0, '每次请求的平均 token 数'],
-            ['模型数', summary.distinct_models ?? 0, '当前范围内涉及的模型数量'],
-            ['账号数', summary.distinct_accounts ?? 0, '当前范围内涉及的账号数量'],
-            ['流式请求', summary.stream_request_count ?? 0, '以流式方式返回的请求数'],
+            ['请求数', summary.request_count ?? 0, '当前范围内一共记了多少次请求。'],
+            ['总 Token', summary.total_tokens ?? 0, '先看整体消耗，不把注意力打散。'],
+            ['平均每次请求', summary.avg_total_tokens ?? 0, '每次请求平均吃掉多少 token。'],
+            ['输入 Token', summary.prompt_tokens ?? 0, '提示词侧累计消耗。'],
+            ['输出 Token', summary.completion_tokens ?? 0, '回复侧累计消耗。'],
+            ['模型数', summary.distinct_models ?? 0, '当前范围内涉及多少个模型。'],
+            ['账号数', summary.distinct_accounts ?? 0, '当前范围内涉及多少个账号。'],
+            ['流式请求', summary.stream_request_count ?? 0, '用来判断流式占比是否过高。'],
         ];
         panel.innerHTML = items.map(([label, value, hint]) => `
             <div class="usage-summary-card">
-                <div class="usage-summary-card-label">${label}</div>
-                <div class="usage-summary-card-value">${value}</div>
-                <div class="usage-summary-card-hint">${hint}</div>
+                <div class="usage-summary-card-label">${this.escapeHtml(label)}</div>
+                <div class="usage-summary-card-value">${this.escapeHtml(String(value))}</div>
+                <div class="usage-summary-card-hint">${this.escapeHtml(hint)}</div>
             </div>
         `).join('');
         if (byModelPanel) {
@@ -872,10 +956,10 @@ window.NotionAI.API.Settings = {
                 ? byModel.map((item) => `
                     <div class="usage-breakdown-row">
                         <div class="usage-breakdown-main">
-                            <div class="usage-breakdown-name">${item.model || '未知模型'}</div>
-                            <div class="usage-breakdown-meta">${item.request_count ?? 0} 次请求</div>
+                            <div class="usage-breakdown-name">${this.escapeHtml(item.model || '未知模型')}</div>
+                            <div class="usage-breakdown-meta">${this.escapeHtml(String(item.request_count ?? 0))} 次请求 · 输入 ${this.escapeHtml(String(item.prompt_tokens ?? 0))} · 输出 ${this.escapeHtml(String(item.completion_tokens ?? 0))}</div>
                         </div>
-                        <div class="usage-breakdown-value">${item.total_tokens ?? 0}</div>
+                        <div class="usage-breakdown-value">${this.escapeHtml(String(item.total_tokens ?? 0))}</div>
                     </div>
                 `).join('')
                 : '<div class="usage-empty-state">当前筛选条件下没有匹配到模型用量。</div>';
@@ -886,10 +970,10 @@ window.NotionAI.API.Settings = {
                 ? byAccount.map((item) => `
                     <div class="usage-breakdown-row">
                         <div class="usage-breakdown-main">
-                            <div class="usage-breakdown-name">${item.account_id || '未知账号'}</div>
-                            <div class="usage-breakdown-meta">${item.request_count ?? 0} 次请求</div>
+                            <div class="usage-breakdown-name">${this.escapeHtml(item.account_id || '未知账号')}</div>
+                            <div class="usage-breakdown-meta">${this.escapeHtml(String(item.request_count ?? 0))} 次请求 · 输入 ${this.escapeHtml(String(item.prompt_tokens ?? 0))} · 输出 ${this.escapeHtml(String(item.completion_tokens ?? 0))}</div>
                         </div>
-                        <div class="usage-breakdown-value">${item.total_tokens ?? 0}</div>
+                        <div class="usage-breakdown-value">${this.escapeHtml(String(item.total_tokens ?? 0))}</div>
                     </div>
                 `).join('')
                 : '<div class="usage-empty-state">当前筛选条件下没有匹配到账号用量。</div>';
@@ -918,9 +1002,9 @@ window.NotionAI.API.Settings = {
             return `
                 <div class="usage-event-row">
                     <div class="usage-event-main">
-                        <div class="usage-event-title">${item.model || '未知模型'} · ${item.request_type || 'chat.completions'}</div>
-                        <div class="usage-event-meta">总量 ${item.total_tokens ?? 0} · 输入 ${item.prompt_tokens ?? 0} · 输出 ${item.completion_tokens ?? 0}</div>
-                        <div class="usage-event-meta">账号 ${item.account_id || '未知'} · 会话 ${item.conversation_id || '无'} · ${created}</div>
+                        <div class="usage-event-title">${this.escapeHtml(item.model || '未知模型')} · ${this.escapeHtml(item.request_type || 'chat.completions')}</div>
+                        <div class="usage-event-meta">总量 ${this.escapeHtml(String(item.total_tokens ?? 0))} · 输入 ${this.escapeHtml(String(item.prompt_tokens ?? 0))} · 输出 ${this.escapeHtml(String(item.completion_tokens ?? 0))}</div>
+                        <div class="usage-event-meta">账号 ${this.escapeHtml(item.account_id || '未知')} · 会话 ${this.escapeHtml(item.conversation_id || '无')} · ${this.escapeHtml(created)}</div>
                     </div>
                 </div>
             `;
@@ -1080,21 +1164,26 @@ window.NotionAI.API.Settings = {
     },
 
     renderPagination(pagination = {}) {
+        this._lastAdminPagination = pagination || {};
         const summary = document.getElementById('adminPaginationSummary');
         const prevBtn = document.getElementById('adminPrevPageBtn');
         const nextBtn = document.getElementById('adminNextPageBtn');
         const page = Number(pagination.page || 1);
         const totalPages = Number(pagination.total_pages || 1);
         const total = Number(pagination.total || 0);
+        const pageSize = String(document.getElementById('adminPageSizeInput')?.value || '24');
         if (summary) {
-            summary.textContent = `第 ${page} / ${Math.max(1, totalPages)} 页 · ${total} 个账号`;
+            summary.textContent = pageSize === 'all'
+                ? `全部显示 · ${total} 个账号`
+                : `第 ${page} / ${Math.max(1, totalPages)} 页 · ${total} 个账号`;
         }
         if (prevBtn) {
-            prevBtn.disabled = page <= 1;
+            prevBtn.disabled = page <= 1 || pageSize === 'all';
         }
         if (nextBtn) {
-            nextBtn.disabled = page >= totalPages;
+            nextBtn.disabled = page >= totalPages || pageSize === 'all';
         }
+        this.syncAdminPageSizeControl(total);
     },
 
     formatTimestamp(timestamp) {
@@ -1116,11 +1205,17 @@ window.NotionAI.API.Settings = {
         }
 
         const accounts = Array.isArray(data.accounts) ? data.accounts : [];
+        const pagination = data.pagination || this._lastAdminPagination || {};
+        const total = Number(pagination.total || accounts.length || 0);
         const viewMode = String(data.view_mode || 'safe').trim().toLowerCase() || 'safe';
         const safeViewMode = this.escapeHtml(viewMode);
-        const viewBanner = `<div class="px-4 py-3 text-xs border-b border-black/10 dark:border-white/10 text-gray-600 dark:text-gray-300">视图模式：<strong>${safeViewMode}</strong>${viewMode === 'safe' ? ' · 列表视图中的 secrets 已遮罩。' : ' · 当前响应中可见原始账号数据。'}</div>`;
+        const pageSizeValue = String(document.getElementById('adminPageSizeInput')?.value || '24');
+        const requestedShowAll = pageSizeValue === 'all';
+        const blockedShowAll = requestedShowAll && total > this._adminMaxShowAllAccounts;
+        this.showAdminAccountsRenderNotice(blockedShowAll ? `当前共有 ${total} 个账号。为防止当前页面一次渲染过多内容，已禁止“全部显示”。请改用分页或较小的每页数量。` : '');
+        const viewBanner = `<div class="accounts-toolbar-copy">视图模式：<strong>${safeViewMode}</strong>${viewMode === 'safe' ? '，敏感字段已遮罩。' : '，当前响应可见原始账号数据。'}</div>`;
         if (!accounts.length) {
-            panel.innerHTML = `${viewBanner}<div class="px-4 py-4 text-sm text-gray-500 dark:text-gray-400">未加载到账号。</div>`;
+            panel.innerHTML = `<div class="admin-access-card"><div class="text-sm text-gray-500 dark:text-gray-400">未加载到账号。</div></div>`;
             return;
         }
 
@@ -1146,7 +1241,7 @@ window.NotionAI.API.Settings = {
             return String(a.user_email || a.user_id || '').localeCompare(String(b.user_email || b.user_id || ''));
         });
 
-        panel.innerHTML = viewBanner + sortedAccounts.map((account) => {
+        panel.innerHTML = sortedAccounts.map((account) => {
             const status = account.status || {};
             const workspace = account.workspace || {};
             const oauth = account.oauth || {};
@@ -1156,7 +1251,7 @@ window.NotionAI.API.Settings = {
             const safeTags = (tags.length ? tags : [account.source || 'manual']).map((tag) => this.escapeHtml(tag));
             const planType = this.escapeHtml(account.plan_type || '未知');
             const safePlanCategory = this.escapeHtml(account.plan_category || status.plan_category || '未知');
-            const subscriptionTier = this.escapeHtml(workspace.subscription_tier || 'no tier');
+            const subscriptionTier = this.escapeHtml(workspace.subscription_tier || '无');
             const notes = this.escapeHtml(account.notes || '');
             const safeAccountId = this.escapeHtmlAttribute(account.id || '');
             const safeTagValue = this.escapeHtmlAttribute(tags.join(', '));
@@ -1170,14 +1265,8 @@ window.NotionAI.API.Settings = {
             if (status.last_workspace_failure_category && status.last_workspace_failure_category !== 'success') {
                 badgeItems.push({ state: 'workspace_creation_pending', label: `workspace:${status.last_workspace_failure_category}` });
             }
-            if (status.workspace_hydration_operator_classification) {
-                badgeItems.push({ state: 'workspace_creation_pending', label: `hydration:${status.workspace_hydration_operator_classification}` });
-            }
             if (status.workspace_hydration_pending) {
                 badgeItems.push({ state: 'workspace_creation_pending', label: 'hydration:pending' });
-            }
-            if (status.workspace_expand_error) {
-                badgeItems.push({ state: 'cooling', label: `expand:${status.workspace_expand_status_code || 'warn'}` });
             }
             if (!badgeItems.length) {
                 badgeItems.push({ state: status.effective_state || 'unknown', label: status.effective_state || '未知' });
@@ -1185,78 +1274,47 @@ window.NotionAI.API.Settings = {
             return `
                 <div class="admin-account-row" data-account-id="${safeAccountId}">
                     <div class="admin-account-main">
-                        <div class="text-sm font-medium text-gray-800 dark:text-gray-100">${label}</div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400">${planType} · ${safePlanCategory} · ${subscriptionTier} · ${workspace.workspace_count || 0} workspace(s)</div>
-                        <div class="flex flex-wrap gap-2 mt-1">
+                        ${viewBanner}
+                        <div class="text-base font-medium text-gray-800 dark:text-gray-100">${label}</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400">${planType} · ${safePlanCategory} · ${subscriptionTier}</div>
+                        <div class="flex flex-wrap gap-2">
+                            ${badgeItems.map((badge) => `<span class="admin-badge" data-state="${this.escapeHtmlAttribute(badge.state)}">${this.escapeHtml(badge.label)}</span>`).join('')}
                             ${safeTags.map((tag) => `<span class="admin-mini-pill">${tag}</span>`).join('')}
                         </div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-2">${notes}</div>
+                        ${notes ? `<div class="text-xs text-gray-500 dark:text-gray-400">${notes}</div>` : ''}
                     </div>
                     <div class="admin-kv text-xs text-gray-600 dark:text-gray-300">
-                        ${badgeItems.map((badge) => `<span class="admin-badge" data-state="${this.escapeHtmlAttribute(badge.state)}">${this.escapeHtml(badge.label)}</span>`).join('')}
-                        <span>${status.usable ? '可用' : '需关注'}</span>
-                        <span>工作区：${this.escapeHtml(status.workspace_state || workspace.state || '缺失')}</span>
+                        <div class="admin-account-metric"><span class="admin-account-metric-label">可用状态</span><span class="admin-account-metric-value">${status.usable ? '可用' : '需关注'}</span></div>
+                        <div class="admin-account-metric"><span class="admin-account-metric-label">工作区</span><span class="admin-account-metric-value">${this.escapeHtml(status.workspace_state || workspace.state || '缺失')}</span></div>
+                        <div class="admin-account-metric"><span class="admin-account-metric-label">工作区数量</span><span class="admin-account-metric-value">${workspace.workspace_count || 0}</span></div>
+                        <div class="admin-account-metric"><span class="admin-account-metric-label">OAuth</span><span class="admin-account-metric-value">${oauth.expired ? '已过期' : '有效'}</span></div>
+                        <div class="admin-account-metric"><span class="admin-account-metric-label">需要刷新</span><span class="admin-account-metric-value">${oauth.needs_refresh ? '是' : '否'}</span></div>
+                        <div class="admin-account-metric"><span class="admin-account-metric-label">最近刷新</span><span class="admin-account-metric-value">${this.escapeHtml(this.formatTimestamp(status.last_refresh_at))}</span></div>
+                        <div class="admin-account-metric"><span class="admin-account-metric-label">最近成功</span><span class="admin-account-metric-value">${this.escapeHtml(this.formatTimestamp(status.last_success_at))}</span></div>
+                        <div class="admin-account-metric"><span class="admin-account-metric-label">最近探测</span><span class="admin-account-metric-value">${this.escapeHtml(status.last_probe_action || '无')}</span></div>
                     </div>
-                    <div class="admin-kv text-xs text-gray-600 dark:text-gray-300">
-                        <strong>刷新 / 鉴权</strong>
-                        <span>OAuth：${oauth.expired ? '已过期' : '有效'}</span>
-                        <span>需要刷新：${oauth.needs_refresh ? '是' : '否'}</span>
-                        <span>过期时间：${this.escapeHtml(oauth.expires_at ? this.formatTimestamp(oauth.expires_at) : '未知')}</span>
-                        <span>最近刷新：${this.escapeHtml(this.formatTimestamp(status.last_refresh_at))}</span>
-                        <span>刷新动作：${this.escapeHtml(status.last_refresh_action || '无')}</span>
-                        <span>刷新失败：${this.escapeHtml(status.last_refresh_failure_category || '无')}</span>
-                        <span>重新授权：${status.reauthorize_required ? '需要' : '暂不需要'}</span>
-                    </div>
-                    <div class="admin-kv text-xs text-gray-600 dark:text-gray-300">
-                        <strong>健康状态</strong>
-                        <span>保活失败：${status.keepalive_failures || 0}</span>
-                        <span>最近成功：${this.escapeHtml(this.formatTimestamp(status.last_success_at))}</span>
-                        <span>错误：${this.escapeHtml(status.last_error || '无')}</span>
-                        <span>工作区检查次数：${status.workspace_poll_count || 0}</span>
-                        <span>工作区动作：${this.escapeHtml(status.last_workspace_action || '无')}</span>
-                        <span>工作区检查时间：${this.escapeHtml(this.formatTimestamp(status.last_workspace_check_at))}</span>
-                        <span>补全挂起：${status.workspace_hydration_pending ? '是' : '否'}</span>
-                        <span>补全重试时间：${this.escapeHtml(this.formatTimestamp(status.workspace_hydration_retry_after))}</span>
-                        <span>补全退避：${status.workspace_hydration_backoff_seconds || 0} 秒</span>
-                        <span>补全策略：${this.escapeHtml(status.workspace_hydration_retry_policy || '无')}</span>
-                        <span>补全分类：${this.escapeHtml(status.workspace_hydration_operator_classification || '无')}</span>
-                        <span>刷新恢复：${status.workspace_hydration_refresh_recovery_attempted ? (status.workspace_hydration_refresh_recovery_ok ? '已恢复' : '失败') : '未尝试'}</span>
-                        <span>补全指引：${this.escapeHtml(status.workspace_hydration_guidance || '无')}</span>
-                        <span>补全下一步：${this.escapeHtml(status.workspace_hydration_next_step || '无')}</span>
-                        <span>最近探测：${this.escapeHtml(status.last_probe_action || '无')}</span>
-                        <span>探测成功：${status.last_probe_ok ? '是' : '否'}</span>
-                        <span>探测状态码：${status.last_probe_status_code ?? 'n/a'}</span>
-                        <span>探测分类：${this.escapeHtml(status.last_probe_failure_category || '无')}</span>
-                        <span>探测类型：${this.escapeHtml(status.last_probe_content_type || '未知')}</span>
-                        <span>探测格式：${this.escapeHtml(status.last_probe_response_format || '未知')}</span>
-                        <span>探测限流：${status.probe_rate_limited ? '是' : '否'}</span>
-                        <span>探测原因：${this.escapeHtml(status.last_probe_reason || '无')}</span>
-                        <span>探测字段：${this.escapeHtml(status.last_probe_recognized_fields ? JSON.stringify(status.last_probe_recognized_fields) : '{}')}</span>
-                        <span>探测解析错误：${this.escapeHtml(status.last_probe_parse_error || '无')}</span>
-                        <span>刷新动作：${this.escapeHtml(status.last_refresh_action || '无')}</span>
-                        <span>工作区动作：${this.escapeHtml(status.last_workspace_action || '无')}</span>
-                        <span>工作区失败：${this.escapeHtml(status.last_workspace_failure_category || '无')}</span>
-                        <span>扩展警告：${this.escapeHtml(status.workspace_expand_status_code ? `${status.workspace_expand_status_code}` : (status.workspace_expand_error ? '是' : '无'))}</span>
-                        <span>扩展错误：${this.escapeHtml(status.workspace_expand_error || '无')}</span>
-                    </div>
-                    <div class="text-xs text-gray-600 dark:text-gray-300 flex flex-col gap-2">
-                        <div class="admin-inline-actions">
-                            <button type="button" class="admin-action-btn admin-edit-btn">编辑</button>
-                            <button type="button" class="admin-action-btn admin-template-btn">模板</button>
-                            <button type="button" class="admin-action-btn admin-refresh-probe-btn">刷新探测</button>
-                            <button type="button" class="admin-action-btn admin-workspace-probe-btn">工作区探测</button>
-                            <button type="button" class="admin-action-btn admin-probe-btn">探测</button>
-                            <button type="button" class="admin-action-btn admin-refresh-btn">刷新</button>
-                            <button type="button" class="admin-action-btn admin-sync-btn">同步工作区</button>
-                            <button type="button" class="admin-action-btn admin-hydration-retry-btn">补全重试</button>
-                            <button type="button" class="admin-action-btn admin-create-ws-btn">创建工作区</button>
-                        </div>
+                    <div class="admin-account-actions">
+                        <button type="button" class="admin-action-btn admin-edit-btn">编辑</button>
+                        <button type="button" class="admin-action-btn admin-template-btn">模板</button>
+                        <button type="button" class="admin-action-btn admin-refresh-probe-btn">刷新探测</button>
+                        <button type="button" class="admin-action-btn admin-workspace-probe-btn">工作区探测</button>
+                        <button type="button" class="admin-action-btn admin-probe-btn">探测</button>
+                        <button type="button" class="admin-action-btn admin-refresh-btn">刷新</button>
+                        <button type="button" class="admin-action-btn admin-sync-btn">同步工作区</button>
+                        <button type="button" class="admin-action-btn admin-hydration-retry-btn">补全重试</button>
+                        <button type="button" class="admin-action-btn admin-create-ws-btn">创建工作区</button>
                         <button type="button" class="admin-action-btn admin-toggle-btn" data-enabled="${account.enabled !== false ? 'true' : 'false'}">${toggleLabel}</button>
                         <button type="button" class="admin-action-btn admin-delete-btn">删除</button>
-                        <button type="button" class="admin-action-btn admin-tags-btn">保存标签</button>
-                        <input type="text" class="admin-tag-input w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1 text-xs outline-none" value="${safeTagValue}" placeholder="标签，多个用逗号分隔">
-                        <button type="button" class="admin-action-btn admin-note-btn">保存备注</button>
-                        <textarea class="admin-note-input w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1 text-xs outline-none" rows="2" placeholder="备注">${notes}</textarea>
+                    </div>
+                    <div class="admin-account-editor text-xs text-gray-600 dark:text-gray-300">
+                        <input type="text" class="admin-tag-input w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none" value="${safeTagValue}" placeholder="标签，多个用逗号分隔">
+                        <div class="admin-account-actions">
+                            <button type="button" class="admin-action-btn admin-tags-btn">保存标签</button>
+                        </div>
+                        <textarea class="admin-note-input w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none" rows="3" placeholder="备注">${notes}</textarea>
+                        <div class="admin-account-actions">
+                            <button type="button" class="admin-action-btn admin-note-btn">保存备注</button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -1611,7 +1669,10 @@ window.NotionAI.API.Settings = {
             this.renderActionHistory(snapshot || {});
             this.renderProbeLogs(snapshot || {});
             this.renderPagination(data.pagination || {});
-            this.renderAdminAccounts(data);
+            this.renderAdminAccounts({
+                ...data,
+                pagination: data.pagination || {},
+            });
             const viewMode = String(data.view_mode || 'safe').trim().toLowerCase() || 'safe';
             const alertsMode = String((alerts || {}).response_mode || 'safe_summary').trim().toLowerCase() || 'safe_summary';
             const operationsMode = String((operations || {}).response_mode || 'audit_log').trim().toLowerCase() || 'audit_log';
@@ -1729,6 +1790,7 @@ window.NotionAI.API.Settings = {
             media_validation_error: mediaValidation.error,
         });
         this.applyRuntimeAdvancedVisibility();
+        this.applyRuntimeProxyAdvancedVisibility();
     },
 
     getRuntimeMediaFormValues() {
@@ -1985,19 +2047,13 @@ window.NotionAI.API.Settings = {
         const items = [
             ['模式', settings.app_mode || 'standard'],
             ['探测间隔', `${settings.account_probe_interval_seconds ?? 300} 秒`],
-            ['自动建工作区', settings.auto_create_workspace ? '开启' : '关闭'],
-            ['干跑模式', settings.workspace_create_dry_run !== false ? '开启' : '关闭'],
-            ['代理模式', settings.upstream_proxy_mode || 'direct'],
-            ['Warp', settings.upstream_warp_enabled ? '开启' : '关闭'],
-            ['自动注册', settings.auto_register_enabled ? '开启' : '关闭'],
-            ['自动注册空闲限制', settings.auto_register_idle_only !== false ? '仅空闲时' : '始终可触发'],
-            ['Chat 模块', settings.chat_enabled ? '开启' : '关闭'],
+            ['Chat', settings.chat_enabled ? '开启' : '关闭'],
             ['Chat 密码', settings.chat_password_enabled ? '开启' : ((settings.has_chat_password || settings.chat_password === '********') ? '已配置未启用' : '未设置')],
-            ['媒体公开地址', settings.media_public_base_url || '跟随当前服务地址'],
-            ['媒体缓存目录', settings.media_storage_path || '默认 data/media'],
+            ['代理模式', settings.upstream_proxy_mode || 'direct'],
+            ['自动注册', settings.auto_register_enabled ? '开启' : '关闭'],
             ['服务端密钥', (settings.has_api_key || settings.api_key) ? '已设置' : '为空'],
+            ['媒体地址', settings.media_public_base_url || '跟随当前服务地址'],
             ['刷新模式', settings.refresh_execution_mode || 'manual'],
-            ['刷新地址', settings.refresh_request_url ? '已设置' : '为空'],
             ['工作区模式', settings.workspace_execution_mode || 'manual'],
             ['真实探测', settings.allow_real_probe_requests ? '已放开' : '已阻止'],
         ];
@@ -2040,11 +2096,7 @@ window.NotionAI.API.Settings = {
             ['代理活跃', proxyHealth.active ? '是' : '否'],
             ['模式', proxyHealth.mode || 'direct'],
             ['状态', proxyHealth.operator_state || 'direct'],
-            ['Warp', proxyHealth.warp_enabled ? '启用' : '停用'],
-            ['Warp 代理', proxyHealth.warp_configured ? '已设置' : '为空'],
-            ['SOCKS5', proxyHealth.socks5_configured ? '已设置' : '为空'],
-            ['HTTP', proxyHealth.http_configured ? '已设置' : '为空'],
-            ['HTTPS', proxyHealth.https_configured ? '已设置' : '为空'],
+            ['已配置出口', [proxyHealth.http_configured && 'HTTP', proxyHealth.https_configured && 'HTTPS', proxyHealth.socks5_configured && 'SOCKS5', proxyHealth.warp_configured && 'Warp'].filter(Boolean).join(' / ') || '无'],
             ['可达目标数', String(proxyHealth.reachable_target_count ?? 0)],
         ];
         container.innerHTML = items
@@ -2085,13 +2137,7 @@ window.NotionAI.API.Settings = {
         const items = [
             ['自动注册活跃', automation.active ? '是' : '否'],
             ['允许执行', automation.eligible ? '是' : '否'],
-            ['最近启动', this.formatTimestamp(automation.last_started_at)],
-            ['最近结束', this.formatTimestamp(automation.last_finished_at)],
-            ['最近任务', automation.last_task_id || '无'],
-            ['任务状态', automation.latest_task_status || '无'],
-            ['最近决策', automation.last_decision_reason || '未知'],
-            ['当前门禁', automation.current_reason || automation.last_decision_reason || '未知'],
-            ['阻塞原因', automation.gate_reason || automation.current_reason || '未知'],
+            ['当前原因', automation.current_reason || automation.last_decision_reason || '未知'],
             ['待补全数量', automation.pending_hydration_due ?? 0],
         ];
         container.innerHTML = items
@@ -2323,10 +2369,6 @@ window.NotionAI.API.Settings = {
                 hint.textContent = `运行时配置已保存。后台探测间隔：${payload.account_probe_interval_seconds} 秒。自动创建工作区：${payload.auto_create_workspace ? '开启' : '关闭'}。媒体链接：${payload.media_public_base_url || '跟随当前服务地址'}。`;
             }
             localStorage.setItem('claude_runtime_config_saved', 'true');
-            const saveScopeHint = document.getElementById('settingsSaveScopeHint');
-            if (saveScopeHint) {
-                saveScopeHint.classList.add('hidden');
-            }
             if (!silent) {
                 this.setAdminNotice('运行时配置已保存。');
             }
@@ -2399,6 +2441,7 @@ window.NotionAI.API.Settings = {
                 element.value = '';
             }
         });
+        this.setAccountComposerMode('manual', true);
     },
 
     fillAccountForm(account) {
@@ -2422,6 +2465,7 @@ window.NotionAI.API.Settings = {
                 element.value = value;
             }
         });
+        this.setAccountComposerMode('manual', true);
         this.setAdminNotice(`已将账号 ${account.user_email || account.user_id || account.id} 加载到编辑器。`);
     },
 
@@ -2461,16 +2505,21 @@ window.NotionAI.API.Settings = {
         }
     },
 
-    parseBulkAccountsInput() {
-        const raw = document.getElementById('adminAccountBulkInput').value.trim();
-        if (!raw) {
-            throw new Error('请先粘贴 JSON 数组。');
+    parseBulkAccountsText(raw = '') {
+        const text = String(raw || '').trim();
+        if (!text) {
+            throw new Error('请先提供 JSON 数组。');
         }
-        const parsed = JSON.parse(raw);
+        const parsed = JSON.parse(text);
         if (!Array.isArray(parsed)) {
             throw new Error('批量账号载荷必须是 JSON 数组。');
         }
         return parsed;
+    },
+
+    parseBulkAccountsInput() {
+        const raw = document.getElementById('adminAccountBulkInput').value.trim();
+        return this.parseBulkAccountsText(raw);
     },
 
     async bulkImportAccounts() {
@@ -2490,6 +2539,21 @@ window.NotionAI.API.Settings = {
             await this.refreshAdminPanel('批量替换已完成。');
         } catch (error) {
             this.setAdminNotice(error.message || '批量替换失败。');
+        }
+    },
+
+    async bulkImportAccountsFromFile(replace = false) {
+        try {
+            const accounts = await this.parseBulkAccountsFromFile();
+            if (replace) {
+                await window.NotionAI.API.Admin.bulkReplaceAccounts(accounts);
+                await this.refreshAdminPanel('文件批量替换已完成。');
+                return;
+            }
+            await window.NotionAI.API.Admin.bulkImportAccounts(accounts);
+            await this.refreshAdminPanel('文件批量导入已完成。');
+        } catch (error) {
+            this.setAdminNotice(error.message || '文件导入失败。');
         }
     },
 

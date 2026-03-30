@@ -304,13 +304,6 @@ function bindEventListeners() {
         document.getElementById('memoryBanner').classList.add('hidden');
     });
 
-    // Workspace footer actions
-    document.getElementById('cancelSettingsBtn').addEventListener('click', () => {
-        window.NotionAI.API.Settings.close();
-    });
-    document.getElementById('saveSettingsBtn').addEventListener('click', () => {
-        window.NotionAI.API.Settings.save();
-    });
     document.getElementById('adminLoginBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.loginAdminSession();
     });
@@ -401,6 +394,21 @@ function bindEventListeners() {
     document.getElementById('adminWorkspaceCreateBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.runAdminAction('/v1/admin/accounts/workspaces/create', '已触发工作区创建流程。');
     });
+    document.getElementById('adminToggleAccountComposerBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.toggleAccountComposer();
+    });
+    document.getElementById('adminAccountModeManualBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.setAccountComposerMode('manual');
+    });
+    document.getElementById('adminAccountModeJsonBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.setAccountComposerMode('json');
+    });
+    document.getElementById('adminAccountModeFileBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.setAccountComposerMode('file');
+    });
+    document.getElementById('adminAccountModeOauthBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.setAccountComposerMode('oauth');
+    });
     document.getElementById('adminAddAccountBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.addAccountFromForm();
     });
@@ -413,6 +421,18 @@ function bindEventListeners() {
     document.getElementById('adminReplaceAccountsBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.bulkReplaceAccounts();
     });
+    document.getElementById('adminImportAccountsFileBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.bulkImportAccountsFromFile(false);
+    });
+    document.getElementById('adminReplaceAccountsFileBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.bulkImportAccountsFromFile(true);
+    });
+    document.getElementById('adminOpenOAuthModuleBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.openOAuthImporter(false);
+    });
+    document.getElementById('adminOpenOAuthStartBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.openOAuthImporter(true);
+    });
     document.getElementById('adminExportAccountsBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.exportAccountsToTextarea();
     });
@@ -421,6 +441,14 @@ function bindEventListeners() {
     });
     document.getElementById('adminNextPageBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.changeAdminPage(1);
+    });
+    document.getElementById('adminAccountsPageSizeSelect').addEventListener('change', (event) => {
+        const value = event.target.value;
+        if (value === 'all') {
+            window.NotionAI.API.Settings.setAdminPageSize('all');
+            return;
+        }
+        window.NotionAI.API.Settings.setAdminPageSize(String(Math.max(1, Number(value) || 24)));
     });
     document.getElementById('runtimeLoadBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.loadRuntimeConfigIntoForm();
@@ -447,6 +475,9 @@ function bindEventListeners() {
     });
     document.getElementById('runtimeAdvancedToggleBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.toggleRuntimeAdvanced();
+    });
+    document.getElementById('runtimeProxyAdvancedToggleBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.toggleRuntimeProxyAdvanced();
     });
     document.getElementById('chatAccessUnlockBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.unlockChatAccess();

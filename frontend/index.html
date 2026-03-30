@@ -247,16 +247,8 @@
                         <div id="runtimeSectionStatus" class="admin-section-status" data-state="signed_out"><span class="admin-section-status-dot"></span><strong>已锁定</strong><span>登录后台后解锁运行时控制。</span></div>
                         <div>
                             <div class="settings-console-kicker">运行时</div>
-                            <h4 class="text-sm font-medium">把服务调到你想要的状态</h4>
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">这里主要处理服务怎么跑、Chat 要不要开放、代理怎么接、自动注册是否启用。第一次使用时，不需要一次填完全部内容。</p>
-                        </div>
-                        <div class="admin-module-intro-card">
-                            <div class="admin-module-intro-title">你通常会先在这里做什么</div>
-                            <div class="admin-module-intro-copy">先决定是否启用 Chat、是否需要单独聊天密码，再补 API Key、代理和自动化设置。复杂项可以晚一点再配。</div>
-                        </div>
-                        <div class="runtime-config-callout">
-                            <div class="runtime-config-callout-title">更轻的起步方式</div>
-                            <div class="runtime-config-callout-copy">通常只要先准备 `ADMIN_PASSWORD` 和端口就够了。账号、`API_KEY`、代理、自动注册、工作区和 refresh 这些更细的内容，后续再在后台里慢慢补齐。</div>
+                            <h4 class="text-sm font-medium">先配当前真的要改的</h4>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">先处理基础、Chat 和代理。其余能力按需展开，不默认摊开。</p>
                         </div>
                         <div class="runtime-config-section">
                             <div class="runtime-config-section-header">
@@ -289,19 +281,40 @@
                                         class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
                                 </div>
                             </div>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-                                <select id="runtimeProxyModeInput"
-                                    class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                    <option value="direct">代理模式：直连</option>
-                                    <option value="http">代理模式：HTTP</option>
-                                    <option value="https">代理模式：HTTPS</option>
-                                    <option value="socks5">代理模式：SOCKS5</option>
-                                    <option value="warp">代理模式：Warp</option>
-                                    <option value="mixed">代理模式：混合</option>
-                                </select>
-                                <input id="runtimeProxyInput" type="text" placeholder="上游代理地址（可选）"
-                                    class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                <label class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 sm:col-span-2"><input id="runtimeWarpEnabledInput" type="checkbox">优先使用 Warp 代理（高级代理场景再开启）</label>
+                            <div class="runtime-proxy-card mt-4">
+                                <div class="runtime-proxy-header">
+                                    <div>
+                                        <div class="runtime-config-section-title">代理</div>
+                                        <div class="runtime-config-section-copy">先选模式。只有不是直连时，再补对应地址。</div>
+                                    </div>
+                                    <button id="runtimeProxyAdvancedToggleBtn" type="button" class="admin-action-btn">展开代理细项</button>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                                    <select id="runtimeProxyModeInput"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <option value="direct">直连</option>
+                                        <option value="http">HTTP 代理</option>
+                                        <option value="https">HTTPS 代理</option>
+                                        <option value="socks5">SOCKS5 代理</option>
+                                        <option value="warp">Warp 出口</option>
+                                        <option value="mixed">混合</option>
+                                    </select>
+                                    <input id="runtimeProxyInput" type="text" placeholder="通用代理地址（仅在需要统一入口时填写）"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                </div>
+                                <div id="runtimeProxyAdvancedFields" class="hidden space-y-3 mt-3">
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <input id="runtimeHttpProxyInput" type="text" placeholder="HTTP 代理地址（仅 HTTP 模式填写）"
+                                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <input id="runtimeHttpsProxyInput" type="text" placeholder="HTTPS 代理地址（仅 HTTPS 模式填写）"
+                                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <input id="runtimeSocks5ProxyInput" type="text" placeholder="SOCKS5 地址（仅 SOCKS5 模式填写）"
+                                            class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <input id="runtimeWarpProxyInput" type="text" placeholder="Warp 本地出口地址（仅在已集成 Warp 本地代理时填写）"
+                                            class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    </div>
+                                    <label class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300"><input id="runtimeWarpEnabledInput" type="checkbox">优先使用 Warp 出口</label>
+                                </div>
                             </div>
                         </div>
                         <div class="runtime-config-section">
@@ -316,20 +329,12 @@
                                 <div class="runtime-subsection-card">
                                     <div class="runtime-subsection-heading">
                                         <div>
-                                            <div class="runtime-subsection-title">代理与上游网络</div>
-                                            <div class="runtime-subsection-copy">当服务需要走 HTTP、HTTPS、SOCKS5 或 Warp 时，在这里补齐完整网络出口。</div>
+                                            <div class="runtime-subsection-title">外部服务</div>
+                                            <div class="runtime-subsection-copy">只有在你真的要接第三方能力时，再打开这些字段。</div>
                                         </div>
                                     </div>
                                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <input id="runtimeSiliconflowApiKeyInput" type="text" placeholder="SiliconFlow 密钥（敏感）"
-                                            class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                        <input id="runtimeHttpProxyInput" type="text" placeholder="上游 HTTP 代理"
-                                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                        <input id="runtimeHttpsProxyInput" type="text" placeholder="上游 HTTPS 代理"
-                                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                        <input id="runtimeSocks5ProxyInput" type="text" placeholder="上游 SOCKS5 代理"
-                                            class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                        <input id="runtimeWarpProxyInput" type="text" placeholder="Warp 本地代理（例如 warp-yg 暴露端口）"
                                             class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
                                     </div>
                                 </div>
@@ -429,22 +434,41 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="text-[11px] text-gray-500 dark:text-gray-400" id="runtimeConfigHint">保存运行时配置后，会立即更新当前服务设置。多数运行时参数会直接生效；`ALLOWED_ORIGINS` 这类启动期配置通常仍需重启。Warp 本地代理可填写 warp-yg 等工具暴露的端口。媒体 public base URL 不填时，聊天图片会自动跟随当前服务地址生成 `/v1/media/...` 链接。</div>
+                        <div class="text-[11px] text-gray-500 dark:text-gray-400" id="runtimeConfigHint">保存后多数运行时设置会立即生效；`ALLOWED_ORIGINS` 这类启动期配置通常仍需重启。</div>
                         <div class="flex flex-wrap gap-2 pt-1">
                             <button id="runtimeLoadBtn" type="button" class="admin-action-btn">加载配置</button>
                             <button id="runtimeSaveBtn" type="button" class="admin-action-btn">保存配置</button>
-                            <button id="runtimeCheckProxyBtn" type="button" class="admin-action-btn">检查代理</button>
-                            <button id="runtimeTriggerAutoRegisterBtn" type="button" class="admin-action-btn">触发自动注册</button>
-                            <button id="runtimeRefreshAutoRegisterBtn" type="button" class="admin-action-btn">刷新自动注册状态</button>
                             <button id="runtimeToggleSecretsBtn" type="button" class="admin-action-btn">显示密钥</button>
+                            <button id="runtimeAdvancedToggleBtn" type="button" class="admin-action-btn">展开更多能力</button>
                         </div>
-                        <div id="runtimeConfigSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
-                        <div id="runtimeProxyHealthSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
-                        <div id="runtimeRegisterAutomationSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
-                        <div id="runtimeRegisterAutomationGuidance" class="text-[11px] text-gray-500 dark:text-gray-400"></div>
-                        <div id="runtimeOperationsPanel" class="text-[11px] text-gray-500 dark:text-gray-400 space-y-1"></div>
-                        <div id="runtimeProxyChecks" class="text-[11px] text-gray-500 dark:text-gray-400 space-y-1"></div>
-                        <div id="runtimeConfigPaths" class="text-[11px] text-gray-500 dark:text-gray-400 space-y-1"></div>
+                        <div class="runtime-status-board">
+                            <div class="runtime-status-card">
+                                <div class="runtime-status-title">当前摘要</div>
+                                <div id="runtimeConfigSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                            </div>
+                            <div class="runtime-status-card">
+                                <div class="runtime-status-title">代理状态</div>
+                                <div class="flex flex-wrap gap-2 mb-2">
+                                    <button id="runtimeCheckProxyBtn" type="button" class="admin-action-btn">检查代理</button>
+                                </div>
+                                <div id="runtimeProxyHealthSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                                <div id="runtimeProxyChecks" class="text-[11px] text-gray-500 dark:text-gray-400 space-y-1 mt-2"></div>
+                            </div>
+                            <div class="runtime-status-card">
+                                <div class="runtime-status-title">自动注册</div>
+                                <div class="flex flex-wrap gap-2 mb-2">
+                                    <button id="runtimeTriggerAutoRegisterBtn" type="button" class="admin-action-btn">触发自动注册</button>
+                                    <button id="runtimeRefreshAutoRegisterBtn" type="button" class="admin-action-btn">刷新自动注册状态</button>
+                                </div>
+                                <div id="runtimeRegisterAutomationSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                                <div id="runtimeRegisterAutomationGuidance" class="text-[11px] text-gray-500 dark:text-gray-400 mt-2"></div>
+                            </div>
+                        </div>
+                        <details class="runtime-details-block">
+                            <summary>查看运行时细节</summary>
+                            <div id="runtimeOperationsPanel" class="text-[11px] text-gray-500 dark:text-gray-400 space-y-1 mt-3"></div>
+                            <div id="runtimeConfigPaths" class="text-[11px] text-gray-500 dark:text-gray-400 space-y-1 mt-3"></div>
+                        </details>
                     </div>
                 </div>
 
@@ -531,10 +555,8 @@
                             <option value="desc">降序</option>
                             <option value="asc">升序</option>
                         </select>
-                        <input id="adminPageInput" type="number" min="1" value="1" placeholder="页码"
-                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
-                        <input id="adminPageSizeInput" type="number" min="1" max="200" value="20" placeholder="每页数量"
-                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
+                        <input id="adminPageInput" type="hidden" min="1" value="1">
+                        <input id="adminPageSizeInput" type="hidden" value="24">
                     </div>
                     <div class="admin-action-group">
                         <div class="admin-action-group-label">批量处理</div>
@@ -590,25 +612,24 @@
                     </div>
                     <div id="adminActionHistory" class="text-xs text-gray-500 dark:text-gray-400 space-y-1"></div>
                     <div id="adminProbeHistory" class="text-xs text-gray-500 dark:text-gray-400 space-y-1"></div>
-                    <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                        <span id="adminPaginationSummary">第 1 页</span>
-                        <button id="adminPrevPageBtn" type="button" class="admin-action-btn">上一页</button>
-                        <button id="adminNextPageBtn" type="button" class="admin-action-btn">下一页</button>
-                    </div>
                 </div>
 
                 <div id="settings-section-usage" class="settings-console-panel admin-module-panel space-y-4">
                     <div id="usageSectionStatus" class="admin-section-status" data-state="signed_out"><span class="admin-section-status-dot"></span><strong>已锁定</strong><span>登录后台后解锁用量查询。</span></div>
-                    <div class="usage-hero-panel">
-                        <div class="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                        <div class="settings-console-kicker">用量</div>
+                        <h4 class="text-sm font-medium">把消耗看清楚</h4>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">先看总量，再看模型、账号和最近事件，不把所有信息堆在一个区里。</p>
+                    </div>
+                    <div class="usage-toolbar-card">
+                        <div class="usage-toolbar-row">
                             <div>
-                                <div class="usage-section-kicker">运维 / 用量</div>
-                                <h4 class="text-sm font-medium">看看请求都花在了哪里</h4>
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">这里用来查 chat 和 responses 的 token 用量，适合排查“为什么今天突然跑贵了”或者“到底是哪类请求在吃量”。</p>
+                                <div class="usage-toolbar-title">筛选范围</div>
+                                <div class="usage-toolbar-copy">按时间、模型、账号和请求类型收窄范围。</div>
                             </div>
-                            <div id="adminUsageEventsMeta" class="text-[11px] text-gray-500 dark:text-gray-400"></div>
+                            <div id="adminUsageEventsMeta" class="usage-toolbar-meta"></div>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs mt-3">
+                        <div class="usage-filter-grid mt-4">
                             <input id="adminUsageStartTsInput" type="number" min="0" placeholder="开始时间戳"
                                 class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
                             <input id="adminUsageEndTsInput" type="number" min="0" placeholder="结束时间戳"
@@ -617,8 +638,6 @@
                                 class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
                             <input id="adminUsageAccountInput" type="text" placeholder="账号 ID"
                                 class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs mt-2">
                             <select id="adminUsageRequestTypeInput"
                                 class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
                                 <option value="">全部请求类型</option>
@@ -627,26 +646,41 @@
                             </select>
                             <input id="adminUsageLimitInput" type="number" min="1" max="100" value="8" placeholder="事件条数上限"
                                 class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
-                            <div class="sm:col-span-2 flex flex-wrap gap-2">
-                                <button id="adminUsageApplyBtn" type="button" class="admin-action-btn">应用用量筛选</button>
-                                <button id="adminUsageClearBtn" type="button" class="admin-action-btn">清空用量筛选</button>
-                            </div>
+                        </div>
+                        <div class="usage-toolbar-actions">
+                            <button id="adminUsageApplyBtn" type="button" class="admin-action-btn admin-action-btn-primary">刷新用量</button>
+                            <button id="adminUsageClearBtn" type="button" class="admin-action-btn">清空筛选</button>
                         </div>
                     </div>
                     <div id="adminUsageSummary" class="usage-summary-grid"></div>
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
                         <div class="usage-breakdown-panel">
-                            <div class="usage-breakdown-title">按模型统计</div>
-                            <div id="adminUsageByModel" class="space-y-2"></div>
+                            <div class="usage-breakdown-heading">
+                                <div>
+                                    <div class="usage-breakdown-title">按模型</div>
+                                    <div class="usage-breakdown-copy">看哪些模型在吃量。</div>
+                                </div>
+                            </div>
+                            <div id="adminUsageByModel" class="usage-breakdown-list"></div>
                         </div>
                         <div class="usage-breakdown-panel">
-                            <div class="usage-breakdown-title">按账号统计</div>
-                            <div id="adminUsageByAccount" class="space-y-2"></div>
+                            <div class="usage-breakdown-heading">
+                                <div>
+                                    <div class="usage-breakdown-title">按账号</div>
+                                    <div class="usage-breakdown-copy">看消耗集中在哪些号上。</div>
+                                </div>
+                            </div>
+                            <div id="adminUsageByAccount" class="usage-breakdown-list"></div>
                         </div>
                     </div>
                     <div class="usage-breakdown-panel">
-                        <div class="usage-breakdown-title">最近用量事件</div>
-                        <div id="adminUsageEvents" class="space-y-2"></div>
+                        <div class="usage-breakdown-heading">
+                            <div>
+                                <div class="usage-breakdown-title">最近事件</div>
+                                <div class="usage-breakdown-copy">只保留最近一小段，方便快速排查。</div>
+                            </div>
+                        </div>
+                        <div id="adminUsageEvents" class="usage-events-list"></div>
                     </div>
                 </div>
 
@@ -671,38 +705,95 @@
                             <button id="adminExportAccountsBtn" type="button" class="admin-action-btn">导出账号</button>
                         </div>
                     </div>
-                    <div id="adminAccountsPanel" class="max-h-72 overflow-y-auto border border-black/10 dark:border-white/10 rounded-2xl"></div>
-                    <div class="space-y-3 pt-1 border-t border-black/10 dark:border-white/10">
-                        <div>
-                            <h4 class="text-sm font-medium">新增账号</h4>
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">快速新增或编辑账号池中的单个账号。</p>
+                    <div class="accounts-toolbar-card">
+                        <div class="accounts-toolbar-row">
+                            <div>
+                                <div class="accounts-toolbar-title">账号列表</div>
+                                <div class="accounts-toolbar-copy">一个账号一张卡。默认分页显示，避免一次渲染过多内容。</div>
+                            </div>
+                            <div id="adminAccountsRenderNotice" class="accounts-render-notice hidden"></div>
                         </div>
-                        <input id="adminAccountIdInput" type="hidden">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <input id="adminAccountTokenInput" type="text" placeholder="token_v2 令牌"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="adminAccountUserIdInput" type="text" placeholder="user_id"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="adminAccountSpaceIdInput" type="text" placeholder="space_id"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="adminAccountEmailInput" type="text" placeholder="用户邮箱"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="adminAccountPlanInput" type="text" placeholder="套餐类型，例如 free / education"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="adminAccountTagsInput" type="text" placeholder="标签，多个用逗号分隔"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <textarea id="adminAccountNotesInput" rows="3" placeholder="备注"
-                                class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none resize-y"></textarea>
+                        <div class="accounts-toolbar-controls">
+                            <label class="accounts-toolbar-field">
+                                <span>每页</span>
+                                <select id="adminAccountsPageSizeSelect" class="accounts-toolbar-select">
+                                    <option value="12">12</option>
+                                    <option value="24" selected>24</option>
+                                    <option value="48">48</option>
+                                    <option value="96">96</option>
+                                    <option value="all">全部</option>
+                                </select>
+                            </label>
+                            <div class="accounts-toolbar-pagination">
+                                <button id="adminPrevPageBtn" type="button" class="admin-action-btn">上一页</button>
+                                <span id="adminPaginationSummary">第 1 页</span>
+                                <button id="adminNextPageBtn" type="button" class="admin-action-btn">下一页</button>
+                            </div>
                         </div>
-                        <div class="flex flex-wrap gap-2">
-                            <button id="adminAddAccountBtn" type="button" class="admin-action-btn">保存账号</button>
-                            <button id="adminClearAccountFormBtn" type="button" class="admin-action-btn">清空表单</button>
+                    </div>
+                    <div id="adminAccountsPanel" class="admin-accounts-grid"></div>
+                    <div class="accounts-composer-card">
+                        <div class="accounts-composer-header">
+                            <div>
+                                <div class="accounts-toolbar-title">新增账号</div>
+                                <div class="accounts-toolbar-copy">默认收起来。按需要选择手动、JSON、文件或 OAuth。</div>
+                            </div>
+                            <button id="adminToggleAccountComposerBtn" type="button" class="admin-action-btn">打开新增入口</button>
                         </div>
-                        <textarea id="adminAccountBulkInput" rows="5" placeholder="在这里粘贴账号 JSON 数组，用于批量导入或替换"
-                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
-                        <div class="flex flex-wrap gap-2">
-                            <button id="adminImportAccountsBtn" type="button" class="admin-action-btn">批量导入</button>
-                            <button id="adminReplaceAccountsBtn" type="button" class="admin-action-btn">批量替换</button>
+                        <div id="adminAccountComposer" class="accounts-composer-body hidden">
+                            <div class="accounts-composer-tabs">
+                                <button id="adminAccountModeManualBtn" type="button" class="admin-action-btn admin-action-btn-primary">手动输入 v2</button>
+                                <button id="adminAccountModeJsonBtn" type="button" class="admin-action-btn">JSON 输入</button>
+                                <button id="adminAccountModeFileBtn" type="button" class="admin-action-btn">文件导入</button>
+                                <button id="adminAccountModeOauthBtn" type="button" class="admin-action-btn">OAuth 导入</button>
+                            </div>
+                            <input id="adminAccountIdInput" type="hidden">
+                            <div id="adminAccountManualSection" class="accounts-composer-section space-y-3">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <input id="adminAccountTokenInput" type="text" placeholder="token_v2 令牌"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <input id="adminAccountUserIdInput" type="text" placeholder="user_id"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <input id="adminAccountSpaceIdInput" type="text" placeholder="space_id"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <input id="adminAccountEmailInput" type="text" placeholder="用户邮箱"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <input id="adminAccountPlanInput" type="text" placeholder="套餐类型，例如 free / education"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <input id="adminAccountTagsInput" type="text" placeholder="标签，多个用逗号分隔"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <textarea id="adminAccountNotesInput" rows="3" placeholder="备注"
+                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none resize-y"></textarea>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    <button id="adminAddAccountBtn" type="button" class="admin-action-btn admin-action-btn-primary">保存账号</button>
+                                    <button id="adminClearAccountFormBtn" type="button" class="admin-action-btn">清空表单</button>
+                                </div>
+                            </div>
+                            <div id="adminAccountJsonSection" class="accounts-composer-section hidden space-y-3">
+                                <textarea id="adminAccountBulkInput" rows="6" placeholder="在这里粘贴账号 JSON 数组"
+                                    class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
+                                <div class="flex flex-wrap gap-2">
+                                    <button id="adminImportAccountsBtn" type="button" class="admin-action-btn admin-action-btn-primary">批量导入</button>
+                                    <button id="adminReplaceAccountsBtn" type="button" class="admin-action-btn">批量替换</button>
+                                </div>
+                            </div>
+                            <div id="adminAccountFileSection" class="accounts-composer-section hidden space-y-3">
+                                <input id="adminAccountFileInput" type="file" accept=".json,application/json"
+                                    class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                <div class="text-xs text-gray-500 dark:text-gray-400">选择本地账号 JSON 文件后，可直接导入或整批替换。</div>
+                                <div class="flex flex-wrap gap-2">
+                                    <button id="adminImportAccountsFileBtn" type="button" class="admin-action-btn admin-action-btn-primary">从文件导入</button>
+                                    <button id="adminReplaceAccountsFileBtn" type="button" class="admin-action-btn">从文件替换</button>
+                                </div>
+                            </div>
+                            <div id="adminAccountOauthSection" class="accounts-composer-section hidden space-y-3">
+                                <div class="text-sm text-gray-700 dark:text-gray-300">OAuth 账号导入保留在诊断模块里，但账号这里给直接入口，不用自己去找。</div>
+                                <div class="flex flex-wrap gap-2">
+                                    <button id="adminOpenOAuthModuleBtn" type="button" class="admin-action-btn admin-action-btn-primary">去 OAuth 导入</button>
+                                    <button id="adminOpenOAuthStartBtn" type="button" class="admin-action-btn">打开后准备 OAuth 启动参数</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -763,15 +854,6 @@
                 </div>
                 </div>
 
-                <div class="mt-8 border-t border-black/10 dark:border-white/10 pt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <p id="settingsSaveScopeHint" class="text-xs text-gray-500 dark:text-gray-400">底部保存只应用 Base URL、API Key 和运行时配置。admin session 访问请在上方单独管理。</p>
-                    <div class="flex justify-end gap-3 sm:ml-auto">
-                        <button id="cancelSettingsBtn"
-                            class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">重置视图</button>
-                        <button id="saveSettingsBtn"
-                            class="px-4 py-2 rounded-lg text-sm font-medium bg-black text-white dark:bg-white dark:text-black hover:opacity-90 transition-opacity">保存更改</button>
-                    </div>
-                </div>
             </div>
         </div>
         </section>
