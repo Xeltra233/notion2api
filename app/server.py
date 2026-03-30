@@ -25,7 +25,7 @@ from app.account_pool import AccountPool
 from app.conversation import ConversationManager
 from app.usage import UsageStore
 from app.api.admin import router as admin_router
-from app.api.chat import router as chat_router
+from app.api.chat import gemini_router, router as chat_router
 from app.api.models import router as models_router
 from app.api.register import router as register_router
 from app.logger import logger
@@ -168,7 +168,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Notion Opus API",
-    description="A FastAPI wrapper providing an OpenAI-compatible interface for Notion's Claude Opus backend.",
+    description="A FastAPI wrapper providing OpenAI-, Anthropic-, and Gemini-compatible interfaces for the Notion backend.",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -273,22 +273,26 @@ async def api_key_auth(request: Request, call_next):
     # 如果环境配置中未设置 API_KEY，则全局不验证
     api_key = get_api_key()
     if api_key:
-        public_v1_paths = {
+        public_api_paths = {
             "/v1/admin/oauth/callback",
         }
+        request_path = request.url.path
         # 跳过 OPTIONS 请求和非受保护的静态路由（如果以后有的话）
-        if request.url.path.startswith("/v1") and request.method != "OPTIONS":
-            if request.url.path in public_v1_paths:
+        if (
+            request_path.startswith("/v1") or request_path.startswith("/v1beta")
+        ) and request.method != "OPTIONS":
+            if request_path in public_api_paths:
                 return await call_next(request)
-            if request.url.path.startswith("/v1/media/"):
-                if _is_safe_public_media_path(request.url.path):
+            if request_path.startswith("/v1/media/"):
+                if _is_safe_public_media_path(request_path):
                     return await call_next(request)
                 return JSONResponse(status_code=404, content={"detail": "Media not found."})
             auth_header = request.headers.get("Authorization", "")
-            if (
-                not auth_header.startswith("Bearer ")
-                or auth_header.split(" ")[1] != api_key
-            ):
+            x_api_key = str(request.headers.get("x-api-key", "") or "")
+            bearer_token = ""
+            if auth_header.startswith("Bearer "):
+                bearer_token = auth_header.split(" ", 1)[1]
+            if bearer_token != api_key and x_api_key != api_key:
                 return JSONResponse(
                     status_code=401,
                     content={
@@ -304,6 +308,7 @@ async def api_key_auth(request: Request, call_next):
 
 # 挂载路由，前缀统一为 /v1
 app.include_router(chat_router, prefix="/v1")
+app.include_router(gemini_router, prefix="/v1beta")
 app.include_router(models_router, prefix="/v1")
 app.include_router(register_router, prefix="/v1")
 app.include_router(admin_router, prefix="/v1")

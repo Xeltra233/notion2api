@@ -6,6 +6,17 @@ MODEL_MAP: dict[str, str] = {
     "gpt-5.4": "oval-kumquat-medium",
 }
 
+MODEL_ALIASES: dict[str, str] = {
+    "claude-opus-4-6": "claude-opus4.6",
+    "claude-opus-4.6": "claude-opus4.6",
+    "claude-sonnet-4-6": "claude-sonnet4.6",
+    "claude-sonnet-4.6": "claude-sonnet4.6",
+    "gemini-3.1-pro": "gemini-3.1pro",
+    "gemini-3.1pro": "gemini-3.1pro",
+    "gpt-5.2": "gpt-5.2",
+    "gpt-5.4": "gpt-5.4",
+}
+
 SEARCH_MODEL_SUFFIX = "-search"
 
 NOTION_MODEL_REVERSE_MAP: dict[str, str] = {
@@ -52,11 +63,16 @@ def get_thread_type(model_name: str) -> str:
 
 
 def get_standard_model(model_name: str) -> str:
-    if model_name.endswith(SEARCH_MODEL_SUFFIX):
-        model_name = model_name[: -len(SEARCH_MODEL_SUFFIX)]
-    if model_name in MODEL_MAP:
-        return model_name
-    return NOTION_MODEL_REVERSE_MAP.get(model_name, DEFAULT_MODEL)
+    raw_name = str(model_name or "").strip()
+    search_suffix = raw_name.endswith(SEARCH_MODEL_SUFFIX)
+    if search_suffix:
+        raw_name = raw_name[: -len(SEARCH_MODEL_SUFFIX)]
+    normalized_name = raw_name.lower()
+    if normalized_name in MODEL_MAP:
+        return normalized_name
+    if normalized_name in MODEL_ALIASES:
+        return MODEL_ALIASES[normalized_name]
+    return NOTION_MODEL_REVERSE_MAP.get(normalized_name, DEFAULT_MODEL)
 
 
 def is_search_model(model_name: str) -> bool:

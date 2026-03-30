@@ -28,14 +28,17 @@ Notion2API 已经不只是一个简单的 `/v1/chat/completions` 代理壳。
 
 ## 功能总览
 
-### 1. OpenAI 兼容 API 面
+### 1. OpenAI / Anthropic / Gemini 兼容 API 面
 
 - `POST /v1/chat/completions`
 - `POST /v1/responses`
+- `POST /v1/messages`
+- `POST /v1beta/models/{model}:generateContent`
+- `POST /v1beta/models/{model}:streamGenerateContent`
 - `GET /v1/models`
 - 流式响应
 - 模型注册与兼容归一化
-- 对 OpenAI 风格请求体的校验与解析
+- 对 OpenAI / Anthropic / Gemini 风格请求体的校验与解析
 
 ### 2. 多模态与图片输入支持
 
@@ -166,10 +169,10 @@ API 同时支持纯文本消息，以及 OpenAI 风格的多模态 `content` 数
 
 ### 客户端 API 认证
 
-对于普通 `/v1/...` 客户端请求：
+对于普通 `/v1/...` 和 `/v1beta/...` 客户端请求：
 
 - 如果 Runtime 里的 `API_KEY` 为空，则全局 Bearer 校验关闭
-- 如果设置了 `API_KEY`，客户端必须发送 `Authorization: Bearer <your-key>`
+- 如果设置了 `API_KEY`，客户端必须发送 `Authorization: Bearer <your-key>`；其中 Anthropic Messages 兼容入口也支持 `x-api-key: <your-key>`
 - 这意味着部署时既可以走本地开放模式，也可以在后台 Runtime 中启用自定义 API key
 
 ### 后台认证
@@ -190,6 +193,25 @@ API 同时支持纯文本消息，以及 OpenAI 风格的多模态 `content` 数
 - 已登录后台的 admin session 可以直通聊天模块，方便运维排查
 
 这样可以把运维权限和普通聊天 / 模型访问权限分离开，也把后台密码和聊天访问密码拆开。
+
+---
+
+## API 格式兼容说明
+
+当前服务提供三种外部 API 入口，但它们共用同一条内部执行链路：
+
+- OpenAI：`/v1/chat/completions` 与 `/v1/responses`
+- Anthropic Messages：`/v1/messages`（需要请求头 `anthropic-version: 2023-06-01`）
+- Gemini GenerateContent：`/v1beta/models/{model}:generateContent`
+- Gemini StreamGenerateContent：`/v1beta/models/{model}:streamGenerateContent`
+
+需要注意：
+
+- 这是 wire-format compatibility，不是新增三个独立 provider
+- 模型名会先归一化到当前服务支持的 canonical model，再映射到内部 Notion model
+- 第一版主要覆盖：文本、当前已支持的图片 URL / data URL、多数基础采样参数、流式响应
+- 当前不会伪造 provider-native 的 tool use、Gemini safety feedback、或完整 reasoning 语义
+- 对无法忠实映射的字段，服务会选择明确拒绝或忽略，而不是静默假兼容
 
 ---
 
@@ -374,7 +396,16 @@ uvicorn app.server:app --host 0.0.0.0 --port 8000
 - `scripts/verify_refresh_probe_success.py`
 - `scripts/verify_workspace_probe_success.py`
 
+### OpenAI / Anthropic / Gemini 兼容层
+
+- `scripts/verify_api_compat_openai.py`
+- `scripts/verify_api_compat_anthropic_messages.py`
+- `scripts/verify_api_compat_gemini_generate_content.py`
+- `scripts/verify_api_compat_all.py`
+
 这些脚本的目的，是让关键后端行为不只依赖人工点页面验证。
+
+其中 `verify_api_compat_all.py` 会统一串跑 OpenAI、Anthropic Messages 与 Gemini GenerateContent 的 smoke 验证。
 
 ---
 

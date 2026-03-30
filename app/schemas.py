@@ -115,6 +115,34 @@ class ResponsesRequest(BaseModel):
     )
 
 
+class AnthropicMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: Union[str, List[Dict[str, Any]]]
+
+
+class AnthropicMessagesRequest(BaseModel):
+    model: str = Field(default="claude-opus4.6", description="Requested model.")
+    messages: List[AnthropicMessage]
+    system: Optional[Union[str, List[Dict[str, Any]]]] = Field(default=None)
+    stream: bool = Field(default=False)
+    temperature: Optional[float] = Field(default=None)
+    top_p: Optional[float] = Field(default=None)
+    max_tokens: Optional[int] = Field(default=None)
+    metadata: Optional[Dict[str, Any]] = Field(default=None)
+
+
+class GeminiContent(BaseModel):
+    role: Optional[str] = None
+    parts: List[Dict[str, Any]]
+
+
+class GeminiGenerateContentRequest(BaseModel):
+    contents: List[GeminiContent]
+    systemInstruction: Optional[GeminiContent] = Field(default=None)
+    generationConfig: Optional[Dict[str, Any]] = Field(default=None)
+    safetySettings: Optional[List[Dict[str, Any]]] = Field(default=None)
+
+
 # ================================
 # 非流式返回 Schema
 # ================================

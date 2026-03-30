@@ -28,14 +28,17 @@ If you only expect a single upstream proxy, the current product shape is much cl
 
 ## Feature overview
 
-### 1. OpenAI-compatible API surface
+### 1. OpenAI / Anthropic / Gemini compatibility surface
 
 - `POST /v1/chat/completions`
 - `POST /v1/responses`
+- `POST /v1/messages`
+- `POST /v1beta/models/{model}:generateContent`
+- `POST /v1beta/models/{model}:streamGenerateContent`
 - `GET /v1/models`
 - streaming responses
 - model registry and compatibility normalization
-- request validation for OpenAI-style payloads
+- request validation for OpenAI / Anthropic / Gemini-style payloads
 
 ### 2. Multimodal and image input support
 
@@ -167,10 +170,10 @@ Client-side API authentication and admin authentication are intentionally separa
 
 ### Client API auth
 
-For normal `/v1/...` client requests:
+For normal `/v1/...` and `/v1beta/...` client requests:
 
 - if `API_KEY` is blank in Runtime, global Bearer validation is disabled
-- if `API_KEY` is set, clients must send `Authorization: Bearer <your-key>`
+- if `API_KEY` is set, clients must send `Authorization: Bearer <your-key>`; the Anthropic Messages compatibility endpoint also accepts `x-api-key: <your-key>`
 - this allows deployments to run in either open local mode or enabling a custom API key from the Runtime panel
 
 ### Admin auth
@@ -191,6 +194,25 @@ For the Chat module and chat-facing APIs:
 - an already-authenticated admin session can bypass this for operator troubleshooting
 
 This keeps operator access separate from normal model/chat access, and also separates the admin password from the chat access password.
+
+---
+
+## API compatibility notes
+
+The service now exposes three external API styles while still sharing one internal execution path:
+
+- OpenAI: `/v1/chat/completions` and `/v1/responses`
+- Anthropic Messages: `/v1/messages` (requires the `anthropic-version: 2023-06-01` header)
+- Gemini GenerateContent: `/v1beta/models/{model}:generateContent`
+- Gemini StreamGenerateContent: `/v1beta/models/{model}:streamGenerateContent`
+
+Important boundaries:
+
+- this is wire-format compatibility, not three separate upstream providers
+- model names are normalized into the service's canonical model keys before mapping into internal Notion models
+- the first pass focuses on text, currently supported image URL / data URL inputs, common sampling parameters, and streaming
+- the service does not try to fake provider-native tool use, Gemini safety feedback, or full reasoning semantics
+- when a field cannot be mapped faithfully, the service should reject it clearly or ignore it intentionally rather than silently pretending full parity
 
 ---
 
@@ -273,6 +295,9 @@ uvicorn app.server:app --host 0.0.0.0 --port 8000
 - `GET /v1/models`
 - `POST /v1/chat/completions`
 - `POST /v1/responses`
+- `POST /v1/messages`
+- `POST /v1beta/models/{model}:generateContent`
+- `POST /v1beta/models/{model}:streamGenerateContent`
 
 ### Admin auth
 
@@ -375,7 +400,16 @@ They can be grouped roughly by responsibility:
 - `scripts/verify_refresh_probe_success.py`
 - `scripts/verify_workspace_probe_success.py`
 
+### OpenAI / Anthropic / Gemini compatibility
+
+- `scripts/verify_api_compat_openai.py`
+- `scripts/verify_api_compat_anthropic_messages.py`
+- `scripts/verify_api_compat_gemini_generate_content.py`
+- `scripts/verify_api_compat_all.py`
+
 These scripts are intended to validate backend behavior without relying only on manual UI checks.
+
+For the compatibility layer, `verify_api_compat_all.py` runs the OpenAI, Anthropic Messages, and Gemini GenerateContent smoke checks together.
 
 ---
 
@@ -385,10 +419,57 @@ These scripts are intended to validate backend behavior without relying only on 
 - safe views are the default for admin list/export flows
 - raw views and raw exports are explicit and auditable
 - `ADMIN_PASSWORD` is used as the admin login password and can also be changed later in the admin console
-- `API_KEY` can be left blank for local/open deployments or set to a custom value for Bearer protection
+- `API_KEY` can be left blank for local/open deployments or set to a custom value for Bearer protection; that protection now applies to both `/v1/...` and `/v1beta/...` compatibility endpoints
 - Chat password is a separate Runtime setting and is not the same thing as the admin password
 - `media_public_base_url` controls the public-facing base used when generating media links; if left blank, the service address is used
 - `media_storage_path` should usually point at a persistent volume so cached uploads survive restarts
 - if you deploy on platforms such as Zeabur, it is safer to mount media cache and runtime data onto the same persistent volume
 - workspace create currently exposes dry-run and diagnostic-oriented operator tooling
 - the project still supports chat usage, but operational administration is now a first-class part of the product
+
+### Compatibility request examples
+
+#### OpenAI
+
+```bash
+curl http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "claude-opus4.6",
+    "messages": [
+      {"role": "user", "content": "hello"}
+    ]
+  }'
+```
+
+#### Anthropic Messages
+
+```bash
+curl http://localhost:8000/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "x-api-key: YOUR_API_KEY" \
+  -d '{
+    "model": "claude-opus-4-6",
+    "messages": [
+      {"role": "user", "content": "hello"}
+    ]
+  }'
+```
+
+#### Gemini GenerateContent
+
+```bash
+curl http://localhost:8000/v1beta/models/gemini-3.1-pro:generateContent \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "contents": [
+      {
+        "role": "user",
+        "parts": [{"text": "hello"}]
+      }
+    ]
+  }'
+```

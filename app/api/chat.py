@@ -37,10 +37,12 @@ from app.model_registry import (
 from app.notion_client import NotionUpstreamError
 from app.usage import estimate_token_count
 from app.schemas import (
+    AnthropicMessagesRequest,
     ChatCompletionRequest,
     ChatCompletionResponse,
     ChatMessage,
     ChatMessageResponseChoice,
+    GeminiGenerateContentRequest,
     MediaUploadRequest,
     MediaUploadResponse,
     ResponsesRequest,
@@ -48,6 +50,9 @@ from app.schemas import (
 from app.api.admin import _ensure_chat_access
 
 router = APIRouter()
+gemini_router = APIRouter()
+
+ANTHROPIC_VERSION_HEADER = "2023-06-01"
 
 RECALL_INTENT_KEYWORDS = [
     "之前",
@@ -109,7 +114,9 @@ def _detect_image_mime_type(data: bytes, *, fallback: str = "") -> str:
     lowered_fallback = str(fallback or "").strip().lower()
     if lowered_fallback in _MEDIA_EXTENSION_BY_MIME:
         return lowered_fallback
-    raise HTTPException(status_code=400, detail="Only png, jpeg, webp, and gif images are supported.")
+    raise HTTPException(
+        status_code=400, detail="Only png, jpeg, webp, and gif images are supported."
+    )
 
 
 def _parse_data_image_url(url: str, *, param: str) -> tuple[str, bytes]:
@@ -154,7 +161,9 @@ def _parse_data_image_url(url: str, *, param: str) -> tuple[str, bytes]:
 
 def _sanitize_media_filename(file_name: str | None, *, mime_type: str) -> str:
     candidate = Path(str(file_name or "upload")).name
-    stem = re.sub(r"[^A-Za-z0-9._-]+", "-", Path(candidate).stem).strip("-._") or "image"
+    stem = (
+        re.sub(r"[^A-Za-z0-9._-]+", "-", Path(candidate).stem).strip("-._") or "image"
+    )
     extension = _guess_media_extension(mime_type)
     return f"{stem}{extension}"
 
@@ -167,10 +176,14 @@ def _build_media_public_url(request: Request, media_id: str) -> str:
     return str(request.url_for("get_media_file", media_id=media_id))
 
 
-def _store_media_data(request: Request, *, data_url: str, file_name: str | None = None) -> dict[str, Any]:
+def _store_media_data(
+    request: Request, *, data_url: str, file_name: str | None = None
+) -> dict[str, Any]:
     mime_type, decoded = _parse_data_image_url(data_url, param="data_url")
     media_dir = _resolve_media_storage_dir()
-    media_id = f"{int(time.time())}-{secrets.token_hex(8)}{_guess_media_extension(mime_type)}"
+    media_id = (
+        f"{int(time.time())}-{secrets.token_hex(8)}{_guess_media_extension(mime_type)}"
+    )
     media_path = media_dir / media_id
     media_path.write_bytes(decoded)
     safe_file_name = _sanitize_media_filename(file_name, mime_type=mime_type)
@@ -420,6 +433,242 @@ def _chat_request_from_responses(req_body: ResponsesRequest) -> ChatCompletionRe
     )
 
 
+def _normalize_anthropic_content_blocks(
+    content: Any, *, param_prefix: str
+) -> List[Dict[str, Any]]:
+    if isinstance(content, str):
+        text = str(content)
+        if not text.strip():
+            raise HTTPException(
+                status_code=400, detail=f"{param_prefix} cannot be empty."
+            )
+        return [{"type": "text", "text": text}]
+    if not isinstance(content, list) or not content:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{param_prefix} must be a non-empty string or content block array.",
+        )
+
+    normalized: List[Dict[str, Any]] = []
+    for idx, block in enumerate(content):
+        if hasattr(block, "model_dump"):
+            block = block.model_dump()
+        elif hasattr(block, "dict"):
+            block = block.dict()
+        if not isinstance(block, dict):
+            raise HTTPException(
+                status_code=400, detail=f"{param_prefix}[{idx}] must be an object."
+            )
+        block_type = str(block.get("type", "") or "").strip().lower()
+        if block_type == "text":
+            text = str(block.get("text", "") or "")
+            if not text.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{param_prefix}[{idx}].text cannot be empty.",
+                )
+            normalized.append({"type": "text", "text": text})
+            continue
+        if block_type == "image":
+            source = block.get("source")
+            if not isinstance(source, dict):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{param_prefix}[{idx}].source must be an object.",
+                )
+            source_type = str(source.get("type", "") or "").strip().lower()
+            if source_type == "url":
+                url = str(source.get("url", "") or "").strip()
+                _validate_media_url(url, param=f"{param_prefix}[{idx}].source.url")
+                normalized.append({"type": "image_url", "image_url": {"url": url}})
+                continue
+            if source_type == "base64":
+                media_type = (
+                    str(source.get("media_type", "") or "image/png").strip().lower()
+                )
+                data = str(source.get("data", "") or "").strip()
+                if not data:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"{param_prefix}[{idx}].source.data cannot be empty.",
+                    )
+                normalized.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{media_type};base64,{data}"},
+                    }
+                )
+                continue
+            raise HTTPException(
+                status_code=400,
+                detail=f"{param_prefix}[{idx}].source.type '{source_type}' is not supported.",
+            )
+        raise HTTPException(
+            status_code=400,
+            detail=f"{param_prefix}[{idx}].type '{block_type}' is not supported.",
+        )
+    return normalized
+
+
+def _chat_request_from_anthropic(
+    req_body: AnthropicMessagesRequest,
+) -> ChatCompletionRequest:
+    if not req_body.messages:
+        raise HTTPException(
+            status_code=400, detail="messages must contain at least one message."
+        )
+
+    normalized_messages: List[ChatMessage] = []
+    if req_body.system is not None:
+        system_blocks = _normalize_anthropic_content_blocks(
+            req_body.system, param_prefix="system"
+        )
+        normalized_messages.append(ChatMessage(role="system", content=system_blocks))
+
+    for idx, message in enumerate(req_body.messages):
+        normalized_messages.append(
+            ChatMessage(
+                role=message.role,
+                content=_normalize_anthropic_content_blocks(
+                    message.content, param_prefix=f"messages[{idx}].content"
+                ),
+            )
+        )
+
+    return ChatCompletionRequest(
+        model=req_body.model,
+        messages=_normalize_request_messages(normalized_messages),
+        stream=req_body.stream,
+        temperature=req_body.temperature,
+        top_p=req_body.top_p,
+        max_tokens=req_body.max_tokens,
+        metadata=req_body.metadata,
+        conversation_id=None,
+    )
+
+
+def _normalize_gemini_parts(parts: Any, *, param_prefix: str) -> List[Dict[str, Any]]:
+    if not isinstance(parts, list) or not parts:
+        raise HTTPException(
+            status_code=400, detail=f"{param_prefix} must be a non-empty parts array."
+        )
+
+    normalized: List[Dict[str, Any]] = []
+    for idx, part in enumerate(parts):
+        if hasattr(part, "model_dump"):
+            part = part.model_dump()
+        elif hasattr(part, "dict"):
+            part = part.dict()
+        if not isinstance(part, dict):
+            raise HTTPException(
+                status_code=400, detail=f"{param_prefix}[{idx}] must be an object."
+            )
+        if "text" in part:
+            text = str(part.get("text", "") or "")
+            if not text.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{param_prefix}[{idx}].text cannot be empty.",
+                )
+            normalized.append({"type": "text", "text": text})
+            continue
+        inline_data = part.get("inline_data") or part.get("inlineData")
+        if isinstance(inline_data, dict):
+            mime_type = (
+                str(
+                    inline_data.get("mime_type")
+                    or inline_data.get("mimeType")
+                    or "image/png"
+                )
+                .strip()
+                .lower()
+            )
+            data = str(inline_data.get("data", "") or "").strip()
+            if not data:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{param_prefix}[{idx}].inline_data.data cannot be empty.",
+                )
+            normalized.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime_type};base64,{data}"},
+                }
+            )
+            continue
+        file_data = part.get("file_data") or part.get("fileData")
+        if isinstance(file_data, dict):
+            url = str(
+                file_data.get("file_uri") or file_data.get("fileUri") or ""
+            ).strip()
+            if not url:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{param_prefix}[{idx}].file_data.file_uri cannot be empty.",
+                )
+            _validate_media_url(url, param=f"{param_prefix}[{idx}].file_data.file_uri")
+            normalized.append({"type": "image_url", "image_url": {"url": url}})
+            continue
+        raise HTTPException(
+            status_code=400,
+            detail=f"{param_prefix}[{idx}] only supports text, inline_data, or file_data parts.",
+        )
+    return normalized
+
+
+def _chat_request_from_gemini(
+    model: str, req_body: GeminiGenerateContentRequest, *, stream: bool
+) -> ChatCompletionRequest:
+    if req_body.safetySettings:
+        raise HTTPException(
+            status_code=400,
+            detail="Gemini safetySettings are not supported by this compatibility endpoint.",
+        )
+
+    generation_config = req_body.generationConfig or {}
+    normalized_messages: List[ChatMessage] = []
+
+    if req_body.systemInstruction is not None:
+        normalized_messages.append(
+            ChatMessage(
+                role="system",
+                content=_normalize_gemini_parts(
+                    req_body.systemInstruction.parts,
+                    param_prefix="systemInstruction.parts",
+                ),
+            )
+        )
+
+    for idx, content in enumerate(req_body.contents):
+        role = str(content.role or "user").strip().lower() or "user"
+        mapped_role = "assistant" if role == "model" else role
+        if mapped_role not in {"user", "assistant"}:
+            raise HTTPException(
+                status_code=400,
+                detail=f"contents[{idx}].role '{role}' is not supported.",
+            )
+        normalized_messages.append(
+            ChatMessage(
+                role=mapped_role,
+                content=_normalize_gemini_parts(
+                    content.parts, param_prefix=f"contents[{idx}].parts"
+                ),
+            )
+        )
+
+    return ChatCompletionRequest(
+        model=model,
+        messages=_normalize_request_messages(normalized_messages),
+        stream=stream,
+        temperature=generation_config.get("temperature"),
+        top_p=generation_config.get("topP", generation_config.get("top_p")),
+        max_tokens=generation_config.get(
+            "maxOutputTokens", generation_config.get("max_output_tokens")
+        ),
+        conversation_id=None,
+    )
+
+
 def _build_responses_output_text(output_text: str) -> List[Dict[str, Any]]:
     return [{"type": "output_text", "text": output_text, "annotations": []}]
 
@@ -458,6 +707,383 @@ def _build_responses_response(
 
 def _build_responses_stream_event(event_type: str, data: Dict[str, Any]) -> str:
     return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _extract_response_text(result: ChatCompletionResponse) -> str:
+    assistant_message = result.choices[0].message if result.choices else None
+    if assistant_message is None:
+        return ""
+    return content_to_text(assistant_message.content)
+
+
+def _normalize_search_metadata(search_metadata: Any) -> dict[str, list[str]]:
+    metadata = search_metadata if isinstance(search_metadata, dict) else {}
+    queries = [
+        str(item).strip() for item in metadata.get("queries", []) if str(item).strip()
+    ]
+    sources = [
+        str(item).strip() for item in metadata.get("sources", []) if str(item).strip()
+    ]
+    return {"queries": queries, "sources": sources}
+
+
+def _build_anthropic_citations(
+    search_metadata: Any, *, cited_text: str
+) -> list[dict[str, Any]]:
+    normalized = _normalize_search_metadata(search_metadata)
+    citations = []
+    for source in normalized["sources"]:
+        citations.append(
+            {
+                "type": "web_search_result_location",
+                "url": source,
+                "title": source,
+                "cited_text": cited_text,
+            }
+        )
+    return citations
+
+
+def _build_gemini_grounding_metadata(search_metadata: Any) -> dict[str, Any] | None:
+    normalized = _normalize_search_metadata(search_metadata)
+    if not normalized["queries"] and not normalized["sources"]:
+        return None
+    metadata: dict[str, Any] = {}
+    if normalized["queries"]:
+        metadata["webSearchQueries"] = normalized["queries"]
+    if normalized["sources"]:
+        metadata["groundingChunks"] = [
+            {"web": {"uri": source, "title": source}}
+            for source in normalized["sources"]
+        ]
+    return metadata
+
+
+def _extract_stream_search_metadata(payload: dict[str, Any]) -> dict[str, Any] | None:
+    if str(payload.get("type", "") or "") != "search_metadata":
+        return None
+    searches = payload.get("searches")
+    if not isinstance(searches, dict):
+        return None
+    return searches
+
+
+def _build_gemini_stream_chunk(
+    *,
+    model: str,
+    text: str,
+    finish_reason: str | None,
+    grounding_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    candidate: dict[str, Any] = {
+        "content": {
+            "role": "model",
+            "parts": [{"text": text}],
+        },
+        "finishReason": finish_reason,
+        "index": 0,
+    }
+    if grounding_metadata:
+        candidate["groundingMetadata"] = grounding_metadata
+    return {
+        "candidates": [candidate],
+        "modelVersion": model,
+    }
+
+
+def _build_anthropic_response(result: ChatCompletionResponse) -> Dict[str, Any]:
+    output_text = _extract_response_text(result)
+    usage = result.usage or {}
+    text_block: dict[str, Any] = {"type": "text", "text": output_text}
+    citations = _build_anthropic_citations(
+        result.search_metadata, cited_text=output_text
+    )
+    if citations:
+        text_block["citations"] = citations
+    return {
+        "id": result.id,
+        "type": "message",
+        "role": "assistant",
+        "model": result.model,
+        "content": [text_block],
+        "stop_reason": "end_turn",
+        "stop_sequence": None,
+        "usage": {
+            "input_tokens": int(usage.get("prompt_tokens") or 0),
+            "output_tokens": int(usage.get("completion_tokens") or 0),
+        },
+    }
+
+
+def _build_gemini_response(result: ChatCompletionResponse) -> Dict[str, Any]:
+    output_text = _extract_response_text(result)
+    usage = result.usage or {}
+    candidate: dict[str, Any] = {
+        "content": {"role": "model", "parts": [{"text": output_text}]},
+        "finishReason": "STOP",
+        "index": 0,
+    }
+    grounding_metadata = _build_gemini_grounding_metadata(result.search_metadata)
+    if grounding_metadata:
+        candidate["groundingMetadata"] = grounding_metadata
+    return {
+        "candidates": [candidate],
+        "usageMetadata": {
+            "promptTokenCount": int(usage.get("prompt_tokens") or 0),
+            "candidatesTokenCount": int(usage.get("completion_tokens") or 0),
+            "totalTokenCount": int(usage.get("total_tokens") or 0),
+        },
+        "modelVersion": result.model,
+    }
+
+
+def _build_anthropic_stream_event(event_type: str, data: Dict[str, Any]) -> str:
+    return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _build_anthropic_error_response(
+    status_code: int, message: str, *, error_type: str = "invalid_request_error"
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "type": "error",
+            "error": {
+                "type": error_type,
+                "message": str(message),
+            },
+        },
+    )
+
+
+def _build_gemini_error_response(
+    status_code: int, message: str, *, error_status: str = "INVALID_ARGUMENT"
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "error": {
+                "code": status_code,
+                "message": str(message),
+                "status": error_status,
+            }
+        },
+    )
+
+
+def _wrap_chat_stream_as_anthropic_stream(
+    chat_stream: StreamingResponse,
+    *,
+    model: str,
+) -> StreamingResponse:
+    message_id = f"msg_{uuid.uuid4().hex}"
+
+    async def event_generator():
+        yield _build_anthropic_stream_event(
+            "message_start",
+            {
+                "type": "message_start",
+                "message": {
+                    "id": message_id,
+                    "type": "message",
+                    "role": "assistant",
+                    "model": model,
+                    "content": [],
+                    "stop_reason": None,
+                    "stop_sequence": None,
+                    "usage": {"input_tokens": 0, "output_tokens": 0},
+                },
+            },
+        )
+        yield _build_anthropic_stream_event(
+            "content_block_start",
+            {
+                "type": "content_block_start",
+                "index": 0,
+                "content_block": {"type": "text", "text": ""},
+            },
+        )
+
+        aggregate_text = ""
+        async for chunk in chat_stream.body_iterator:
+            text_chunk = (
+                chunk.decode("utf-8") if isinstance(chunk, bytes) else str(chunk)
+            )
+            for frame in text_chunk.split("\n\n"):
+                frame = frame.strip()
+                if not frame.startswith("data:"):
+                    continue
+                payload_text = frame[5:].strip()
+                if payload_text == "[DONE]":
+                    continue
+                try:
+                    payload = json.loads(payload_text)
+                except json.JSONDecodeError:
+                    continue
+                search_metadata = _extract_stream_search_metadata(payload)
+                if search_metadata is not None:
+                    citations = _build_anthropic_citations(
+                        search_metadata,
+                        cited_text=aggregate_text,
+                    )
+                    for citation in citations:
+                        yield _build_anthropic_stream_event(
+                            "content_block_delta",
+                            {
+                                "type": "content_block_delta",
+                                "index": 0,
+                                "delta": {
+                                    "type": "citations_delta",
+                                    "citation": citation,
+                                },
+                            },
+                        )
+                    continue
+                choices = payload.get("choices") or []
+                if not choices:
+                    continue
+                delta = choices[0].get("delta") or {}
+                content_delta = str(delta.get("content", "") or "")
+                if not content_delta:
+                    continue
+                aggregate_text += content_delta
+                yield _build_anthropic_stream_event(
+                    "content_block_delta",
+                    {
+                        "type": "content_block_delta",
+                        "index": 0,
+                        "delta": {"type": "text_delta", "text": content_delta},
+                    },
+                )
+
+        yield _build_anthropic_stream_event(
+            "content_block_stop",
+            {"type": "content_block_stop", "index": 0},
+        )
+        yield _build_anthropic_stream_event(
+            "message_delta",
+            {
+                "type": "message_delta",
+                "delta": {"stop_reason": "end_turn", "stop_sequence": None},
+                "usage": {"output_tokens": 0},
+            },
+        )
+        yield _build_anthropic_stream_event(
+            "message_stop",
+            {"type": "message_stop"},
+        )
+
+    headers = dict(chat_stream.headers)
+    headers["Cache-Control"] = "no-cache"
+    headers["Connection"] = "keep-alive"
+    headers["X-Accel-Buffering"] = "no"
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers=headers,
+    )
+
+
+def _wrap_chat_stream_as_gemini_stream(
+    chat_stream: StreamingResponse,
+    *,
+    model: str,
+) -> StreamingResponse:
+    async def event_generator():
+        aggregate_text = ""
+        grounding_metadata: dict[str, Any] | None = None
+        async for chunk in chat_stream.body_iterator:
+            text_chunk = (
+                chunk.decode("utf-8") if isinstance(chunk, bytes) else str(chunk)
+            )
+            for frame in text_chunk.split("\n\n"):
+                frame = frame.strip()
+                if not frame.startswith("data:"):
+                    continue
+                payload_text = frame[5:].strip()
+                if payload_text == "[DONE]":
+                    if aggregate_text:
+                        yield (
+                            json.dumps(
+                                _build_gemini_stream_chunk(
+                                    model=model,
+                                    text=aggregate_text,
+                                    finish_reason="STOP",
+                                    grounding_metadata=grounding_metadata,
+                                ),
+                                ensure_ascii=False,
+                            )
+                            + "\n"
+                        )
+                    continue
+                try:
+                    payload = json.loads(payload_text)
+                except json.JSONDecodeError:
+                    continue
+                search_metadata = _extract_stream_search_metadata(payload)
+                if search_metadata is not None:
+                    grounding_metadata = _build_gemini_grounding_metadata(
+                        search_metadata
+                    )
+                    if grounding_metadata:
+                        yield (
+                            json.dumps(
+                                _build_gemini_stream_chunk(
+                                    model=model,
+                                    text=aggregate_text,
+                                    finish_reason=None,
+                                    grounding_metadata=grounding_metadata,
+                                ),
+                                ensure_ascii=False,
+                            )
+                            + "\n"
+                        )
+                    continue
+                choices = payload.get("choices") or []
+                if not choices:
+                    continue
+                choice = choices[0] or {}
+                delta = choice.get("delta") or {}
+                content_delta = str(delta.get("content", "") or "")
+                finish_reason = choice.get("finish_reason")
+                if content_delta:
+                    aggregate_text += content_delta
+                    yield (
+                        json.dumps(
+                            _build_gemini_stream_chunk(
+                                model=model,
+                                text=aggregate_text,
+                                finish_reason=None,
+                                grounding_metadata=grounding_metadata,
+                            ),
+                            ensure_ascii=False,
+                        )
+                        + "\n"
+                    )
+                elif finish_reason:
+                    yield (
+                        json.dumps(
+                            _build_gemini_stream_chunk(
+                                model=model,
+                                text=aggregate_text,
+                                finish_reason=str(finish_reason).upper(),
+                                grounding_metadata=grounding_metadata,
+                            ),
+                            ensure_ascii=False,
+                        )
+                        + "\n"
+                    )
+
+    headers = dict(chat_stream.headers)
+    headers.pop("content-type", None)
+    headers["Cache-Control"] = "no-cache"
+    headers["Connection"] = "keep-alive"
+    headers["X-Accel-Buffering"] = "no"
+    return StreamingResponse(
+        event_generator(),
+        media_type="application/x-ndjson",
+        headers=headers,
+    )
 
 
 def _wrap_chat_stream_as_responses_stream(
@@ -1334,7 +1960,9 @@ def _build_usage_payload(
     req_body: ChatCompletionRequest,
     output_text: str,
 ) -> dict[str, int]:
-    prompt_text = "\n".join(content_to_text(message.content) for message in req_body.messages)
+    prompt_text = "\n".join(
+        content_to_text(message.content) for message in req_body.messages
+    )
     prompt_tokens = estimate_token_count(prompt_text)
     completion_tokens = estimate_token_count(output_text)
     return {
@@ -2575,15 +3203,14 @@ async def create_responses(
     )
 
     if isinstance(result, StreamingResponse):
-        response_id = response.headers.get("X-Response-Id") or f"resp_{uuid.uuid4().hex}"
+        response_id = (
+            response.headers.get("X-Response-Id") or f"resp_{uuid.uuid4().hex}"
+        )
         response.headers["X-Response-Id"] = response_id
         return _wrap_chat_stream_as_responses_stream(result, model=chat_req.model)
 
     if isinstance(result, ChatCompletionResponse):
-        assistant_message = result.choices[0].message if result.choices else None
-        output_text = ""
-        if assistant_message is not None:
-            output_text = content_to_text(assistant_message.content)
+        output_text = _extract_response_text(result)
         _record_usage_event(
             request,
             request_id=f"resp_{result.id}",
@@ -2600,6 +3227,133 @@ async def create_responses(
     raise HTTPException(
         status_code=503, detail="Service unavailable: all upstream retries exhausted."
     )
+
+
+@router.post("/messages", tags=["chat"])
+async def create_anthropic_messages(
+    request: Request,
+    req_body: AnthropicMessagesRequest,
+    background_tasks: BackgroundTasks,
+    response: Response,
+    x_chat_session: str | None = Header(default=None, alias="X-Chat-Session"),
+    anthropic_version: str | None = Header(default=None, alias="anthropic-version"),
+):
+    try:
+        if anthropic_version is None:
+            raise HTTPException(
+                status_code=400,
+                detail="anthropic-version header is required for Anthropic Messages compatibility.",
+            )
+        if anthropic_version != ANTHROPIC_VERSION_HEADER:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Unsupported anthropic-version '{anthropic_version}'. "
+                    f"Expected '{ANTHROPIC_VERSION_HEADER}'."
+                ),
+            )
+        chat_req = _chat_request_from_anthropic(req_body)
+        result = await create_chat_completion(
+            request=request,
+            req_body=chat_req,
+            background_tasks=background_tasks,
+            response=response,
+            x_chat_session=x_chat_session,
+        )
+
+        if isinstance(result, StreamingResponse):
+            return _wrap_chat_stream_as_anthropic_stream(result, model=chat_req.model)
+
+        if isinstance(result, ChatCompletionResponse):
+            _record_usage_event(
+                request,
+                request_id=f"anthropic_{result.id}",
+                request_type="anthropic.messages",
+                stream=False,
+                model=result.model,
+                usage=result.usage,
+                conversation_id=response.headers.get("X-Conversation-Id") or "",
+            )
+            return _build_anthropic_response(result)
+
+        return result
+    except HTTPException as exc:
+        error_type = "invalid_request_error" if exc.status_code < 500 else "api_error"
+        return _build_anthropic_error_response(
+            exc.status_code, exc.detail, error_type=error_type
+        )
+
+
+@gemini_router.post("/models/{model}:generateContent", tags=["chat"])
+async def generate_gemini_content(
+    model: str,
+    request: Request,
+    req_body: GeminiGenerateContentRequest,
+    background_tasks: BackgroundTasks,
+    response: Response,
+    x_chat_session: str | None = Header(default=None, alias="X-Chat-Session"),
+):
+    try:
+        chat_req = _chat_request_from_gemini(model, req_body, stream=False)
+        result = await create_chat_completion(
+            request=request,
+            req_body=chat_req,
+            background_tasks=background_tasks,
+            response=response,
+            x_chat_session=x_chat_session,
+        )
+
+        if isinstance(result, ChatCompletionResponse):
+            _record_usage_event(
+                request,
+                request_id=f"gemini_{result.id}",
+                request_type="gemini.generateContent",
+                stream=False,
+                model=result.model,
+                usage=result.usage,
+                conversation_id=response.headers.get("X-Conversation-Id") or "",
+            )
+            return _build_gemini_response(result)
+
+        return result
+    except HTTPException as exc:
+        error_status = "INVALID_ARGUMENT" if exc.status_code < 500 else "INTERNAL"
+        return _build_gemini_error_response(
+            exc.status_code, exc.detail, error_status=error_status
+        )
+
+
+@gemini_router.post("/models/{model}:streamGenerateContent", tags=["chat"])
+async def stream_gemini_content(
+    model: str,
+    request: Request,
+    req_body: GeminiGenerateContentRequest,
+    background_tasks: BackgroundTasks,
+    response: Response,
+    x_chat_session: str | None = Header(default=None, alias="X-Chat-Session"),
+):
+    try:
+        chat_req = _chat_request_from_gemini(model, req_body, stream=True)
+        result = await create_chat_completion(
+            request=request,
+            req_body=chat_req,
+            background_tasks=background_tasks,
+            response=response,
+            x_chat_session=x_chat_session,
+        )
+
+        if isinstance(result, StreamingResponse):
+            return _wrap_chat_stream_as_gemini_stream(result, model=chat_req.model)
+
+        if isinstance(result, ChatCompletionResponse):
+            return JSONResponse(content=_build_gemini_response(result))
+
+        return result
+    except HTTPException as exc:
+        error_status = "INVALID_ARGUMENT" if exc.status_code < 500 else "INTERNAL"
+        return _build_gemini_error_response(
+            exc.status_code, exc.detail, error_status=error_status
+        )
 
 
 @router.delete("/conversations/{conversation_id}", tags=["chat"])
