@@ -1,14 +1,19 @@
 import asyncio
 import base64
 from difflib import SequenceMatcher
+import imghdr
 import json
+import mimetypes
 import re
+import secrets
 import time
 import uuid
+from pathlib import Path
 from typing import Any, Dict, Generator, Iterable, List, Tuple
+from urllib.parse import urljoin
 
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request, Response
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from app.conversation import (
     build_lite_transcript,
@@ -17,7 +22,11 @@ from app.conversation import (
     compress_sliding_window_round,
     content_to_text,
 )
-from app.config import is_lite_mode
+from app.config import (
+    get_media_public_base_url,
+    get_media_storage_path,
+    is_lite_mode,
+)
 from app.limiter import limiter
 from app.logger import logger
 from app.model_registry import (
@@ -32,6 +41,8 @@ from app.schemas import (
     ChatCompletionResponse,
     ChatMessage,
     ChatMessageResponseChoice,
+    MediaUploadRequest,
+    MediaUploadResponse,
     ResponsesRequest,
 )
 from app.api.admin import _ensure_chat_access
@@ -65,6 +76,112 @@ ALLOWED_DATA_IMAGE_MIME_PREFIXES = (
     "data:image/webp;base64,",
     "data:image/gif;base64,",
 )
+_MEDIA_EXTENSION_BY_MIME = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
+
+
+def _resolve_media_storage_dir() -> Path:
+    return get_media_storage_path()
+
+
+def _guess_media_extension(mime_type: str) -> str:
+    normalized = str(mime_type or "").strip().lower()
+    if normalized in _MEDIA_EXTENSION_BY_MIME:
+        return _MEDIA_EXTENSION_BY_MIME[normalized]
+    guessed = mimetypes.guess_extension(normalized)
+    return guessed or ".bin"
+
+
+def _detect_image_mime_type(data: bytes, *, fallback: str = "") -> str:
+    kind = imghdr.what(None, h=data)
+    if kind == "jpeg":
+        return "image/jpeg"
+    if kind == "png":
+        return "image/png"
+    if kind == "webp":
+        return "image/webp"
+    if kind == "gif":
+        return "image/gif"
+    lowered_fallback = str(fallback or "").strip().lower()
+    if lowered_fallback in _MEDIA_EXTENSION_BY_MIME:
+        return lowered_fallback
+    raise HTTPException(status_code=400, detail="Only png, jpeg, webp, and gif images are supported.")
+
+
+def _parse_data_image_url(url: str, *, param: str) -> tuple[str, bytes]:
+    lowered = url.lower()
+    if not lowered.startswith(ALLOWED_DATA_IMAGE_MIME_PREFIXES):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{param} only supports base64 data URIs for png, jpeg, jpg, webp, or gif images."
+            ),
+        )
+    try:
+        header, encoded = url.split(",", 1)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{param} is not a valid base64 data URI.",
+        ) from exc
+    try:
+        decoded = base64.b64decode(encoded, validate=True)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{param} contains invalid base64 image data.",
+        ) from exc
+    if not decoded:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{param} image payload cannot be empty.",
+        )
+    if len(decoded) > MAX_DATA_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{param} image payload is too large. Limit is {MAX_DATA_IMAGE_BYTES // (1024 * 1024)}MB after decoding."
+            ),
+        )
+    declared_mime = header.split(";", 1)[0].split(":", 1)[-1].strip().lower()
+    mime_type = _detect_image_mime_type(decoded, fallback=declared_mime)
+    return mime_type, decoded
+
+
+def _sanitize_media_filename(file_name: str | None, *, mime_type: str) -> str:
+    candidate = Path(str(file_name or "upload")).name
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "-", Path(candidate).stem).strip("-._") or "image"
+    extension = _guess_media_extension(mime_type)
+    return f"{stem}{extension}"
+
+
+def _build_media_public_url(request: Request, media_id: str) -> str:
+    public_base = get_media_public_base_url()
+    if public_base:
+        normalized_base = public_base.rstrip("/") + "/"
+        return urljoin(normalized_base, media_id)
+    return str(request.url_for("get_media_file", media_id=media_id))
+
+
+def _store_media_data(request: Request, *, data_url: str, file_name: str | None = None) -> dict[str, Any]:
+    mime_type, decoded = _parse_data_image_url(data_url, param="data_url")
+    media_dir = _resolve_media_storage_dir()
+    media_id = f"{int(time.time())}-{secrets.token_hex(8)}{_guess_media_extension(mime_type)}"
+    media_path = media_dir / media_id
+    media_path.write_bytes(decoded)
+    safe_file_name = _sanitize_media_filename(file_name, mime_type=mime_type)
+    return {
+        "media_id": media_id,
+        "file_name": safe_file_name,
+        "mime_type": mime_type,
+        "size_bytes": len(decoded),
+        "path": media_path,
+        "url": _build_media_public_url(request, media_id),
+    }
 
 
 def _wants_search_tools(tools: Any) -> bool:
@@ -148,44 +265,7 @@ def _validate_media_url(url: str, *, param: str) -> None:
 
 
 def _validate_data_image_url(url: str, *, param: str) -> None:
-    lowered = url.lower()
-    if not lowered.startswith(ALLOWED_DATA_IMAGE_MIME_PREFIXES):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"{param} only supports base64 data URIs for png, jpeg, jpg, webp, or gif images."
-            ),
-        )
-
-    try:
-        encoded = url.split(",", 1)[1]
-    except IndexError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=f"{param} is not a valid base64 data URI.",
-        ) from exc
-
-    try:
-        decoded = base64.b64decode(encoded, validate=True)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=f"{param} contains invalid base64 image data.",
-        ) from exc
-
-    if not decoded:
-        raise HTTPException(
-            status_code=400,
-            detail=f"{param} image payload cannot be empty.",
-        )
-
-    if len(decoded) > MAX_DATA_IMAGE_BYTES:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"{param} image payload is too large. Limit is {MAX_DATA_IMAGE_BYTES // (1024 * 1024)}MB after decoding."
-            ),
-        )
+    _parse_data_image_url(url, param=param)
 
 
 def _normalize_message_content(content: Any, *, role: str, param_prefix: str) -> Any:
@@ -1814,6 +1894,39 @@ async def _handle_standard_request(
     raise HTTPException(
         status_code=503, detail="Service unavailable: all upstream retries exhausted."
     )
+
+
+@router.post("/media/upload", tags=["chat"], response_model=MediaUploadResponse)
+async def upload_media(
+    request: Request,
+    payload: MediaUploadRequest,
+    x_chat_session: str | None = Header(default=None, alias="X-Chat-Session"),
+):
+    _ensure_chat_access(request, x_chat_session)
+    saved = _store_media_data(
+        request,
+        data_url=str(payload.data_url or ""),
+        file_name=payload.file_name,
+    )
+    return MediaUploadResponse(
+        url=saved["url"],
+        media_id=saved["media_id"],
+        file_name=saved["file_name"],
+        mime_type=saved["mime_type"],
+        size_bytes=int(saved["size_bytes"]),
+    )
+
+
+@router.get("/media/{media_id}", tags=["chat"], name="get_media_file")
+async def get_media_file(media_id: str):
+    safe_name = Path(str(media_id or "")).name
+    if safe_name != media_id or safe_name in {"", ".", ".."}:
+        raise HTTPException(status_code=404, detail="Media not found.")
+    media_path = _resolve_media_storage_dir() / safe_name
+    if not media_path.exists() or not media_path.is_file():
+        raise HTTPException(status_code=404, detail="Media not found.")
+    mime_type, _ = mimetypes.guess_type(media_path.name)
+    return FileResponse(media_path, media_type=mime_type or "application/octet-stream")
 
 
 @router.post("/chat/completions", tags=["chat"])

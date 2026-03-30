@@ -12,9 +12,12 @@ if str(ROOT) not in sys.path:
 os.environ.setdefault("API_KEY", "test-server-key")
 os.environ.setdefault("ADMIN_PASSWORD", "test-admin-password")
 
+from app.config import update_admin_credentials  # noqa: E402
 from app.server import app  # noqa: E402
 from scripts.admin_session_test_utils import build_admin_session_headers  # noqa: E402
 
+
+update_admin_credentials(username="admin", password="test-admin-password")
 
 with TestClient(app) as client:
     headers = build_admin_session_headers(client)

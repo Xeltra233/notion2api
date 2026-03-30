@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 os.environ.setdefault("ADMIN_PASSWORD", "test-admin-password")
 
-from app.config import get_config_store
+from app.config import get_config_store, update_admin_credentials
 from app.server import app
 from scripts.admin_session_test_utils import build_admin_session_headers
 
@@ -50,6 +50,7 @@ class RefreshFormalHandler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
+    update_admin_credentials(username="admin", password="test-admin-password")
     store = get_config_store()
     original_config = copy.deepcopy(store.get_config())
     original_accounts = copy.deepcopy(store.get_accounts())

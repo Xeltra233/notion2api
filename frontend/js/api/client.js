@@ -20,19 +20,20 @@ window.NotionAI.API.Client = {
         const apiKey = window.NotionAI.Core.State.get('apiKey');
         const adminSessionToken = window.NotionAI.Core.State.get('adminSessionToken');
         const chatSessionToken = window.NotionAI.Core.State.get('chatSessionToken');
+        const { headers: extraHeaders = {}, ...restOptions } = options || {};
 
         const response = await fetch(`${baseUrl}${endpoint}`, {
             method: 'POST',
+            ...restOptions,
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${apiKey}`,
                 'X-Client-Type': window.NotionAI.Core.Constants.CLIENT_TYPE,
                 ...(adminSessionToken ? { 'X-Admin-Session': adminSessionToken } : {}),
                 ...(chatSessionToken ? { 'X-Chat-Session': chatSessionToken } : {}),
-                ...options.headers
+                ...extraHeaders
             },
-            body: JSON.stringify(data),
-            ...options
+            body: JSON.stringify(data)
         });
 
         return response;
@@ -67,17 +68,18 @@ window.NotionAI.API.Client = {
         const apiKey = window.NotionAI.Core.State.get('apiKey');
         const adminSessionToken = window.NotionAI.Core.State.get('adminSessionToken');
         const chatSessionToken = window.NotionAI.Core.State.get('chatSessionToken');
+        const { headers: extraHeaders = {}, ...restOptions } = options || {};
 
         const response = await fetch(`${baseUrl}${endpoint}`, {
             method: 'GET',
+            ...restOptions,
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
                 'X-Client-Type': window.NotionAI.Core.Constants.CLIENT_TYPE,
                 ...(adminSessionToken ? { 'X-Admin-Session': adminSessionToken } : {}),
                 ...(chatSessionToken ? { 'X-Chat-Session': chatSessionToken } : {}),
-                ...options.headers
-            },
-            ...options
+                ...extraHeaders
+            }
         });
 
         return response;
@@ -88,19 +90,20 @@ window.NotionAI.API.Client = {
         const apiKey = window.NotionAI.Core.State.get('apiKey');
         const adminSessionToken = window.NotionAI.Core.State.get('adminSessionToken');
         const chatSessionToken = window.NotionAI.Core.State.get('chatSessionToken');
+        const { headers: extraHeaders = {}, ...restOptions } = options || {};
 
         const response = await fetch(`${baseUrl}${endpoint}`, {
             method: 'PATCH',
+            ...restOptions,
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${apiKey}`,
                 'X-Client-Type': window.NotionAI.Core.Constants.CLIENT_TYPE,
                 ...(adminSessionToken ? { 'X-Admin-Session': adminSessionToken } : {}),
                 ...(chatSessionToken ? { 'X-Chat-Session': chatSessionToken } : {}),
-                ...options.headers
+                ...extraHeaders
             },
-            body: JSON.stringify(data),
-            ...options
+            body: JSON.stringify(data)
         });
 
         return response;
@@ -111,19 +114,20 @@ window.NotionAI.API.Client = {
         const apiKey = window.NotionAI.Core.State.get('apiKey');
         const adminSessionToken = window.NotionAI.Core.State.get('adminSessionToken');
         const chatSessionToken = window.NotionAI.Core.State.get('chatSessionToken');
+        const { headers: extraHeaders = {}, ...restOptions } = options || {};
 
         const response = await fetch(`${baseUrl}${endpoint}`, {
             method: 'PUT',
+            ...restOptions,
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${apiKey}`,
                 'X-Client-Type': window.NotionAI.Core.Constants.CLIENT_TYPE,
                 ...(adminSessionToken ? { 'X-Admin-Session': adminSessionToken } : {}),
                 ...(chatSessionToken ? { 'X-Chat-Session': chatSessionToken } : {}),
-                ...options.headers
+                ...extraHeaders
             },
-            body: JSON.stringify(data),
-            ...options
+            body: JSON.stringify(data)
         });
 
         return response;

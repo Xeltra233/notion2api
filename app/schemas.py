@@ -2,6 +2,19 @@ import time
 from typing import Any, Dict, List, Literal, Optional, Union
 from pydantic import BaseModel, Field
 
+
+class MediaUploadRequest(BaseModel):
+    data_url: str
+    file_name: Optional[str] = None
+
+
+class MediaUploadResponse(BaseModel):
+    url: str
+    media_id: str
+    file_name: str
+    mime_type: str
+    size_bytes: int
+
 # ================================
 # 请求相关 Schema (Chat Completion)
 # ================================

@@ -32,11 +32,14 @@ window.NotionAI.Core.App = window.NotionAI.Core.App || {
         const requested = String(moduleName || '').trim() || this.getDefaultModule();
         const hasAdminSession = Boolean(window.NotionAI.Core.State.get('adminSessionToken'));
         const chatEnabled = Boolean(window.NotionAI.Core.State.get('chatEnabled'));
-        if (!hasAdminSession) {
+        const chatPasswordEnabled = Boolean(window.NotionAI.Core.State.get('chatPasswordEnabled'));
+        const hasChatSession = Boolean(window.NotionAI.Core.State.get('chatSessionToken'));
+        const canAccessChatModule = chatEnabled && (hasAdminSession || !chatPasswordEnabled || hasChatSession);
+        if (!hasAdminSession && requested !== 'chat') {
             return 'access';
         }
-        if (requested === 'chat' && !chatEnabled) {
-            return this.getDefaultModule();
+        if (requested === 'chat' && !canAccessChatModule) {
+            return hasAdminSession ? this.getDefaultModule() : 'access';
         }
         return requested;
     },
@@ -59,6 +62,9 @@ window.NotionAI.Core.App = window.NotionAI.Core.App || {
 
         const hasAdminSession = Boolean(window.NotionAI.Core.State.get('adminSessionToken'));
         const chatEnabled = Boolean(window.NotionAI.Core.State.get('chatEnabled'));
+        const chatPasswordEnabled = Boolean(window.NotionAI.Core.State.get('chatPasswordEnabled'));
+        const hasChatSession = Boolean(window.NotionAI.Core.State.get('chatSessionToken'));
+        const canAccessChatModule = chatEnabled && (hasAdminSession || !chatPasswordEnabled || hasChatSession);
         const adminView = document.getElementById('adminWorkspaceView');
         const chatView = document.getElementById('chatWorkspaceView');
         const sidebar = document.getElementById('sidebar');
@@ -68,6 +74,7 @@ window.NotionAI.Core.App = window.NotionAI.Core.App || {
         const headerTitle = document.getElementById('headerTitle');
         const settingsModal = document.getElementById('settingsModal');
         const settingsModalContent = document.getElementById('settingsModalContent');
+        const settingsConsoleInner = document.getElementById('settingsConsoleInner');
         const settingsNav = document.querySelector('.settings-console-nav');
         const loginCard = document.getElementById('adminAccessLoginCard');
         const credentialCard = document.getElementById('adminAccessCredentialCard');
@@ -78,28 +85,38 @@ window.NotionAI.Core.App = window.NotionAI.Core.App || {
             'settings-section-accounts',
             'settings-section-diagnostics'
         ];
+        const adminModuleSectionMap = {
+            access: 'settings-section-access',
+            runtime: 'settings-section-runtime',
+            overview: 'settings-section-overview',
+            usage: 'settings-section-usage',
+            accounts: 'settings-section-accounts',
+            diagnostics: 'settings-section-diagnostics'
+        };
 
         document.body?.setAttribute('data-admin-auth', hasAdminSession ? 'signed_in' : 'signed_out');
+        document.body?.setAttribute('data-active-module', resolvedModule);
 
-        if (sidebar) {
-            sidebar.classList.toggle('hidden', !hasAdminSession);
-        }
         if (mobileBackdrop && !hasAdminSession) {
             mobileBackdrop.classList.add('hidden');
         }
         if (openSidebarBtn) {
-            openSidebarBtn.classList.toggle('hidden', !hasAdminSession);
+            openSidebarBtn.classList.remove('hidden');
+        }
+        if (sidebar) {
+            sidebar.classList.remove('hidden');
         }
         if (settingsModal) {
             settingsModal.classList.toggle('max-w-7xl', hasAdminSession);
-            settingsModal.classList.toggle('max-w-2xl', !hasAdminSession);
+            settingsModal.classList.toggle('max-w-3xl', !hasAdminSession);
+            settingsModal.classList.toggle('admin-shell-signed-out', !hasAdminSession);
         }
         if (settingsModalContent) {
             settingsModalContent.classList.toggle('shadow-2xl', hasAdminSession);
             settingsModalContent.classList.toggle('min-h-[calc(100vh-7rem)]', !hasAdminSession);
-            settingsModalContent.classList.toggle('flex', !hasAdminSession);
-            settingsModalContent.classList.toggle('items-center', !hasAdminSession);
-            settingsModalContent.classList.toggle('justify-center', !hasAdminSession);
+        }
+        if (settingsConsoleInner) {
+            settingsConsoleInner.classList.toggle('min-h-[calc(100vh-7rem)]', !hasAdminSession);
         }
         if (settingsNav) {
             settingsNav.classList.toggle('hidden', !hasAdminSession);
@@ -113,29 +130,35 @@ window.NotionAI.Core.App = window.NotionAI.Core.App || {
 
         document.querySelectorAll('[data-module]').forEach((button) => {
             const moduleName = button.dataset.module || '';
-            const hideForSignedOut = !hasAdminSession;
-            const hideForChatDisabled = moduleName === 'chat' && !chatEnabled;
+            const hideForSignedOut = !hasAdminSession && moduleName !== 'access' && moduleName !== 'chat';
+            const hideForChatDisabled = moduleName === 'chat' && !canAccessChatModule;
             button.classList.toggle('hidden', hideForSignedOut || hideForChatDisabled);
             button.dataset.active = button.dataset.module === resolvedModule ? 'true' : 'false';
         });
 
-        protectedSections.forEach((id) => {
-            const section = document.getElementById(id);
-            if (section) {
-                section.classList.toggle('hidden', !hasAdminSession);
+        Object.entries(adminModuleSectionMap).forEach(([moduleName, sectionId]) => {
+            const section = document.getElementById(sectionId);
+            if (!section) {
+                return;
             }
+            const hideForSignedOut = !hasAdminSession && moduleName !== 'access';
+            const hideForInactiveModule = resolvedModule !== moduleName;
+            section.classList.toggle('hidden', hideForSignedOut || hideForInactiveModule);
+            section.dataset.moduleActive = hideForSignedOut || hideForInactiveModule ? 'false' : 'true';
         });
         if (chatSidebarPanel) {
-            chatSidebarPanel.classList.toggle('hidden', !hasAdminSession || resolvedModule !== 'chat');
+            chatSidebarPanel.classList.toggle('hidden', !canAccessChatModule || resolvedModule !== 'chat');
         }
         if (adminView) {
             adminView.classList.toggle('hidden', resolvedModule === 'chat');
         }
         if (chatView) {
-            chatView.classList.toggle('hidden', !hasAdminSession || resolvedModule !== 'chat');
+            chatView.classList.toggle('hidden', !canAccessChatModule || resolvedModule !== 'chat');
         }
         if (headerTitle) {
-            headerTitle.textContent = hasAdminSession ? this.getModuleTitle(resolvedModule) : '登录后台';
+            headerTitle.textContent = resolvedModule === 'chat' && canAccessChatModule
+                ? this.getModuleTitle(resolvedModule)
+                : (hasAdminSession ? this.getModuleTitle(resolvedModule) : '后台登录');
             headerTitle.classList.remove('opacity-0');
         }
     }
@@ -167,6 +190,8 @@ function init() {
     window.NotionAI.API.Settings.refreshChatAccessState(true);
     if (window.NotionAI.Core.State.get('adminSessionToken')) {
         window.NotionAI.API.Settings.refreshAdminPanel('当前浏览器会话的 admin session 已恢复。');
+    } else {
+        window.NotionAI.Core.App.syncShellFromState();
     }
 }
 
@@ -192,7 +217,7 @@ function bindEventListeners() {
                     const hasAdminSession = Boolean(window.NotionAI.Core.State.get('adminSessionToken'));
                     const hasChatSession = Boolean(window.NotionAI.Core.State.get('chatSessionToken'));
                     const canOpenChat = Boolean(state?.chat_enabled) && (!state?.password_enabled || hasAdminSession || hasChatSession);
-                    if (canOpenChat && !STATE.currentChatId) {
+                    if (canOpenChat && !STATE.currentChatId && STATE.chats.length === 0) {
                         window.NotionAI.Chat.Manager.startNewChat();
                     }
                 });
@@ -279,9 +304,9 @@ function bindEventListeners() {
         document.getElementById('memoryBanner').classList.add('hidden');
     });
 
-    // Settings
+    // Workspace footer actions
     document.getElementById('cancelSettingsBtn').addEventListener('click', () => {
-        window.NotionAI.Core.App.setActiveModule(window.NotionAI.Core.App.getDefaultModule());
+        window.NotionAI.API.Settings.close();
     });
     document.getElementById('saveSettingsBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.save();
@@ -414,6 +439,11 @@ function bindEventListeners() {
     });
     document.getElementById('runtimeToggleSecretsBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.toggleRuntimeSecrets();
+    });
+    ['runtimeMediaPublicBaseUrlInput', 'runtimeMediaStoragePathInput'].forEach((id) => {
+        document.getElementById(id).addEventListener('input', () => {
+            window.NotionAI.API.Settings.previewRuntimeMediaGuidanceFromForm();
+        });
     });
     document.getElementById('runtimeAdvancedToggleBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.toggleRuntimeAdvanced();
@@ -608,12 +638,18 @@ async function handleSend() {
     if (!plainText && (!Array.isArray(content) || !content.length)) return;
 
     // Get or create chat
-    let chat = STATE.chats.find(c => c.id === STATE.currentChatId);
+    let currentChatId = STATE.currentChatId;
+    if (!currentChatId) {
+        currentChatId = Date.now().toString();
+        window.NotionAI.Core.State.set('currentChatId', currentChatId);
+    }
+
+    let chat = STATE.chats.find(c => c.id === currentChatId);
     const isNewChat = !chat;
 
     if (isNewChat) {
         chat = {
-            id: STATE.currentChatId,
+            id: currentChatId,
             title: plainText.length > 12 ? plainText.substring(0, 12) + '...' : (plainText || 'Image chat'),
             messages: [],
             conversationId: null

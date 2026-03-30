@@ -3,6 +3,16 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 
+def ensure_default_admin_credentials(
+    *,
+    username: str = "admin",
+    password: str = "test-admin-password",
+) -> None:
+    from app.config import update_admin_credentials
+
+    update_admin_credentials(username=username, password=password)
+
+
 def build_admin_session_headers(
     client: TestClient,
     *,
@@ -11,7 +21,11 @@ def build_admin_session_headers(
     password: str = "test-admin-password",
     rotated_username: str = "ops-admin",
     rotated_password: str = "test-admin-password-rotated",
+    normalize_credentials: bool = True,
 ) -> dict[str, str]:
+    if normalize_credentials:
+        ensure_default_admin_credentials(username=username, password=password)
+
     auth_headers = {"Authorization": f"Bearer {api_key}"}
 
     def _login(candidate_username: str, candidate_password: str):

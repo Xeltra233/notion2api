@@ -169,6 +169,45 @@ html.dark .admin-chat-action-btn {
     border-color: rgba(255, 255, 255, 0.08);
 }
 
+body[data-admin-auth="signed_out"] .sidebar-shell {
+    width: min(360px, 100vw);
+}
+
+body[data-admin-auth="signed_out"] .admin-shell-summary {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(252, 245, 238, 0.8));
+}
+
+body[data-admin-auth="signed_out"] #settings-section-access {
+    border-radius: 28px;
+    padding: 22px;
+}
+
+body[data-admin-auth="signed_out"] #settings-section-access .admin-access-banner {
+    margin-bottom: 4px;
+}
+
+body[data-admin-auth="signed_out"] #settings-section-access .admin-access-card {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(252, 245, 238, 0.74));
+}
+
+body[data-admin-auth="signed_out"] .admin-module-btn {
+    min-height: 58px;
+}
+
+#moduleAccessBtn {
+    position: relative;
+}
+
+body[data-admin-auth="signed_out"] #moduleAccessBtn {
+    background: linear-gradient(135deg, rgba(218, 119, 86, 0.2), rgba(188, 158, 120, 0.16));
+    border-color: rgba(218, 119, 86, 0.34);
+    box-shadow: 0 14px 30px rgba(154, 91, 63, 0.1);
+}
+
+#settingsModal.admin-shell-signed-out {
+    max-width: 960px;
+}
+
 .topbar-shell {
     border-bottom: 1px solid rgba(126, 102, 79, 0.08);
 }
@@ -323,7 +362,7 @@ body[data-admin-auth="signed_out"] #adminWorkspaceView {
 }
 
 body[data-admin-auth="signed_out"] #settingsModal {
-    max-width: 1120px;
+    max-width: 960px;
 }
 
 body[data-admin-auth="signed_out"] #settingsModalContent {
@@ -331,8 +370,35 @@ body[data-admin-auth="signed_out"] #settingsModalContent {
     border-radius: 32px;
 }
 
+body[data-admin-auth="signed_out"] #settingsConsoleInner {
+    min-height: min(700px, calc(100dvh - 128px)) !important;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 24px;
+}
+
+body[data-admin-auth="signed_out"] .settings-console-header {
+    max-width: 760px;
+    width: 100%;
+    margin: 0 auto;
+}
+
 body[data-admin-auth="signed_out"] #settings-section-access {
-    padding: 28px 32px;
+    flex: 1;
+    padding: 20px 32px 28px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    max-width: 760px;
+    width: 100%;
+    margin: 0 auto;
+}
+
+body[data-admin-auth="signed_out"] #settings-section-access .pt-2.space-y-3 {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
 }
 
 @media (max-width: 768px) {
@@ -369,8 +435,19 @@ body[data-admin-auth="signed_out"] #settings-section-access {
         border-radius: 26px;
     }
 
+    body[data-admin-auth="signed_out"] #settingsConsoleInner {
+        min-height: auto !important;
+        display: block;
+    }
+
+    body[data-admin-auth="signed_out"] .settings-console-header {
+        max-width: 100%;
+    }
+
     body[data-admin-auth="signed_out"] #settings-section-access {
+        max-width: 100%;
         padding: 22px;
+        display: block;
     }
 
     .app-grid {

@@ -50,8 +50,9 @@ Supported image reference forms:
 
 - normal `http://` or `https://` image URLs
 - `data:image/...;base64,...` payloads
+- server-cached `/v1/media/...` links or links generated from a custom public media base URL
 
-The frontend also includes image upload / drag-upload support and stores uploaded image references in the local chat flow.
+The frontend also includes image upload / drag-upload support. Newly uploaded images are pushed into the server-side media cache first, then the returned media link is stored in chat content; older `data:` URI history remains compatible.
 
 ### 3. Account pool and account operations
 
@@ -64,13 +65,16 @@ The frontend also includes image upload / drag-upload support and stores uploade
 
 ### 4. Admin operations console
 
-The bundled frontend is no longer only a simple settings popup. It now exposes an operations-oriented admin workspace with sections for:
+The bundled frontend is now an admin-first operations workspace rather than a chat-first page with a settings popup hidden behind it.
+
+The root path `/` opens into the admin entry flow first, with sections for:
 
 - Overview
 - Usage
 - Accounts
 - Runtime
 - Diagnostics
+- Chat
 
 Key admin UX behavior:
 
@@ -80,6 +84,7 @@ Key admin UX behavior:
 - operational status cards and account health views
 - usage filters and event list rendering
 - callback parsing for OAuth import flows
+- a dedicated Chat module instead of chat being the default landing page
 
 ### 5. Runtime controls and diagnostics
 
@@ -176,7 +181,16 @@ For admin operations:
 - obtain an `admin session`
 - send `X-Admin-Session` on subsequent admin requests
 
-This keeps operator access separate from normal model/chat access.
+### Chat access auth
+
+For the Chat module and chat-facing APIs:
+
+- chat can stay open
+- or you can enable a separate Chat password in Runtime
+- once enabled, the frontend Chat module requires an extra chat access login
+- an already-authenticated admin session can bypass this for operator troubleshooting
+
+This keeps operator access separate from normal model/chat access, and also separates the admin password from the chat access password.
 
 ---
 
@@ -247,7 +261,8 @@ uvicorn app.server:app --host 0.0.0.0 --port 8000
 
 - app: `http://localhost:8000`
 - models: `GET /v1/models`
-- admin console: open the bundled frontend and sign in from the settings/admin area
+- admin console: open the root path `/`; it now lands on the admin entry flow first
+- Chat module: enter it from the left-side module navigation after admin sign-in; if Chat password is enabled, complete chat access login as well
 
 ---
 
@@ -297,15 +312,16 @@ uvicorn app.server:app --host 0.0.0.0 --port 8000
 
 ## Frontend admin console
 
-The frontend is now closer to an operations dashboard than a plain chat settings sheet.
+The frontend is now an admin-first operations dashboard rather than a plain chat settings sheet.
 
-Current sections include:
+The root path `/` opens into the admin entry flow first. Current sections include:
 
 - Overview
 - Usage
 - Accounts
 - Runtime
 - Diagnostics
+- Chat
 
 The frontend also supports:
 
@@ -315,7 +331,8 @@ The frontend also supports:
 - masked/safe rendering for admin data by default
 - usage filters and event list rendering
 - workspace and runtime action surfaces
-- image attachment handling in chat input
+- separate access control for the Chat module
+- image attachment handling in chat input with server-cached media links
 
 ---
 
@@ -323,19 +340,39 @@ The frontend also supports:
 
 This repository now includes a larger set of non-manual verification scripts for admin, runtime, account, export, usage, refresh, and workspace behavior.
 
-Examples:
+They can be grouped roughly by responsibility:
+
+### Auth / sessions / security boundaries
 
 - `scripts/verify_admin_session_auth_flow.py`
-- `scripts/verify_usage_admin_endpoints.py`
 - `scripts/verify_register_admin_protection.py`
+- `scripts/verify_admin_redaction_modes.py`
+- `scripts/verify_safe_accounts_view.py`
+- `scripts/verify_usage_admin_endpoints.py`
+
+### Admin shell and frontend/backend contracts
+
+- `scripts/verify_frontend_semantic_fields_backend_contract.py`
+- `scripts/verify_admin_first_entry_shell.py`
+- `scripts/verify_admin_first_default_module_contract.py`
+- `scripts/verify_workspace_footer_actions_contract.py`
+- `scripts/verify_direct_mode_ignores_warp_proxy.py`
+
+### Chat / access gates / media
+
+- `scripts/verify_chat_access_flow.py`
+- `scripts/verify_chat_session_module_access_contract.py`
+- `scripts/verify_admin_logout_chat_gate_contract.py`
+- `scripts/verify_runtime_chat_session_reset_contract.py`
+- `scripts/verify_chat_access_refresh_session_cleanup_contract.py`
+- `scripts/verify_media_upload_flow.py`
+
+### Refresh / workspace / probe flows
+
 - `scripts/verify_refresh_action_success.py`
 - `scripts/verify_create_workspace_success.py`
 - `scripts/verify_refresh_probe_success.py`
 - `scripts/verify_workspace_probe_success.py`
-- `scripts/verify_safe_accounts_view.py`
-- `scripts/verify_admin_redaction_modes.py`
-- `scripts/verify_direct_mode_ignores_warp_proxy.py`
-- `scripts/verify_frontend_semantic_fields_backend_contract.py`
 
 These scripts are intended to validate backend behavior without relying only on manual UI checks.
 
@@ -348,5 +385,9 @@ These scripts are intended to validate backend behavior without relying only on 
 - raw views and raw exports are explicit and auditable
 - `ADMIN_PASSWORD` is used as the admin login password and can also be changed later in the admin console
 - `API_KEY` can be left blank for local/open deployments or set to a custom value for Bearer protection
+- Chat password is a separate Runtime setting and is not the same thing as the admin password
+- `media_public_base_url` controls the public-facing base used when generating media links; if left blank, the service address is used
+- `media_storage_path` should usually point at a persistent volume so cached uploads survive restarts
+- if you deploy on platforms such as Zeabur, it is safer to mount media cache and runtime data onto the same persistent volume
 - workspace create currently exposes dry-run and diagnostic-oriented operator tooling
 - the project still supports chat usage, but operational administration is now a first-class part of the product

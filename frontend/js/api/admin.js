@@ -149,6 +149,18 @@ window.NotionAI.API.Admin = {
         return data;
     },
 
+    async uploadMedia(dataUrl, fileName = '') {
+        const response = await window.NotionAI.API.Client.post('/v1/media/upload', {
+            data_url: dataUrl,
+            file_name: fileName
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.detail || '上传图片失败');
+        }
+        return data;
+    },
+
     async saveRuntimeSettings(payload) {
         const response = await window.NotionAI.API.Client.put('/v1/admin/config/settings', payload);
         const data = await response.json().catch(() => ({}));

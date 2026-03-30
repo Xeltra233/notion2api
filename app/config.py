@@ -114,11 +114,20 @@ def _normalize_origins(origins: Any) -> list[str]:
         return DEFAULT_ALLOWED_ORIGINS.copy()
     if isinstance(origins, str):
         values = [item.strip() for item in origins.split(",") if item.strip()]
-        return values or DEFAULT_ALLOWED_ORIGINS.copy()
-    if isinstance(origins, list):
+    elif isinstance(origins, list):
         values = [str(item).strip() for item in origins if str(item).strip()]
-        return values or DEFAULT_ALLOWED_ORIGINS.copy()
-    return DEFAULT_ALLOWED_ORIGINS.copy()
+    else:
+        return DEFAULT_ALLOWED_ORIGINS.copy()
+
+    normalized: list[str] = []
+    for item in values:
+        parsed = urlparse(item)
+        scheme = str(parsed.scheme or "").lower()
+        hostname = str(parsed.hostname or "").strip()
+        if item == "*" or not hostname or scheme not in {"http", "https"}:
+            continue
+        normalized.append(f"{scheme}://{parsed.netloc}")
+    return normalized or DEFAULT_ALLOWED_ORIGINS.copy()
 
 
 def validate_runtime_request_url(value: Any, field_name: str) -> str:
@@ -272,6 +281,34 @@ def _normalize_chat_auth(raw: Any) -> dict[str, Any]:
     }
 
 
+def _normalize_action_history(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    normalized_logs: list[dict[str, Any]] = []
+    for item in raw[-100:]:
+        if not isinstance(item, dict):
+            continue
+        normalized_item = deepcopy(item)
+        action = str(normalized_item.get("action") or "").strip()
+        payload = (
+            normalized_item.get("payload")
+            if isinstance(normalized_item.get("payload"), dict)
+            else {}
+        )
+        summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else None
+        if summary is not None:
+            if not str(summary.get("action") or "").strip() and action:
+                summary["action"] = action
+            if not str(summary.get("account_id") or "").strip() and payload.get("account_id"):
+                summary["account_id"] = payload.get("account_id")
+            if not str(summary.get("user_id") or "").strip() and payload.get("user_id"):
+                summary["user_id"] = payload.get("user_id")
+            if not str(summary.get("user_email") or "").strip() and payload.get("user_email"):
+                summary["user_email"] = payload.get("user_email")
+        normalized_logs.append(normalized_item)
+    return normalized_logs
+
+
 def _chat_password_matches(chat_auth: dict[str, Any], password: str) -> bool:
     password_hash = str(chat_auth.get("password_hash") or "").strip()
     password_salt = str(chat_auth.get("password_salt") or "").strip()
@@ -313,6 +350,8 @@ def _default_config() -> dict[str, Any]:
         "workspace_request_url": "",
         "allow_real_probe_requests": False,
         "chat_enabled": False,
+        "media_public_base_url": "",
+        "media_storage_path": str(DATA_DIR / "media"),
         "auto_register_enabled": False,
         "auto_register_idle_only": True,
         "auto_register_interval_seconds": 1800,
@@ -391,11 +430,7 @@ class RuntimeConfigStore:
             config["probe_logs"] = probe_logs[-100:]
         else:
             config["probe_logs"] = []
-        action_history = raw.get("action_history")
-        if isinstance(action_history, list):
-            config["action_history"] = action_history[-100:]
-        else:
-            config["action_history"] = []
+        config["action_history"] = _normalize_action_history(raw.get("action_history"))
         refresh_execution_mode = (
             str(raw.get("refresh_execution_mode") or "manual").strip().lower()
         )
@@ -418,6 +453,11 @@ class RuntimeConfigStore:
         config["workspace_request_url"] = str(raw.get("workspace_request_url") or "")
         config["allow_real_probe_requests"] = bool(
             raw.get("allow_real_probe_requests", False)
+        )
+        config["media_public_base_url"] = str(raw.get("media_public_base_url") or "").strip()
+        config["media_storage_path"] = (
+            str(raw.get("media_storage_path") or str(DATA_DIR / "media")).strip()
+            or str(DATA_DIR / "media")
         )
         config["auto_register_enabled"] = bool(raw.get("auto_register_enabled", False))
         config["auto_register_idle_only"] = bool(
@@ -669,6 +709,17 @@ def update_chat_password(*, password: str, enabled: bool) -> dict[str, Any]:
 
 def get_api_key() -> str:
     return str(get_runtime_config().get("api_key") or "")
+
+
+def get_media_public_base_url() -> str:
+    return str(get_runtime_config().get("media_public_base_url") or "").strip()
+
+
+def get_media_storage_path() -> Path:
+    raw_path = str(get_runtime_config().get("media_storage_path") or "").strip()
+    path = Path(raw_path or str(DATA_DIR / "media")).expanduser()
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def get_allowed_origins() -> list[str]:

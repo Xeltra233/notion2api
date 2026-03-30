@@ -55,7 +55,8 @@ window.NotionAI.Chat.Storage = {
                 if (part.type === 'image_url' && part.image_url && typeof part.image_url.url === 'string') {
                     return {
                         type: 'image_url',
-                        image_url: { url: part.image_url.url }
+                        image_url: { url: part.image_url.url },
+                        media_id: typeof part.media_id === 'string' ? part.media_id : ''
                     };
                 }
                 if (part.type === 'text') {

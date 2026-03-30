@@ -1,6 +1,8 @@
 import os
+import re
 import time
 import threading
+from urllib.parse import unquote
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -175,7 +177,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_allowed_origins(),
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -255,6 +257,16 @@ async def log_requests_middleware(request: Request, call_next):
     return response
 
 
+def _is_safe_public_media_path(path: str) -> bool:
+    normalized = unquote(str(path or "")).replace("\\", "/")
+    if not normalized.startswith("/v1/media/"):
+        return False
+    media_id = normalized[len("/v1/media/") :]
+    if not media_id or "/" in media_id:
+        return False
+    return bool(re.fullmatch(r"[A-Za-z0-9._-]+", media_id))
+
+
 # 简易 API Key 鉴权中间件
 @app.middleware("http")
 async def api_key_auth(request: Request, call_next):
@@ -268,6 +280,10 @@ async def api_key_auth(request: Request, call_next):
         if request.url.path.startswith("/v1") and request.method != "OPTIONS":
             if request.url.path in public_v1_paths:
                 return await call_next(request)
+            if request.url.path.startswith("/v1/media/"):
+                if _is_safe_public_media_path(request.url.path):
+                    return await call_next(request)
+                return JSONResponse(status_code=404, content={"detail": "Media not found."})
             auth_header = request.headers.get("Authorization", "")
             if (
                 not auth_header.startswith("Bearer ")

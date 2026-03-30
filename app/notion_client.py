@@ -8,7 +8,6 @@ from typing import Any, Generator, Optional
 
 import cloudscraper
 import requests
-import urllib3
 
 from app.config import (
     get_runtime_config,
@@ -23,10 +22,6 @@ from app.logger import logger
 from app.model_registry import get_notion_model
 from app.register.mail_client import build_runtime_proxy_dict
 from app.stream_parser import parse_stream
-
-# 禁用 SSL 警告
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
 
 def _build_live_template_client_context(api: "NotionOpusAPI") -> dict[str, Any]:
     return {

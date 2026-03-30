@@ -1,10 +1,13 @@
 from typing import Any
+import ipaddress
 import secrets
 import socket
 import time
 from urllib.parse import urlencode
 from urllib.parse import urlparse
+from urllib.parse import urlunparse
 
+import requests
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
@@ -846,6 +849,8 @@ class RuntimeSettingsRequest(BaseModel):
     workspace_request_url: str = Field(default="")
     allow_real_probe_requests: bool = False
     chat_enabled: bool = False
+    media_public_base_url: str = Field(default="")
+    media_storage_path: str = Field(default="")
     chat_password_enabled: bool = False
     chat_password: str | None = Field(default=None)
     auto_register_enabled: bool = False
@@ -1162,12 +1167,35 @@ def _build_saved_oauth_account(
     }
 
 
+def _normalize_callback_redirect_uri(value: str, fallback: str) -> str:
+    candidate = str(value or "").strip()
+    if not candidate:
+        return fallback
+    parsed = urlparse(candidate)
+    scheme = str(parsed.scheme or "").lower()
+    hostname = str(parsed.hostname or "").strip().lower()
+    if scheme not in {"http", "https"} or not hostname:
+        return fallback
+    if hostname in {"localhost", "127.0.0.1", "::1"}:
+        return candidate
+    try:
+        ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        ip = None
+    if ip and (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved):
+        return fallback
+    safe_path = parsed.path or "/"
+    safe_query = parsed.query if parsed.query and "redirect_uri=" not in parsed.query else ""
+    return urlunparse((scheme, parsed.netloc, safe_path, "", safe_query, ""))
+
+
 def _default_local_redirect_uri(request: Request) -> str:
+    fallback = "http://localhost:8000"
     host = (request.headers.get("host") or "").strip()
     if host:
         scheme = request.url.scheme or "http"
-        return f"{scheme}://{host}"
-    return "http://localhost:8000"
+        return _normalize_callback_redirect_uri(f"{scheme}://{host}", fallback)
+    return fallback
 
 
 def _build_oauth_placeholder_url(redirect_uri: str, state: str, provider: str) -> str:
@@ -1334,6 +1362,19 @@ async def admin_report(
             "account": str(action_account or "").strip(),
         },
     }
+
+
+@router.get("/admin/overview")
+async def admin_overview(
+    request: Request,
+    action_account: str | None = Query(default=None),
+    x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
+):
+    return await admin_snapshot(
+        request=request,
+        action_account=action_account,
+        x_admin_session=x_admin_session,
+    )
 
 
 @router.get("/admin/snapshot")
@@ -1899,6 +1940,8 @@ def _append_action_history_log(action: str, payload: dict[str, Any]) -> None:
         payload.get("summary") if isinstance(payload.get("summary"), dict) else None
     )
     if summary is not None:
+        if not summary.get("action"):
+            summary["action"] = action
         if not summary.get("account_id") and payload.get("account_id"):
             summary["account_id"] = payload.get("account_id")
         if not summary.get("user_id") and payload.get("user_id"):
@@ -1922,12 +1965,33 @@ def _summarize_action_payload(payload: dict[str, Any]) -> dict[str, Any]:
         if isinstance(payload.get("recognized_fields"), dict)
         else {}
     )
+    reason = str(payload.get("reason") or "").strip()
+    action = str(payload.get("action") or "").strip()
+    raw_status_code = payload.get("status_code")
+    try:
+        status_code = int(raw_status_code) if raw_status_code is not None else None
+    except (TypeError, ValueError):
+        status_code = None
+    state = str(payload.get("state") or "").strip().lower()
     category = str(payload.get("failure_category") or "").strip().lower()
-    retryable = category in {"rate_limited", "timeout", "server_error", "network_error"}
-    if bool(payload.get("reauthorize_required", False)) or category in {
+    reason_lower = reason.lower()
+    if not category and not bool(payload.get("ok", False)):
+        if status_code in {401, 403}:
+            category = "unauthorized" if status_code == 401 else "forbidden"
+        elif state == "invalid" or "unauthorized" in reason_lower or "token is invalid" in reason_lower:
+            category = "unauthorized"
+        elif status_code == 404:
+            category = "not_found"
+        elif status_code is not None and status_code >= 500:
+            category = "server_error"
+        elif status_code == 429 or "429" in reason_lower:
+            category = "rate_limited"
+    reauthorize_required = bool(payload.get("reauthorize_required", False)) or category in {
         "unauthorized",
         "forbidden",
-    }:
+    }
+    retryable = category in {"rate_limited", "timeout", "server_error", "network_error"}
+    if reauthorize_required:
         suggested_action = "reauthorize_account"
         remediation_message = "OAuth credentials are no longer accepted; run reauthorization before retrying."
     elif category == "rate_limited":
@@ -1944,23 +2008,23 @@ def _summarize_action_payload(payload: dict[str, Any]) -> dict[str, Any]:
     elif category == "success" or bool(payload.get("ok", False)):
         suggested_action = "none"
         remediation_message = "No remediation needed."
-    elif "workspace" in str(payload.get("action") or "").lower():
+    elif "workspace" in action.lower():
         suggested_action = "check_workspace_template"
         remediation_message = "Workspace creation payload likely needs schema or template adjustments before retrying."
     else:
         suggested_action = "inspect_action_details"
         remediation_message = "Inspect action details and upstream payloads."
     return {
-        "action": payload.get("action", ""),
+        "action": action,
         "ok": payload.get("ok"),
-        "reason": payload.get("reason", ""),
+        "reason": reason,
         "account_id": payload.get("account_id", ""),
         "user_id": payload.get("user_id", ""),
         "user_email": payload.get("user_email", ""),
         "space_id": payload.get("space_id", ""),
-        "failure_category": payload.get("failure_category", ""),
-        "status_code": payload.get("status_code"),
-        "reauthorize_required": bool(payload.get("reauthorize_required", False)),
+        "failure_category": category,
+        "status_code": status_code,
+        "reauthorize_required": reauthorize_required,
         "retryable": retryable,
         "suggested_action": suggested_action,
         "remediation_message": remediation_message,
@@ -3058,6 +3122,8 @@ async def get_admin_config(
             "workspace_request_url": config.get("workspace_request_url", ""),
             "allow_real_probe_requests": config.get("allow_real_probe_requests", False),
             "chat_enabled": config.get("chat_enabled", False),
+            "media_public_base_url": config.get("media_public_base_url", ""),
+            "media_storage_path": config.get("media_storage_path", ""),
             "chat_password_enabled": bool(chat_auth.get("enabled", False)),
             "chat_password": "********" if str(chat_auth.get("password_hash") or "").strip() else "",
             "has_chat_password": bool(str(chat_auth.get("password_hash") or "").strip()),
@@ -3197,6 +3263,8 @@ async def update_runtime_settings(
         "workspace_request_url": workspace_request_url,
         "allow_real_probe_requests": payload.allow_real_probe_requests,
         "chat_enabled": payload.chat_enabled,
+        "media_public_base_url": str(payload.media_public_base_url or "").strip(),
+        "media_storage_path": str(payload.media_storage_path or "").strip(),
     }
     if payload.api_key is not None:
         updates["api_key"] = payload.api_key
@@ -3377,9 +3445,11 @@ async def oauth_callback_import(
 
 @router.get("/admin/oauth/callback")
 async def oauth_callback_redirect(request: Request):
-    redirect_uri = str(
-        request.query_params.get("redirect_uri") or ""
-    ).strip() or _default_local_redirect_uri(request)
+    fallback_redirect_uri = _default_local_redirect_uri(request)
+    redirect_uri = _normalize_callback_redirect_uri(
+        request.query_params.get("redirect_uri") or "",
+        fallback_redirect_uri,
+    )
     redirect_url = _build_callback_redirect_url(
         redirect_uri,
         {key: value for key, value in request.query_params.items()},
@@ -3541,10 +3611,35 @@ async def probe_single_account(
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
     _ensure_admin(request, x_admin_session)
+    pool = request.app.state.account_pool
     try:
-        result = request.app.state.account_pool.probe_account_by_id(account_id)
+        result = pool.probe_account_by_id(account_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    _append_action_history_log(
+        "probe",
+        {
+            "account_id": account_id,
+            "user_id": next(
+                (item.user_id for item in pool.clients if item.account_id == account_id),
+                "",
+            ),
+            "user_email": next(
+                (item.user_email for item in pool.clients if item.account_id == account_id),
+                "",
+            ),
+            "summary": _summarize_action_payload(result),
+            "result": result,
+        },
+    )
+    _append_operation_log(
+        "probe",
+        {
+            "count": 1,
+            "success_count": 1 if result.get("ok") is not False else 0,
+            "failed_count": 1 if result.get("ok") is False else 0,
+        },
+    )
     return {"ok": True, "result": result}
 
 
@@ -3644,10 +3739,94 @@ async def sync_single_account_workspaces(
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
     _ensure_admin(request, x_admin_session)
+    pool = request.app.state.account_pool
     try:
-        result = request.app.state.account_pool.sync_workspace_by_id(account_id)
+        result = pool.sync_workspace_by_id(account_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except requests.RequestException as exc:
+        error_detail = f"Workspace sync failed: {str(exc)[:300]}"
+        summary = _summarize_action_payload(
+            {
+                "action": "sync_workspace",
+                "ok": False,
+                "account_id": account_id,
+                "user_id": next(
+                    (item.user_id for item in pool.clients if item.account_id == account_id),
+                    "",
+                ),
+                "user_email": next(
+                    (
+                        item.user_email
+                        for item in pool.clients
+                        if item.account_id == account_id
+                    ),
+                    "",
+                ),
+                "reason": error_detail,
+                "failure_category": "network_error",
+                "status_code": 502,
+                "retryable": True,
+            }
+        )
+        _append_action_history_log(
+            "sync_workspace",
+            {
+                "account_id": account_id,
+                "user_id": summary.get("user_id", ""),
+                "user_email": summary.get("user_email", ""),
+                "summary": summary,
+                "result": {
+                    "action": "sync_workspace",
+                    "ok": False,
+                    "account_id": account_id,
+                    "user_id": summary.get("user_id", ""),
+                    "user_email": summary.get("user_email", ""),
+                    "error": error_detail,
+                    "status_code": 502,
+                    "failure_category": "network_error",
+                },
+            },
+        )
+        _append_operation_log(
+            "sync_workspace",
+            {
+                "count": 1,
+                "success_count": 0,
+                "failed_count": 1,
+                "account_id": account_id,
+                "status_code": 502,
+                "error": error_detail,
+            },
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=error_detail,
+        ) from exc
+    _append_action_history_log(
+        "sync_workspace",
+        {
+            "account_id": account_id,
+            "user_id": next(
+                (item.user_id for item in pool.clients if item.account_id == account_id),
+                "",
+            ),
+            "user_email": next(
+                (item.user_email for item in pool.clients if item.account_id == account_id),
+                "",
+            ),
+            "summary": _summarize_action_payload(result),
+            "result": result,
+        },
+    )
+    _append_operation_log(
+        "sync_workspace",
+        {
+            "count": 1,
+            "success_count": 1 if result.get("ok") is not False else 0,
+            "failed_count": 1 if result.get("ok") is False else 0,
+        },
+    )
     return {"ok": True, "result": result}
 
 
@@ -3658,10 +3837,35 @@ async def retry_single_account_register_hydration(
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
     _ensure_admin(request, x_admin_session)
+    pool = request.app.state.account_pool
     try:
         result = retry_pending_register_hydration(request, account_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    _append_action_history_log(
+        "register_hydration_retry",
+        {
+            "account_id": account_id,
+            "user_id": next(
+                (item.user_id for item in pool.clients if item.account_id == account_id),
+                "",
+            ),
+            "user_email": next(
+                (item.user_email for item in pool.clients if item.account_id == account_id),
+                "",
+            ),
+            "summary": _summarize_action_payload(result),
+            "result": result,
+        },
+    )
+    _append_operation_log(
+        "register_hydration_retry",
+        {
+            "count": 1,
+            "success_count": 1 if result.get("ok") is not False else 0,
+            "failed_count": 1 if result.get("ok") is False else 0,
+        },
+    )
     return {"ok": True, "result": result}
 
 
@@ -3708,6 +3912,65 @@ async def create_single_account_workspace(
         result = pool.create_workspace_by_id(account_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except requests.RequestException as exc:
+        error_detail = f"Workspace creation failed: {str(exc)[:300]}"
+        summary = _summarize_action_payload(
+            {
+                "action": "create_workspace",
+                "ok": False,
+                "account_id": account_id,
+                "user_id": next(
+                    (item.user_id for item in pool.clients if item.account_id == account_id),
+                    "",
+                ),
+                "user_email": next(
+                    (
+                        item.user_email
+                        for item in pool.clients
+                        if item.account_id == account_id
+                    ),
+                    "",
+                ),
+                "reason": error_detail,
+                "failure_category": "network_error",
+                "status_code": 502,
+                "retryable": True,
+            }
+        )
+        _append_action_history_log(
+            "create_workspace",
+            {
+                "account_id": account_id,
+                "user_id": summary.get("user_id", ""),
+                "user_email": summary.get("user_email", ""),
+                "summary": summary,
+                "result": {
+                    "action": "create_workspace",
+                    "ok": False,
+                    "account_id": account_id,
+                    "user_id": summary.get("user_id", ""),
+                    "user_email": summary.get("user_email", ""),
+                    "error": error_detail,
+                    "status_code": 502,
+                    "failure_category": "network_error",
+                },
+            },
+        )
+        _append_operation_log(
+            "create_workspace",
+            {
+                "count": 1,
+                "success_count": 0,
+                "failed_count": 1,
+                "account_id": account_id,
+                "status_code": 502,
+                "error": error_detail,
+            },
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=error_detail,
+        ) from exc
     _write_workspace_action_result_to_account(account_id, "create_workspace", result)
     _append_action_history_log(
         "create_workspace",
@@ -3791,8 +4054,8 @@ async def refresh_probe_account(
         "refresh_probe",
         {
             "count": 1,
-            "success_count": 1,
-            "failed_count": 0,
+            "success_count": 1 if result.get("ok") is not False else 0,
+            "failed_count": 1 if result.get("ok") is False else 0,
         },
     )
     _append_probe_log(
@@ -3825,8 +4088,8 @@ async def workspace_probe_account(
         "workspace_probe",
         {
             "count": 1,
-            "success_count": 1,
-            "failed_count": 0,
+            "success_count": 1 if result.get("ok") is not False else 0,
+            "failed_count": 1 if result.get("ok") is False else 0,
         },
     )
     _append_probe_log(
@@ -4375,9 +4638,21 @@ async def bulk_account_action(
         pool = request.app.state.account_pool
         for account in matched:
             account_id = str(account.get("id") or "")
+            user_id = str(account.get("user_id") or "")
+            user_email = str(account.get("user_email") or "")
             try:
                 if action == "probe":
                     result = pool.probe_account_by_id(account_id)
+                    _append_action_history_log(
+                        "probe",
+                        {
+                            "account_id": account_id,
+                            "user_id": user_id,
+                            "user_email": user_email,
+                            "summary": _summarize_action_payload(result),
+                            "result": result,
+                        },
+                    )
                 elif action == "refresh":
                     result = pool.refresh_account_by_id(account_id)
                     _write_refresh_action_result_to_account(
@@ -4387,14 +4662,36 @@ async def bulk_account_action(
                         "refresh",
                         {
                             "account_id": account_id,
+                            "user_id": user_id,
+                            "user_email": user_email,
                             "summary": _summarize_action_payload(result),
                             "result": result,
                         },
                     )
                 elif action == "sync_workspace":
                     result = pool.sync_workspace_by_id(account_id)
+                    _append_action_history_log(
+                        "sync_workspace",
+                        {
+                            "account_id": account_id,
+                            "user_id": user_id,
+                            "user_email": user_email,
+                            "summary": _summarize_action_payload(result),
+                            "result": result,
+                        },
+                    )
                 elif action == "register_hydration_retry":
                     result = retry_pending_register_hydration(request, account_id)
+                    _append_action_history_log(
+                        "register_hydration_retry",
+                        {
+                            "account_id": account_id,
+                            "user_id": user_id,
+                            "user_email": user_email,
+                            "summary": _summarize_action_payload(result),
+                            "result": result,
+                        },
+                    )
                 elif action == "create_workspace":
                     result = pool.create_workspace_by_id(account_id)
                     _write_workspace_action_result_to_account(
@@ -4404,6 +4701,8 @@ async def bulk_account_action(
                         "create_workspace",
                         {
                             "account_id": account_id,
+                            "user_id": user_id,
+                            "user_email": user_email,
                             "summary": _summarize_action_payload(result),
                             "result": result,
                         },
@@ -4417,6 +4716,16 @@ async def bulk_account_action(
                         **client.try_refresh_session_probe(),
                     }
                     _write_probe_result_to_account(account_id, "refresh_probe", result)
+                    _append_action_history_log(
+                        "refresh_probe",
+                        {
+                            "account_id": account_id,
+                            "user_id": user_id,
+                            "user_email": user_email,
+                            "summary": _summarize_action_payload(result),
+                            "result": result,
+                        },
+                    )
                 elif action == "workspace_probe":
                     idx = pool._find_client_index(account_id)
                     client = pool.clients[idx]
@@ -4428,15 +4737,78 @@ async def bulk_account_action(
                     _write_probe_result_to_account(
                         account_id, "workspace_probe", result
                     )
+                    _append_action_history_log(
+                        "workspace_probe",
+                        {
+                            "account_id": account_id,
+                            "user_id": user_id,
+                            "user_email": user_email,
+                            "summary": _summarize_action_payload(result),
+                            "result": result,
+                        },
+                    )
                 else:
                     raise HTTPException(
                         status_code=400, detail="Unsupported bulk action"
                     )
                 results.append(result)
             except ValueError as exc:
-                results.append(
-                    {"account_id": account_id, "ok": False, "error": str(exc)}
+                failure_result = {
+                    "account_id": account_id,
+                    "ok": False,
+                    "error": str(exc),
+                }
+                _append_action_history_log(
+                    action,
+                    {
+                        "account_id": account_id,
+                        "user_id": user_id,
+                        "user_email": user_email,
+                        "summary": _summarize_action_payload(
+                            {
+                                "action": action,
+                                "ok": False,
+                                "account_id": account_id,
+                                "user_id": user_id,
+                                "user_email": user_email,
+                                "reason": str(exc),
+                                "failure_category": "not_found",
+                                "status_code": 404,
+                            }
+                        ),
+                        "result": failure_result,
+                    },
                 )
+                results.append(failure_result)
+            except requests.RequestException as exc:
+                failure_reason = str(exc)[:300]
+                failure_result = {
+                    "account_id": account_id,
+                    "ok": False,
+                    "error": failure_reason,
+                }
+                _append_action_history_log(
+                    action,
+                    {
+                        "account_id": account_id,
+                        "user_id": user_id,
+                        "user_email": user_email,
+                        "summary": _summarize_action_payload(
+                            {
+                                "action": action,
+                                "ok": False,
+                                "account_id": account_id,
+                                "user_id": user_id,
+                                "user_email": user_email,
+                                "reason": failure_reason,
+                                "failure_category": "network_error",
+                                "status_code": 502,
+                            }
+                        ),
+                        "result": failure_result,
+                    },
+                )
+                results.append(failure_result)
 
     if rebuild_needed:
         _rebuild_pool(request)

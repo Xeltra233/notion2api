@@ -13,7 +13,7 @@ if str(ROOT) not in sys.path:
 os.environ.setdefault("API_KEY", "test-server-key")
 os.environ.setdefault("ADMIN_PASSWORD", "test-admin-password")
 
-from app.config import get_chat_auth, get_config_store  # noqa: E402
+from app.config import get_chat_auth, get_config_store, update_admin_credentials  # noqa: E402
 from app.server import app  # noqa: E402
 from scripts.admin_session_test_utils import build_admin_session_headers  # noqa: E402
 
@@ -30,6 +30,10 @@ def _chat_request_body() -> dict:
     }
 
 
+def _access_unblocked(status_code: int) -> bool:
+    return int(status_code) != 401
+
+
 try:
     baseline = copy.deepcopy(original_config)
     baseline["chat_enabled"] = True
@@ -40,6 +44,7 @@ try:
         "updated_at": 0,
     }
     store.save_config(baseline)
+    update_admin_credentials(username="admin", password="test-admin-password")
 
     with TestClient(app) as client:
         auth_headers = {"Authorization": "Bearer test-server-key"}
@@ -54,6 +59,10 @@ try:
 
         protected_config = copy.deepcopy(store.get_config())
         protected_config["chat_enabled"] = True
+        protected_config["refresh_execution_mode"] = "manual"
+        protected_config["refresh_request_url"] = ""
+        protected_config["workspace_execution_mode"] = "manual"
+        protected_config["workspace_request_url"] = ""
         store.save_config(protected_config)
         update_password = client.put(
             "/v1/admin/config/settings",
@@ -131,15 +140,19 @@ try:
         "open_access_status": open_access.status_code,
         "open_password_enabled": open_access.json().get("password_enabled"),
         "open_completion_status": open_completion.status_code,
+        "open_completion_access_unblocked": _access_unblocked(open_completion.status_code),
         "update_password_status": update_password.status_code,
         "protected_access_status": protected_access.status_code,
         "protected_password_enabled": protected_access.json().get("password_enabled"),
         "protected_configured": protected_access.json().get("configured"),
         "blocked_completion_status": blocked_completion.status_code,
+        "blocked_completion_rejected_by_chat_access": blocked_completion.status_code == 401,
         "wrong_login_status": wrong_login.status_code,
         "good_login_status": good_login.status_code,
         "chat_session_completion_status": session_completion.status_code,
+        "chat_session_access_unblocked": _access_unblocked(session_completion.status_code),
         "admin_bypass_completion_status": admin_bypass_completion.status_code,
+        "admin_bypass_access_unblocked": _access_unblocked(admin_bypass_completion.status_code),
         "stored_chat_password_enabled": get_chat_auth().get("enabled"),
         "stored_chat_password_configured": bool(get_chat_auth().get("password_hash")),
     }

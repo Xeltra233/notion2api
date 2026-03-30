@@ -93,9 +93,9 @@
 
         <div class="px-4 pb-3">
             <div class="admin-shell-summary">
-                <div class="admin-shell-summary-kicker">工作区</div>
-                <div class="admin-shell-summary-title">运维入口</div>
-                <div class="admin-shell-summary-copy">默认先进入后台访问与管理模块。Chat 只有启用后才会出现在左侧。</div>
+                <div class="admin-shell-summary-kicker">先登录，再开始</div>
+                <div class="admin-shell-summary-title">一个更清楚的后台入口</div>
+                <div class="admin-shell-summary-copy">先确认后台访问，再进入总览、账号、运行时和诊断。聊天只是其中一个模块，不再抢首页位置。</div>
             </div>
         </div>
 
@@ -164,37 +164,37 @@
             <div id="settingsModal" class="w-full max-w-7xl mx-auto">
                 <div class="bg-white/88 dark:bg-[#2a2a2a]/92 rounded-3xl shadow-2xl border border-black/5 dark:border-white/10 overflow-hidden"
                     id="settingsModalContent">
-                    <div class="p-6">
+                    <div class="p-6" id="settingsConsoleInner">
                 <div class="settings-console-header">
                     <div>
-                        <h3 class="text-xl font-serif font-medium">运维控制台</h3>
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">在一个后台工作区里统一管理访问、运行时、用量、账号和诊断。</p>
+                        <h3 class="text-xl font-serif font-medium">后台工作区</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">先处理登录与访问，再按模块查看总览、账号、运行时和诊断；整个流程尽量保持像正常后台，而不是工具面板。</p>
                     </div>
                     <div class="settings-console-nav">
-                        <button type="button" class="settings-console-nav-btn" data-settings-scroll-target="settings-section-access">访问</button>
-                        <button type="button" class="settings-console-nav-btn" data-settings-scroll-target="settings-section-runtime">运行时</button>
-                        <button type="button" class="settings-console-nav-btn" data-settings-scroll-target="settings-section-overview">总览</button>
-                        <button type="button" class="settings-console-nav-btn" data-settings-scroll-target="settings-section-usage">用量</button>
-                        <button type="button" class="settings-console-nav-btn" data-settings-scroll-target="settings-section-accounts">账号</button>
-                        <button type="button" class="settings-console-nav-btn" data-settings-scroll-target="settings-section-diagnostics">诊断</button>
+                        <button type="button" class="settings-console-nav-btn" data-module="access" data-settings-scroll-target="settings-section-access">访问</button>
+                        <button type="button" class="settings-console-nav-btn" data-module="runtime" data-settings-scroll-target="settings-section-runtime">运行时</button>
+                        <button type="button" class="settings-console-nav-btn" data-module="overview" data-settings-scroll-target="settings-section-overview">总览</button>
+                        <button type="button" class="settings-console-nav-btn" data-module="usage" data-settings-scroll-target="settings-section-usage">用量</button>
+                        <button type="button" class="settings-console-nav-btn" data-module="accounts" data-settings-scroll-target="settings-section-accounts">账号</button>
+                        <button type="button" class="settings-console-nav-btn" data-module="diagnostics" data-settings-scroll-target="settings-section-diagnostics">诊断</button>
                     </div>
                 </div>
 
                 <div class="space-y-4">
-                    <div id="settings-section-access" class="settings-console-panel">
+                    <div id="settings-section-access" class="settings-console-panel admin-module-panel">
                         <div class="settings-console-panel-heading">
                             <div>
-                                <div class="settings-console-kicker">访问</div>
-                                <h4 class="text-sm font-medium">连接与后台访问</h4>
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">配置 API 地址访问并初始化 admin session。</p>
+                                <div class="settings-console-kicker">第一步</div>
+                                <h4 class="text-sm font-medium">先进入后台</h4>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">先确认当前浏览器能连到服务，再用后台账号登录。登录成功后，其它模块才会依次展开。</p>
                             </div>
                         </div>
                         <div class="pt-2 space-y-3">
                             <div id="adminAccessStatusBanner" class="admin-access-banner" data-state="signed_out">
                                 <div class="admin-access-banner-copy">
-                                    <div class="admin-access-banner-label">登录</div>
-                                    <strong id="adminAccessStatusTitle">登录后台</strong>
-                                    <p id="adminAccessStatusDetail">输入后台用户名和密码后进入管理后台。</p>
+                                    <div class="admin-access-banner-label">当前入口</div>
+                                    <strong id="adminAccessStatusTitle">先登录后台</strong>
+                                    <p id="adminAccessStatusDetail">输入后台用户名和密码后，再进入其它管理模块。</p>
                                 </div>
                                 <div class="admin-access-banner-actions">
                                     <button id="adminSignOutBtn" type="button" class="admin-action-btn admin-action-btn-secondary hidden">退出登录</button>
@@ -207,8 +207,8 @@
                                 <div id="adminAccessLoginCard" class="admin-access-card">
                                     <div>
                                         <div class="settings-console-kicker">登录</div>
-                                        <h5 class="text-sm font-medium">进入管理后台</h5>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">使用当前后台用户名和密码登录。登录后才会显示总览、账号、运行时和诊断模块。</p>
+                                        <h5 class="text-sm font-medium">进入后台工作区</h5>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">用后台用户名和密码完成登录。登录后，你会看到更完整的总览、账号、运行时和诊断模块。</p>
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">后台用户名</label>
@@ -251,16 +251,20 @@
                             </div>
                         </div>
                     </div>
-                    <div id="settings-section-runtime" class="settings-console-panel space-y-3">
+                    <div id="settings-section-runtime" class="settings-console-panel admin-module-panel space-y-3">
                         <div id="runtimeSectionStatus" class="admin-section-status" data-state="signed_out"><span class="admin-section-status-dot"></span><strong>已锁定</strong><span>登录后台后解锁运行时控制。</span></div>
                         <div>
                             <div class="settings-console-kicker">运行时</div>
-                            <h4 class="text-sm font-medium">运行时配置</h4>
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">大多数运行时设置都可以直接在这里管理；默认只保留管理员初始密码和端口作为启动项。</p>
+                            <h4 class="text-sm font-medium">把服务调到你想要的状态</h4>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">这里主要处理服务怎么跑、Chat 要不要开放、代理怎么接、自动注册是否启用。第一次使用时，不需要一次填完全部内容。</p>
+                        </div>
+                        <div class="admin-module-intro-card">
+                            <div class="admin-module-intro-title">你通常会先在这里做什么</div>
+                            <div class="admin-module-intro-copy">先决定是否启用 Chat、是否需要单独聊天密码，再补 API Key、代理和自动化设置。复杂项可以晚一点再配。</div>
                         </div>
                         <div class="runtime-config-callout">
-                            <div class="runtime-config-callout-title">最小启动路径</div>
-                            <div class="runtime-config-callout-copy">默认只需要 `ADMIN_PASSWORD` 和端口。账号、`API_KEY`、代理、自动注册、workspace 与 refresh 这类运行时行为，优先在后台里完成。</div>
+                            <div class="runtime-config-callout-title">更轻的起步方式</div>
+                            <div class="runtime-config-callout-copy">通常只要先准备 `ADMIN_PASSWORD` 和端口就够了。账号、`API_KEY`、代理、自动注册、工作区和 refresh 这些更细的内容，后续再在后台里慢慢补齐。</div>
                         </div>
                         <div class="runtime-config-section">
                             <div class="runtime-config-section-header">
@@ -282,10 +286,18 @@
                                     class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
                                 <input id="runtimeServerApiKeyInput" type="text" placeholder="服务端 API Key（敏感）"
                                     class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                <label class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 sm:col-span-2"><input id="runtimeChatEnabledInput" type="checkbox">启用 Chat 模块（开启后左侧大按钮才显示聊天）</label>
-                                <label class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 sm:col-span-2"><input id="runtimeChatPasswordEnabledInput" type="checkbox">启用独立 Chat 密码（进入聊天前单独验证，不复用 admin 密码）</label>
-                                <input id="runtimeChatPasswordInput" type="password" placeholder="新的 Chat 访问密码；留空表示保持当前设置，清空并保存表示关闭"
-                                    class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            </div>
+                            <div class="runtime-chat-group mt-4">
+                                <div class="runtime-chat-group-title">聊天入口</div>
+                                <div class="runtime-chat-group-copy">这里决定聊天模块要不要在左侧出现，以及进入聊天前是否要单独再过一道密码。</div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                                    <label class="runtime-toggle-card sm:col-span-2"><input id="runtimeChatEnabledInput" type="checkbox"><span><strong>启用 Chat 模块</strong><small>开启后，左侧才会出现聊天模块入口。</small></span></label>
+                                    <label class="runtime-toggle-card sm:col-span-2"><input id="runtimeChatPasswordEnabledInput" type="checkbox"><span><strong>启用独立 Chat 密码</strong><small>进入聊天前单独验证，不复用 admin 密码。</small></span></label>
+                                    <input id="runtimeChatPasswordInput" type="password" placeholder="新的 Chat 访问密码；留空表示保持当前设置，清空并保存表示关闭"
+                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
                                 <select id="runtimeProxyModeInput"
                                     class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
                                     <option value="direct">代理模式：直连</option>
@@ -303,83 +315,130 @@
                         <div class="runtime-config-section">
                             <div class="runtime-config-section-header">
                                 <div>
-                                    <div class="runtime-config-section-title">高级设置</div>
-                                    <div class="runtime-config-section-copy">这些设置通常只在自动注册、refresh、workspace 或外部 provider 集成时才需要调整。</div>
+                                    <div class="runtime-config-section-title">更多运行时能力</div>
+                                    <div class="runtime-config-section-copy">下面这些能力按场景拆开了。只展开你现在真正要改的那一块，不需要一次把所有字段都看完。</div>
                                 </div>
-                                <button id="runtimeAdvancedToggleBtn" type="button" class="admin-action-btn">展开高级设置</button>
+                                <button id="runtimeAdvancedToggleBtn" type="button" class="admin-action-btn">展开更多能力</button>
                             </div>
-                            <div id="runtimeAdvancedFields" class="runtime-advanced-fields hidden">
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <input id="runtimeSiliconflowApiKeyInput" type="text" placeholder="SiliconFlow 密钥（敏感）"
-                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                    <input id="runtimeHttpProxyInput" type="text" placeholder="上游 HTTP 代理"
-                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                    <input id="runtimeHttpsProxyInput" type="text" placeholder="上游 HTTPS 代理"
-                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                    <input id="runtimeSocks5ProxyInput" type="text" placeholder="上游 SOCKS5 代理"
-                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                    <input id="runtimeWarpProxyInput" type="text" placeholder="Warp 本地代理（例如 warp-yg 暴露端口）"
-                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                    <input id="runtimeTemplateSpaceInput" type="text" placeholder="工作区模板 space id"
-                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                    <input id="runtimeRefreshRequestUrlInput" type="text" placeholder="刷新请求地址"
-                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                    <input id="runtimeRefreshClientIdInput" type="text" placeholder="刷新客户端 ID"
-                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                    <input id="runtimeRefreshClientSecretInput" type="text" placeholder="刷新客户端密钥（敏感）"
-                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                    <input id="runtimeWorkspaceRequestUrlInput" type="text" placeholder="工作区请求地址"
-                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                    <input id="runtimeAutoRegisterMailBaseUrlInput" type="text" placeholder="自动注册邮箱服务地址"
-                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                    <input id="runtimeAutoRegisterMailApiKeyInput" type="text" placeholder="自动注册邮箱 API Key（敏感）"
-                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                    <input id="runtimeAutoRegisterDomainInput" type="text" placeholder="自动注册域名（可选）"
-                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                    <select id="runtimeAutoRegisterMailProviderInput"
-                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                        <option value="freemail">自动注册邮箱：freemail</option>
-                                        <option value="moemail">自动注册邮箱：moemail</option>
-                                        <option value="duckmail">自动注册邮箱：duckmail</option>
-                                        <option value="gptmail">自动注册邮箱：gptmail</option>
-                                    </select>
-                                    <input id="runtimeAutoRegisterIntervalInput" type="number" min="300" step="60" placeholder="自动注册间隔秒数"
-                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                    <input id="runtimeAutoRegisterMinSpacingInput" type="number" min="300" step="60" placeholder="自动注册最小间隔秒数"
-                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                    <input id="runtimeAutoRegisterBusyCooldownInput" type="number" min="300" step="60" placeholder="自动注册忙碌冷却秒数"
-                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                    <input id="runtimeAutoRegisterBatchSizeInput" type="number" min="1" max="3" step="1" placeholder="自动注册批次大小"
-                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                            <div id="runtimeAdvancedFields" class="runtime-advanced-fields hidden space-y-4">
+                                <div class="runtime-subsection-card">
+                                    <div class="runtime-subsection-heading">
+                                        <div>
+                                            <div class="runtime-subsection-title">代理与上游网络</div>
+                                            <div class="runtime-subsection-copy">当服务需要走 HTTP、HTTPS、SOCKS5 或 Warp 时，在这里补齐完整网络出口。</div>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <input id="runtimeSiliconflowApiKeyInput" type="text" placeholder="SiliconFlow 密钥（敏感）"
+                                            class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <input id="runtimeHttpProxyInput" type="text" placeholder="上游 HTTP 代理"
+                                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <input id="runtimeHttpsProxyInput" type="text" placeholder="上游 HTTPS 代理"
+                                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <input id="runtimeSocks5ProxyInput" type="text" placeholder="上游 SOCKS5 代理"
+                                            class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <input id="runtimeWarpProxyInput" type="text" placeholder="Warp 本地代理（例如 warp-yg 暴露端口）"
+                                            class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    </div>
                                 </div>
-                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-gray-600 dark:text-gray-300 mt-3">
-                                    <label class="flex items-center gap-2"><input id="runtimeAutoCreateWorkspaceInput" type="checkbox">自动创建工作区</label>
-                                    <label class="flex items-center gap-2"><input id="runtimeAutoSelectWorkspaceInput" type="checkbox">自动选择工作区</label>
-                                    <label class="flex items-center gap-2"><input id="runtimeWorkspaceDryRunInput" type="checkbox">工作区干跑模式</label>
-                                    <label class="flex items-center gap-2"><input id="runtimeAutoRegisterEnabledInput" type="checkbox">启用自动注册</label>
-                                    <label class="flex items-center gap-2"><input id="runtimeAutoRegisterIdleOnlyInput" type="checkbox">仅在空闲时自动注册</label>
-                                    <label class="flex items-center gap-2"><input id="runtimeAutoRegisterHeadlessInput" type="checkbox">自动注册使用无头模式</label>
-                                    <label class="flex items-center gap-2"><input id="runtimeAutoRegisterUseApiInput" type="checkbox">优先走 API 而非浏览器</label>
-                                    <label class="flex items-center gap-2"><input id="runtimeAllowRealProbeRequestsInput" type="checkbox">允许真实探测请求</label>
+                                <div class="runtime-subsection-card">
+                                    <div class="runtime-subsection-heading">
+                                        <div>
+                                            <div class="runtime-subsection-title">工作区与 refresh</div>
+                                            <div class="runtime-subsection-copy">只有在要联动模板、外部 refresh 接口或真实工作区创建流程时，才需要改这里。</div>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <input id="runtimeTemplateSpaceInput" type="text" placeholder="工作区模板 space id"
+                                            class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <input id="runtimeRefreshRequestUrlInput" type="text" placeholder="刷新请求地址"
+                                            class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <input id="runtimeRefreshClientIdInput" type="text" placeholder="刷新客户端 ID"
+                                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <input id="runtimeRefreshClientSecretInput" type="text" placeholder="刷新客户端密钥（敏感）"
+                                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <input id="runtimeWorkspaceRequestUrlInput" type="text" placeholder="工作区请求地址"
+                                            class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <select id="runtimeRefreshExecutionModeInput"
+                                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                            <option value="manual">刷新模式：手动</option>
+                                            <option value="dry_run">刷新模式：模板干跑</option>
+                                            <option value="live_template">刷新模式：模板实跑</option>
+                                        </select>
+                                        <select id="runtimeWorkspaceExecutionModeInput"
+                                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                            <option value="manual">工作区模式：手动</option>
+                                            <option value="dry_run">工作区模式：模板干跑</option>
+                                            <option value="live_template">工作区模式：模板实跑</option>
+                                        </select>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-gray-600 dark:text-gray-300 mt-3">
+                                        <label class="flex items-center gap-2"><input id="runtimeAutoCreateWorkspaceInput" type="checkbox">自动创建工作区</label>
+                                        <label class="flex items-center gap-2"><input id="runtimeAutoSelectWorkspaceInput" type="checkbox">自动选择工作区</label>
+                                        <label class="flex items-center gap-2 sm:col-span-2"><input id="runtimeWorkspaceDryRunInput" type="checkbox">工作区干跑模式</label>
+                                        <label class="flex items-center gap-2 sm:col-span-2"><input id="runtimeAllowRealProbeRequestsInput" type="checkbox">允许真实探测请求</label>
+                                    </div>
                                 </div>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                                    <select id="runtimeRefreshExecutionModeInput"
-                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                        <option value="manual">刷新模式：手动</option>
-                                        <option value="dry_run">刷新模式：模板干跑</option>
-                                        <option value="live_template">刷新模式：模板实跑</option>
-                                    </select>
-                                    <select id="runtimeWorkspaceExecutionModeInput"
-                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                        <option value="manual">工作区模式：手动</option>
-                                        <option value="dry_run">工作区模式：模板干跑</option>
-                                        <option value="live_template">工作区模式：模板实跑</option>
-                                    </select>
+                                <div class="runtime-subsection-card">
+                                    <div class="runtime-subsection-heading">
+                                        <div>
+                                            <div class="runtime-subsection-title">自动注册</div>
+                                            <div class="runtime-subsection-copy">只有在你希望系统自己补新号、补邮箱或定时拉起注册动作时，才需要打开这块。</div>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <input id="runtimeAutoRegisterMailBaseUrlInput" type="text" placeholder="自动注册邮箱服务地址"
+                                            class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <input id="runtimeAutoRegisterMailApiKeyInput" type="text" placeholder="自动注册邮箱 API Key（敏感）"
+                                            class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <input id="runtimeAutoRegisterDomainInput" type="text" placeholder="自动注册域名（可选）"
+                                            class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <select id="runtimeAutoRegisterMailProviderInput"
+                                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                            <option value="freemail">自动注册邮箱：freemail</option>
+                                            <option value="moemail">自动注册邮箱：moemail</option>
+                                            <option value="duckmail">自动注册邮箱：duckmail</option>
+                                            <option value="gptmail">自动注册邮箱：gptmail</option>
+                                        </select>
+                                        <input id="runtimeAutoRegisterIntervalInput" type="number" min="300" step="60" placeholder="自动注册间隔秒数"
+                                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <input id="runtimeAutoRegisterMinSpacingInput" type="number" min="300" step="60" placeholder="自动注册最小间隔秒数"
+                                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <input id="runtimeAutoRegisterBusyCooldownInput" type="number" min="300" step="60" placeholder="自动注册忙碌冷却秒数"
+                                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <input id="runtimeAutoRegisterBatchSizeInput" type="number" min="1" max="3" step="1" placeholder="自动注册批次大小"
+                                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-gray-600 dark:text-gray-300 mt-3">
+                                        <label class="flex items-center gap-2"><input id="runtimeAutoRegisterEnabledInput" type="checkbox">启用自动注册</label>
+                                        <label class="flex items-center gap-2"><input id="runtimeAutoRegisterIdleOnlyInput" type="checkbox">仅在空闲时自动注册</label>
+                                        <label class="flex items-center gap-2"><input id="runtimeAutoRegisterHeadlessInput" type="checkbox">自动注册使用无头模式</label>
+                                        <label class="flex items-center gap-2"><input id="runtimeAutoRegisterUseApiInput" type="checkbox">优先走 API 而非浏览器</label>
+                                    </div>
+                                </div>
+                                <div class="runtime-subsection-card runtime-subsection-card-media">
+                                    <div class="runtime-subsection-heading">
+                                        <div>
+                                            <div class="runtime-subsection-title">媒体与公开链接</div>
+                                            <div class="runtime-subsection-copy">这块是给图片缓存和对外可访问链接预留的位置。即使现在还没完全接入媒体上传流程，也先把入口放正，避免以后继续塞进杂项里。</div>
+                                        </div>
+                                        <span class="runtime-subsection-badge">下一批重点</span>
+                                    </div>
+                                    <div class="runtime-media-note">
+                                        配置 public base URL 后，新上传图片会直接生成这个公开地址下的链接；不填时，默认使用当前服务自己的 `/v1/media/...` 地址。媒体缓存目录建议指向持久化挂载目录，避免服务重启后图片失效。
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                                        <input id="runtimeMediaPublicBaseUrlInput" type="text" placeholder="媒体 public base URL，例如 https://your-domain.com/media"
+                                            class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                        <input id="runtimeMediaStoragePathInput" type="text" placeholder="媒体缓存目录，例如 /data/media"
+                                            class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    </div>
+                                    <div id="runtimeMediaGuidance" class="runtime-media-guidance mt-3"></div>
                                 </div>
                             </div>
                         </div>
-                        <div class="text-[11px] text-gray-500 dark:text-gray-400" id="runtimeConfigHint">保存运行时配置后，会立即更新当前服务设置。多数运行时参数会直接生效；`ALLOWED_ORIGINS` 这类启动期配置通常仍需重启。Warp 本地代理可填写 warp-yg 等工具暴露的端口。</div>
-                        <div class="flex flex-wrap gap-2">
+                        <div class="text-[11px] text-gray-500 dark:text-gray-400" id="runtimeConfigHint">保存运行时配置后，会立即更新当前服务设置。多数运行时参数会直接生效；`ALLOWED_ORIGINS` 这类启动期配置通常仍需重启。Warp 本地代理可填写 warp-yg 等工具暴露的端口。媒体 public base URL 不填时，聊天图片会自动跟随当前服务地址生成 `/v1/media/...` 链接。</div>
+                        <div class="flex flex-wrap gap-2 pt-1">
                             <button id="runtimeLoadBtn" type="button" class="admin-action-btn">加载配置</button>
                             <button id="runtimeSaveBtn" type="button" class="admin-action-btn">保存配置</button>
                             <button id="runtimeCheckProxyBtn" type="button" class="admin-action-btn">检查代理</button>
@@ -397,16 +456,20 @@
                     </div>
                 </div>
 
-                <div id="settings-section-overview" class="mt-6 settings-console-panel space-y-4">
+                <div id="settings-section-overview" class="settings-console-panel admin-module-panel space-y-4">
                     <div id="overviewSectionStatus" class="admin-section-status" data-state="signed_out"><span class="admin-section-status-dot"></span><strong>已锁定</strong><span>登录后台后解锁总览。</span></div>
                     <div class="flex items-center justify-between gap-3 flex-wrap">
                         <div>
                             <div class="settings-console-kicker">总览</div>
-                            <h4 class="text-sm font-medium">账号总控台</h4>
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">查看多账号健康状态、OAuth 状态、工作区就绪情况和最近操作。</p>
+                            <h4 class="text-sm font-medium">先看现在整体是不是健康</h4>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">如果你刚登录后台，最适合先看这里。它会把账号可用性、OAuth 状态、工作区情况和最近动作先压缩成一眼能读懂的结果。</p>
                         </div>
                         <button id="adminRefreshBtn" type="button"
                             class="px-3 py-1.5 rounded-lg text-xs font-medium bg-black text-white dark:bg-white dark:text-black hover:opacity-90 transition-opacity">刷新总览</button>
+                    </div>
+                    <div class="admin-module-intro-card">
+                        <div class="admin-module-intro-title">适合先看的三个信号</div>
+                        <div class="admin-module-intro-copy">先看可用账号和待刷新数量，再看工作区是否缺失。如果这里已经一片红，通常不用急着去更深的模块。</div>
                     </div>
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs" id="adminSummaryCards">
                         <div class="admin-stat-card"><span>账号总数</span><strong id="adminStatTotal">-</strong></div>
@@ -417,15 +480,18 @@
                     <div id="adminAlertSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
                     <div id="adminAlertDetails" class="space-y-2"></div>
                     <div id="adminQuickSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
-                    <div class="flex flex-wrap gap-2">
-                        <button id="adminQuickProbeFailuresBtn" type="button" class="admin-action-btn">探测失败</button>
-                        <button id="adminQuickInvalidBtn" type="button" class="admin-action-btn">无效账号</button>
-                        <button id="adminQuickRefreshBtn" type="button" class="admin-action-btn">需要刷新</button>
-                        <button id="adminQuickWorkspaceBtn" type="button" class="admin-action-btn">缺少工作区</button>
-                        <button id="adminQuickPendingHydrationBtn" type="button" class="admin-action-btn">待补全工作区</button>
-                        <button id="adminQuickHydrationDueBtn" type="button" class="admin-action-btn">工作区补全到期</button>
-                        <button id="adminQuickEducationBtn" type="button" class="admin-action-btn">教育账号</button>
-                        <button id="adminQuickUsableBtn" type="button" class="admin-action-btn">仅看可用账号</button>
+                    <div class="admin-action-group">
+                        <div class="admin-action-group-label">先看这些</div>
+                        <div class="admin-action-group-actions">
+                            <button id="adminQuickRefreshBtn" type="button" class="admin-action-btn admin-action-btn-primary">需要刷新</button>
+                            <button id="adminQuickWorkspaceBtn" type="button" class="admin-action-btn admin-action-btn-primary">缺少工作区</button>
+                            <button id="adminQuickInvalidBtn" type="button" class="admin-action-btn">无效账号</button>
+                            <button id="adminQuickProbeFailuresBtn" type="button" class="admin-action-btn">探测失败</button>
+                            <button id="adminQuickPendingHydrationBtn" type="button" class="admin-action-btn">待补全工作区</button>
+                            <button id="adminQuickHydrationDueBtn" type="button" class="admin-action-btn">工作区补全到期</button>
+                            <button id="adminQuickEducationBtn" type="button" class="admin-action-btn">教育账号</button>
+                            <button id="adminQuickUsableBtn" type="button" class="admin-action-btn">仅看可用账号</button>
+                        </div>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
                         <input id="adminSearchInput" type="text" placeholder="搜索邮箱、用户或标签"
@@ -478,18 +544,21 @@
                         <input id="adminPageSizeInput" type="number" min="1" max="200" value="20" placeholder="每页数量"
                             class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
                     </div>
-                    <div class="flex flex-wrap gap-2">
-                        <button id="adminApplyFiltersBtn" type="button" class="admin-action-btn">应用筛选</button>
-                        <button id="adminClearFiltersBtn" type="button" class="admin-action-btn">清空筛选</button>
-                        <button id="adminBulkProbeBtn" type="button" class="admin-action-btn">批量探测筛选结果</button>
-                        <button id="adminBulkRefreshBtn" type="button" class="admin-action-btn">批量刷新筛选结果</button>
-                        <button id="adminBulkRefreshProbeBtn" type="button" class="admin-action-btn">批量刷新并探测</button>
-                        <button id="adminBulkEnableBtn" type="button" class="admin-action-btn">批量启用筛选结果</button>
-                        <button id="adminBulkDisableBtn" type="button" class="admin-action-btn">批量停用筛选结果</button>
-                        <button id="adminBulkSyncWorkspaceBtn" type="button" class="admin-action-btn">批量同步工作区</button>
-                        <button id="adminBulkHydrationRetryBtn" type="button" class="admin-action-btn">批量重试补全</button>
-                        <button id="adminBulkCreateWorkspaceBtn" type="button" class="admin-action-btn">批量创建工作区</button>
-                        <button id="adminBulkWorkspaceProbeBtn" type="button" class="admin-action-btn">批量探测工作区</button>
+                    <div class="admin-action-group">
+                        <div class="admin-action-group-label">批量处理</div>
+                        <div class="admin-action-group-actions">
+                            <button id="adminApplyFiltersBtn" type="button" class="admin-action-btn admin-action-btn-primary">应用筛选</button>
+                            <button id="adminBulkProbeBtn" type="button" class="admin-action-btn admin-action-btn-primary">批量探测筛选结果</button>
+                            <button id="adminBulkRefreshBtn" type="button" class="admin-action-btn admin-action-btn-primary">批量刷新筛选结果</button>
+                            <button id="adminClearFiltersBtn" type="button" class="admin-action-btn">清空筛选</button>
+                            <button id="adminBulkRefreshProbeBtn" type="button" class="admin-action-btn">批量刷新并探测</button>
+                            <button id="adminBulkEnableBtn" type="button" class="admin-action-btn">批量启用筛选结果</button>
+                            <button id="adminBulkDisableBtn" type="button" class="admin-action-btn">批量停用筛选结果</button>
+                            <button id="adminBulkSyncWorkspaceBtn" type="button" class="admin-action-btn">批量同步工作区</button>
+                            <button id="adminBulkHydrationRetryBtn" type="button" class="admin-action-btn">批量重试补全</button>
+                            <button id="adminBulkCreateWorkspaceBtn" type="button" class="admin-action-btn">批量创建工作区</button>
+                            <button id="adminBulkWorkspaceProbeBtn" type="button" class="admin-action-btn">批量探测工作区</button>
+                        </div>
                     </div>
                     <div id="adminPanelNotice" class="text-xs text-gray-500 dark:text-gray-400">请先使用当前后台账号登录。admin session 只保留在当前浏览器会话中，如需更换后台用户名或密码，可在上方直接更新。</div>
                     <div id="adminBulkResultPanel" class="text-xs text-gray-500 dark:text-gray-400 space-y-1"></div>
@@ -536,14 +605,14 @@
                     </div>
                 </div>
 
-                <div id="settings-section-usage" class="settings-console-panel space-y-4">
+                <div id="settings-section-usage" class="settings-console-panel admin-module-panel space-y-4">
                     <div id="usageSectionStatus" class="admin-section-status" data-state="signed_out"><span class="admin-section-status-dot"></span><strong>已锁定</strong><span>登录后台后解锁用量查询。</span></div>
                     <div class="usage-hero-panel">
                         <div class="flex items-start justify-between gap-3 flex-wrap">
                             <div>
                                 <div class="usage-section-kicker">运维 / 用量</div>
-                                <h4 class="text-sm font-medium">用量查询</h4>
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">查询 chat 与 responses 请求记录下来的 token 用量。</p>
+                                <h4 class="text-sm font-medium">看看请求都花在了哪里</h4>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">这里用来查 chat 和 responses 的 token 用量，适合排查“为什么今天突然跑贵了”或者“到底是哪类请求在吃量”。</p>
                             </div>
                             <div id="adminUsageEventsMeta" class="text-[11px] text-gray-500 dark:text-gray-400"></div>
                         </div>
@@ -589,19 +658,26 @@
                     </div>
                 </div>
 
-                <div id="settings-section-accounts" class="settings-console-panel space-y-4">
+                <div id="settings-section-accounts" class="settings-console-panel admin-module-panel space-y-4">
                     <div id="accountsSectionStatus" class="admin-section-status" data-state="signed_out"><span class="admin-section-status-dot"></span><strong>已锁定</strong><span>登录后台后解锁账号操作。</span></div>
                     <div>
                         <div class="settings-console-kicker">账号</div>
-                        <h4 class="text-sm font-medium">账号池</h4>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">管理当前账号池，并支持新增或批量导入账号。</p>
+                        <h4 class="text-sm font-medium">把账号池整理清楚</h4>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">这里适合处理“哪些号还能用、哪些要刷新、哪些要补工作区、哪些该新增或导入”。它更像日常管理页，而不是一次性的导入工具。</p>
                     </div>
-                    <div class="flex flex-wrap gap-2">
-                        <button id="adminProbeBtn" type="button" class="admin-action-btn">探测账号</button>
-                        <button id="adminRefreshTokensBtn" type="button" class="admin-action-btn">刷新令牌</button>
-                        <button id="adminWorkspaceSyncBtn" type="button" class="admin-action-btn">同步工作区</button>
-                        <button id="adminWorkspaceCreateBtn" type="button" class="admin-action-btn">创建工作区</button>
-                        <button id="adminExportAccountsBtn" type="button" class="admin-action-btn">导出账号</button>
+                    <div class="admin-module-intro-card">
+                        <div class="admin-module-intro-title">常见顺序</div>
+                        <div class="admin-module-intro-copy">先看现有账号状态，再决定是探测、刷新还是补工作区；确认结构没问题后，再做新增或批量导入。</div>
+                    </div>
+                    <div class="admin-action-group">
+                        <div class="admin-action-group-label">账号动作</div>
+                        <div class="admin-action-group-actions">
+                            <button id="adminProbeBtn" type="button" class="admin-action-btn admin-action-btn-primary">探测账号</button>
+                            <button id="adminRefreshTokensBtn" type="button" class="admin-action-btn admin-action-btn-primary">刷新令牌</button>
+                            <button id="adminWorkspaceSyncBtn" type="button" class="admin-action-btn">同步工作区</button>
+                            <button id="adminWorkspaceCreateBtn" type="button" class="admin-action-btn">创建工作区</button>
+                            <button id="adminExportAccountsBtn" type="button" class="admin-action-btn">导出账号</button>
+                        </div>
                     </div>
                     <div id="adminAccountsPanel" class="max-h-72 overflow-y-auto border border-black/10 dark:border-white/10 rounded-2xl"></div>
                     <div class="space-y-3 pt-1 border-t border-black/10 dark:border-white/10">
@@ -639,12 +715,16 @@
                     </div>
                 </div>
 
-                <div id="settings-section-diagnostics" class="settings-console-panel space-y-3">
+                <div id="settings-section-diagnostics" class="settings-console-panel admin-module-panel space-y-3">
                     <div id="diagnosticsSectionStatus" class="admin-section-status" data-state="signed_out"><span class="admin-section-status-dot"></span><strong>已锁定</strong><span>登录后台后解锁诊断工具。</span></div>
                     <div>
                         <div class="settings-console-kicker">诊断</div>
-                        <h4 class="text-sm font-medium">OAuth 回调落库</h4>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">使用本地 redirect URI（例如 gcli2api）。若留空则默认使用当前面板地址，也可以直接填写 <code>http://localhost:8000</code>。</p>
+                        <h4 class="text-sm font-medium">当流程卡住时，从这里排查</h4>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">如果 OAuth 回调、工作区创建、模板请求或诊断链路哪里不顺，这里是最适合集中检查的地方。</p>
+                    </div>
+                    <div class="admin-module-intro-card">
+                        <div class="admin-module-intro-title">什么时候该进这个模块</div>
+                        <div class="admin-module-intro-copy">通常是在总览里看到异常，或者账号模块动作失败以后，再来这里看诊断、请求模板和快照，而不是一上来就钻细节。</div>
                     </div>
                     <div class="flex flex-wrap gap-2">
                         <button id="oauthStartBtn" type="button" class="admin-action-btn">准备 OAuth 启动参数</button>
@@ -691,9 +771,9 @@
                 </div>
                 </div>
 
-                <div class="mt-8 border-t border-black/10 dark:border-white/10 pt-4 flex items-center justify-between gap-3 flex-wrap">
-                    <p class="text-xs text-gray-500 dark:text-gray-400">底部保存只应用 Base URL、API Key 和运行时配置。admin session 访问请在上方单独管理。</p>
-                    <div class="flex justify-end gap-3">
+                <div class="mt-8 border-t border-black/10 dark:border-white/10 pt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <p id="settingsSaveScopeHint" class="text-xs text-gray-500 dark:text-gray-400">底部保存只应用 Base URL、API Key 和运行时配置。admin session 访问请在上方单独管理。</p>
+                    <div class="flex justify-end gap-3 sm:ml-auto">
                         <button id="cancelSettingsBtn"
                             class="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">重置视图</button>
                         <button id="saveSettingsBtn"
@@ -717,9 +797,9 @@
                 <div id="chatAccessGate" class="flex-1 flex items-center justify-center px-4 sm:px-6 py-10">
                     <div class="w-full max-w-md bg-white dark:bg-[#1f1f1f] border border-black/10 dark:border-white/10 rounded-2xl p-6 shadow-sm space-y-4">
                         <div>
-                            <div class="settings-console-kicker">Chat Access</div>
-                            <h3 id="chatAccessGateTitle" class="text-lg font-medium mt-1">聊天模块已锁定</h3>
-                            <p id="chatAccessGateCopy" class="text-sm text-gray-500 dark:text-gray-400 mt-2">当前聊天模块需要独立密码。输入后仅在本浏览器会话中保留聊天访问 session。</p>
+                            <div class="settings-console-kicker">聊天访问</div>
+                            <h3 id="chatAccessGateTitle" class="text-lg font-medium mt-1">先解锁聊天模块</h3>
+                            <p id="chatAccessGateCopy" class="text-sm text-gray-500 dark:text-gray-400 mt-2">当前聊天被单独保护。输入聊天密码后，只会在这个浏览器会话里保留访问状态。</p>
                         </div>
                         <input id="chatAccessPasswordInput" type="password" placeholder="输入 Chat 访问密码"
                             class="w-full bg-gray-50 dark:bg-[#161616] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-3 text-sm outline-none">
@@ -727,7 +807,7 @@
                             <button id="chatAccessUnlockBtn" type="button" class="admin-action-btn admin-action-btn-primary">进入 Chat</button>
                             <button id="chatAccessRefreshBtn" type="button" class="admin-action-btn">刷新状态</button>
                         </div>
-                        <div id="chatAccessGateNotice" class="text-xs text-gray-500 dark:text-gray-400">如你已是后台管理员，也可以直接进入 Chat，无需再次输入聊天密码。</div>
+                        <div id="chatAccessGateNotice" class="text-xs text-gray-500 dark:text-gray-400">如果你已经是后台管理员，通常可以直接进入聊天，不需要再重复输入聊天密码。</div>
                     </div>
                 </div>
 

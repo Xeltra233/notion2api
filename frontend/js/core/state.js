@@ -34,26 +34,23 @@ window.NotionAI.Core.State = {
     },
 
     /**
-     * Loads stored API key from localStorage or sessionStorage
+     * Loads stored API key from sessionStorage only
      * @returns {string} API key or empty string
      */
     loadStoredApiKey() {
-        const apiKey = localStorage.getItem('claude_api_key') ||
-                      sessionStorage.getItem('claude_api_key') ||
-                      '';
-        return apiKey;
+        localStorage.removeItem('claude_api_key');
+        return sessionStorage.getItem('claude_api_key') || '';
     },
 
     /**
-     * Persists API key to both localStorage and sessionStorage
+     * Persists API key to sessionStorage only
      * @param {string} apiKey - API key to store
      */
     persistApiKey(apiKey) {
+        localStorage.removeItem('claude_api_key');
         if (apiKey) {
-            localStorage.setItem('claude_api_key', apiKey);
             sessionStorage.setItem('claude_api_key', apiKey);
         } else {
-            localStorage.removeItem('claude_api_key');
             sessionStorage.removeItem('claude_api_key');
         }
     },

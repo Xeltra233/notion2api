@@ -125,25 +125,35 @@ window.NotionAI.UI.Input = {
         const acceptedFiles = imageFiles.slice(0, availableSlots);
 
         if (imageFiles.length > availableSlots) {
-            this.setAttachmentHint(`Only ${this.MAX_ATTACHMENT_COUNT} images can be attached per message.`);
+            this.setAttachmentHint(`最多只能附带 ${this.MAX_ATTACHMENT_COUNT} 张图片。`);
         } else {
             this.setAttachmentHint('');
         }
 
         const additions = [];
-        for (const file of acceptedFiles) {
-            const normalized = await this.normalizeImageFile(file);
-            additions.push({
-                id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-                name: normalized.name,
-                url: normalized.url,
-                size: normalized.size,
-                compressed: normalized.compressed
-            });
+        try {
+            for (const file of acceptedFiles) {
+                const normalized = await this.normalizeImageFile(file);
+                this.setAttachmentHint(`正在上传 ${normalized.name}...`);
+                const uploaded = await window.NotionAI.API.Admin.uploadMedia(normalized.url, normalized.name);
+                additions.push({
+                    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                    name: uploaded.file_name || normalized.name,
+                    url: uploaded.url,
+                    size: Number(uploaded.size_bytes || normalized.size || 0),
+                    compressed: normalized.compressed,
+                    mediaId: uploaded.media_id || ''
+                });
+            }
+        } catch (error) {
+            this.setAttachmentHint(error?.message || '图片上传失败，请稍后重试。');
+            throw error;
         }
 
         if (additions.some(item => item.compressed)) {
-            this.setAttachmentHint('Large images were compressed before sending.');
+            this.setAttachmentHint('图片已优化并上传到服务端缓存。');
+        } else if (additions.length) {
+            this.setAttachmentHint('图片已上传到服务端缓存。');
         }
 
         this.setAttachments([...current, ...additions]);
@@ -177,10 +187,17 @@ window.NotionAI.UI.Input = {
             const chip = document.createElement('div');
             chip.className = 'attachment-chip';
             const sizeKb = Math.max(1, Math.round((Number(item.size || 0) / 1024)));
-            chip.innerHTML = `<span>${item.name}${item.compressed ? ' (optimized)' : ''} · ${sizeKb}KB</span><button type="button" data-attachment-id="${item.id}">x</button>`;
-            chip.querySelector('button').addEventListener('click', () => {
+            const label = document.createElement('span');
+            label.textContent = `${item.name}${item.compressed ? ' (optimized)' : ''} · ${sizeKb}KB`;
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.dataset.attachmentId = item.id;
+            button.textContent = 'x';
+            button.addEventListener('click', () => {
                 this.removeAttachment(item.id);
             });
+            chip.appendChild(label);
+            chip.appendChild(button);
             container.appendChild(chip);
         });
     },
@@ -195,10 +212,14 @@ window.NotionAI.UI.Input = {
         }
 
         attachments.forEach(item => {
-            parts.push({
+            const part = {
                 type: 'image_url',
                 image_url: { url: item.url }
-            });
+            };
+            if (item.mediaId) {
+                part.media_id = item.mediaId;
+            }
+            parts.push(part);
         });
 
         if (parts.length === 0) {

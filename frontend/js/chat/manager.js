@@ -164,7 +164,16 @@ window.NotionAI.Chat.Manager = {
         // Reset if current chat was deleted
         const currentChatId = window.NotionAI.Core.State.get('currentChatId');
         if (currentChatId === chatId) {
-            this.startNewChat();
+            window.NotionAI.Core.State.set('currentChatId', null);
+            const remainingChats = window.NotionAI.Core.State.get('chats');
+            if (remainingChats.length > 0) {
+                this.selectChat(remainingChats[0].id);
+                return;
+            }
+            document.getElementById('chatContainer').innerHTML = '';
+            document.getElementById('welcomeScreen').classList.remove('hidden');
+            document.getElementById('headerTitle').textContent = '聊天';
+            document.getElementById('headerTitle').classList.remove('opacity-0');
         }
 
         this.renderChatList();
