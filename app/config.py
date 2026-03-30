@@ -174,7 +174,9 @@ def _build_admin_auth_payload(
     initialized_from_default: bool,
     updated_at: int | None = None,
 ) -> dict[str, Any]:
-    normalized_username = str(username or DEFAULT_ADMIN_USERNAME).strip() or DEFAULT_ADMIN_USERNAME
+    normalized_username = (
+        str(username or DEFAULT_ADMIN_USERNAME).strip() or DEFAULT_ADMIN_USERNAME
+    )
     salt = secrets.token_hex(16)
     now_ts = int(updated_at or time.time())
     return {
@@ -189,13 +191,18 @@ def _build_admin_auth_payload(
 
 def _normalize_admin_auth(raw: Any) -> dict[str, Any]:
     if isinstance(raw, dict):
-        username = str(raw.get("username") or DEFAULT_ADMIN_USERNAME).strip() or DEFAULT_ADMIN_USERNAME
+        username = (
+            str(raw.get("username") or DEFAULT_ADMIN_USERNAME).strip()
+            or DEFAULT_ADMIN_USERNAME
+        )
         password_hash = str(raw.get("password_hash") or "").strip()
         password_salt = str(raw.get("password_salt") or "").strip()
         if username and password_hash and password_salt:
             updated_at = raw.get("updated_at")
             try:
-                normalized_updated_at = int(updated_at) if updated_at is not None else int(time.time())
+                normalized_updated_at = (
+                    int(updated_at) if updated_at is not None else int(time.time())
+                )
             except (TypeError, ValueError):
                 normalized_updated_at = int(time.time())
             return {
@@ -203,7 +210,9 @@ def _normalize_admin_auth(raw: Any) -> dict[str, Any]:
                 "password_hash": password_hash,
                 "password_salt": password_salt,
                 "must_change_password": bool(raw.get("must_change_password", False)),
-                "initialized_from_default": bool(raw.get("initialized_from_default", False)),
+                "initialized_from_default": bool(
+                    raw.get("initialized_from_default", False)
+                ),
                 "updated_at": normalized_updated_at,
             }
     default_password = str(ADMIN_PASSWORD or "").strip()
@@ -263,7 +272,9 @@ def _normalize_chat_auth(raw: Any) -> dict[str, Any]:
         password_salt = str(raw.get("password_salt") or "").strip()
         updated_at = raw.get("updated_at")
         try:
-            normalized_updated_at = int(updated_at) if updated_at is not None else int(time.time())
+            normalized_updated_at = (
+                int(updated_at) if updated_at is not None else int(time.time())
+            )
         except (TypeError, ValueError):
             normalized_updated_at = int(time.time())
         if password_hash and password_salt:
@@ -295,15 +306,21 @@ def _normalize_action_history(raw: Any) -> list[dict[str, Any]]:
             if isinstance(normalized_item.get("payload"), dict)
             else {}
         )
-        summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else None
+        summary = (
+            payload.get("summary") if isinstance(payload.get("summary"), dict) else None
+        )
         if summary is not None:
             if not str(summary.get("action") or "").strip() and action:
                 summary["action"] = action
-            if not str(summary.get("account_id") or "").strip() and payload.get("account_id"):
+            if not str(summary.get("account_id") or "").strip() and payload.get(
+                "account_id"
+            ):
                 summary["account_id"] = payload.get("account_id")
             if not str(summary.get("user_id") or "").strip() and payload.get("user_id"):
                 summary["user_id"] = payload.get("user_id")
-            if not str(summary.get("user_email") or "").strip() and payload.get("user_email"):
+            if not str(summary.get("user_email") or "").strip() and payload.get(
+                "user_email"
+            ):
                 summary["user_email"] = payload.get("user_email")
         normalized_logs.append(normalized_item)
     return normalized_logs
@@ -454,11 +471,13 @@ class RuntimeConfigStore:
         config["allow_real_probe_requests"] = bool(
             raw.get("allow_real_probe_requests", False)
         )
-        config["media_public_base_url"] = str(raw.get("media_public_base_url") or "").strip()
-        config["media_storage_path"] = (
-            str(raw.get("media_storage_path") or str(DATA_DIR / "media")).strip()
-            or str(DATA_DIR / "media")
-        )
+        config["chat_enabled"] = bool(raw.get("chat_enabled", False))
+        config["media_public_base_url"] = str(
+            raw.get("media_public_base_url") or ""
+        ).strip()
+        config["media_storage_path"] = str(
+            raw.get("media_storage_path") or str(DATA_DIR / "media")
+        ).strip() or str(DATA_DIR / "media")
         config["auto_register_enabled"] = bool(raw.get("auto_register_enabled", False))
         config["auto_register_idle_only"] = bool(
             raw.get("auto_register_idle_only", True)

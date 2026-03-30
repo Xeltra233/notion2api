@@ -281,12 +281,16 @@ async def api_key_auth(request: Request, call_next):
         if (
             request_path.startswith("/v1") or request_path.startswith("/v1beta")
         ) and request.method != "OPTIONS":
+            if request_path.startswith("/v1/admin"):
+                return await call_next(request)
             if request_path in public_api_paths:
                 return await call_next(request)
             if request_path.startswith("/v1/media/"):
                 if _is_safe_public_media_path(request_path):
                     return await call_next(request)
-                return JSONResponse(status_code=404, content={"detail": "Media not found."})
+                return JSONResponse(
+                    status_code=404, content={"detail": "Media not found."}
+                )
             auth_header = request.headers.get("Authorization", "")
             x_api_key = str(request.headers.get("x-api-key", "") or "")
             bearer_token = ""
