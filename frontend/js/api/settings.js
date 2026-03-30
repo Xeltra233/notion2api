@@ -893,6 +893,23 @@ window.NotionAI.API.Settings = {
         }
     },
 
+    resetInvalidAdminSession(reason = '') {
+        window.NotionAI.API.Admin.logout();
+        this.renderAdminAccessStatus({});
+        this.renderAdminSessionSummary({});
+        this.applyAdminConsoleAccessState({});
+        if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
+            window.NotionAI.Core.App.setActiveModule('access');
+        } else if (typeof window.NotionAI.Core.App?.syncShellFromState === 'function') {
+            window.NotionAI.Core.App.syncShellFromState();
+        }
+        if (/api key|invalid_api_key/i.test(reason)) {
+            this.revealConnectionSettingsIfNeeded('当前缓存的后台会话已失效，且当前实例要求有效的 API Key。请先补录访问密钥后重新登录。');
+            return;
+        }
+        this.setAdminNotice(reason || '当前后台会话已失效，请重新登录。');
+    },
+
     async signOutAdminSession() {
         window.NotionAI.API.Admin.logout();
         const passwordInput = document.getElementById('adminPasswordInput');
@@ -1840,7 +1857,12 @@ window.NotionAI.API.Settings = {
         } catch (error) {
             this._lastAdminSnapshot = {};
             this.renderAdminAccounts({ accounts: [] });
-            this.setAdminNotice(error.message || '加载后台账号失败。');
+            const messageText = error.message || '加载后台账号失败。';
+            if (window.NotionAI.Core.State.get('adminSessionToken') && /(api key|invalid_api_key|401|unauthorized|forbidden|admin session)/i.test(messageText)) {
+                this.resetInvalidAdminSession(messageText);
+                return;
+            }
+            this.setAdminNotice(messageText);
         }
     },
 
@@ -2456,7 +2478,12 @@ window.NotionAI.API.Settings = {
             const redactionMode = String(data.redaction_mode || data.settings_view_mode || 'safe').trim().toLowerCase() || 'safe';
             this.setAdminNotice(`运行时配置已加载，当前模式：${redactionMode}。`);
         } catch (error) {
-            this.setAdminNotice(error.message || '加载运行时配置失败。');
+            const messageText = error.message || '加载运行时配置失败。';
+            if (window.NotionAI.Core.State.get('adminSessionToken') && /(api key|invalid_api_key|401|unauthorized|forbidden|admin session)/i.test(messageText)) {
+                this.resetInvalidAdminSession(messageText);
+                return;
+            }
+            this.setAdminNotice(messageText);
         }
     },
 
