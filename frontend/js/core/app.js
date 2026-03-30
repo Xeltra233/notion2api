@@ -101,10 +101,10 @@ window.NotionAI.Core.App = window.NotionAI.Core.App || {
             mobileBackdrop.classList.add('hidden');
         }
         if (openSidebarBtn) {
-            openSidebarBtn.classList.remove('hidden');
+            openSidebarBtn.classList.toggle('hidden', !hasAdminSession);
         }
         if (sidebar) {
-            sidebar.classList.remove('hidden');
+            sidebar.classList.toggle('hidden', !hasAdminSession);
         }
         if (settingsModal) {
             settingsModal.classList.toggle('max-w-7xl', hasAdminSession);

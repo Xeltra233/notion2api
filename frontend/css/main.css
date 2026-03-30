@@ -170,11 +170,7 @@ html.dark .admin-chat-action-btn {
 }
 
 body[data-admin-auth="signed_out"] .sidebar-shell {
-    width: min(360px, 100vw);
-}
-
-body[data-admin-auth="signed_out"] .admin-shell-summary {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(252, 245, 238, 0.8));
+    display: none;
 }
 
 body[data-admin-auth="signed_out"] #settings-section-access {
@@ -190,18 +186,8 @@ body[data-admin-auth="signed_out"] #settings-section-access .admin-access-card {
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(252, 245, 238, 0.74));
 }
 
-body[data-admin-auth="signed_out"] .admin-module-btn {
-    min-height: 58px;
-}
-
 #moduleAccessBtn {
     position: relative;
-}
-
-body[data-admin-auth="signed_out"] #moduleAccessBtn {
-    background: linear-gradient(135deg, rgba(218, 119, 86, 0.2), rgba(188, 158, 120, 0.16));
-    border-color: rgba(218, 119, 86, 0.34);
-    box-shadow: 0 14px 30px rgba(154, 91, 63, 0.1);
 }
 
 #settingsModal.admin-shell-signed-out {

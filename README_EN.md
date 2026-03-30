@@ -65,15 +65,15 @@ The frontend also includes image upload / drag-upload support. Newly uploaded im
 
 ### 4. Admin operations console
 
-The bundled frontend is now an admin-first operations workspace rather than a chat-first page with a settings popup hidden behind it.
+The bundled frontend now shows the admin login screen first; after login, it opens the admin workspace.
 
-The root path `/` opens into the admin entry flow first, with sections for:
+Main modules after login:
 
 - Overview
-- Usage
 - Accounts
 - Runtime
 - Diagnostics
+- Usage
 - Chat
 
 Key admin UX behavior:
@@ -261,8 +261,8 @@ uvicorn app.server:app --host 0.0.0.0 --port 8000
 
 - app: `http://localhost:8000`
 - models: `GET /v1/models`
-- admin console: open the root path `/`; it now lands on the admin entry flow first
-- Chat module: enter it from the left-side module navigation after admin sign-in; if Chat password is enabled, complete chat access login as well
+- admin console: open the root path `/` to see the admin login screen first
+- Chat module: enter it after admin sign-in; if Chat password is enabled, complete chat access login as well
 
 ---
 
@@ -312,15 +312,16 @@ uvicorn app.server:app --host 0.0.0.0 --port 8000
 
 ## Frontend admin console
 
-The frontend is now an admin-first operations dashboard rather than a plain chat settings sheet.
+The frontend now shows the admin login screen first instead of opening on chat.
 
-The root path `/` opens into the admin entry flow first. Current sections include:
+Main modules after login:
 
+- Login
 - Overview
-- Usage
 - Accounts
 - Runtime
 - Diagnostics
+- Usage
 - Chat
 
 The frontend also supports:

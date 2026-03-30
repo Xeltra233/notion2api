@@ -91,14 +91,6 @@
             </button>
         </div>
 
-        <div class="px-4 pb-3">
-            <div class="admin-shell-summary">
-                <div class="admin-shell-summary-kicker">先登录，再开始</div>
-                <div class="admin-shell-summary-title">一个更清楚的后台入口</div>
-                <div class="admin-shell-summary-copy">先确认后台访问，再进入总览、账号、运行时和诊断。聊天只是其中一个模块，不再抢首页位置。</div>
-            </div>
-        </div>
-
         <nav class="px-3 pb-3 flex flex-col gap-2">
             <button type="button" id="moduleAccessBtn" class="admin-module-btn" data-module="access" data-settings-scroll-target="settings-section-access">后台登录</button>
             <button type="button" id="moduleOverviewBtn" class="admin-module-btn" data-module="overview" data-settings-scroll-target="settings-section-overview">总览</button>
@@ -167,16 +159,16 @@
                     <div class="p-6" id="settingsConsoleInner">
                 <div class="settings-console-header">
                     <div>
-                        <h3 class="text-xl font-serif font-medium">后台工作区</h3>
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">先处理登录与访问，再按模块查看总览、账号、运行时和诊断；整个流程尽量保持像正常后台，而不是工具面板。</p>
+                        <h3 class="text-xl font-serif font-medium">后台</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">登录后按模块查看和管理。</p>
                     </div>
                     <div class="settings-console-nav">
-                        <button type="button" class="settings-console-nav-btn" data-module="access" data-settings-scroll-target="settings-section-access">访问</button>
-                        <button type="button" class="settings-console-nav-btn" data-module="runtime" data-settings-scroll-target="settings-section-runtime">运行时</button>
+                        <button type="button" class="settings-console-nav-btn" data-module="access" data-settings-scroll-target="settings-section-access">登录</button>
                         <button type="button" class="settings-console-nav-btn" data-module="overview" data-settings-scroll-target="settings-section-overview">总览</button>
-                        <button type="button" class="settings-console-nav-btn" data-module="usage" data-settings-scroll-target="settings-section-usage">用量</button>
                         <button type="button" class="settings-console-nav-btn" data-module="accounts" data-settings-scroll-target="settings-section-accounts">账号</button>
+                        <button type="button" class="settings-console-nav-btn" data-module="runtime" data-settings-scroll-target="settings-section-runtime">运行时</button>
                         <button type="button" class="settings-console-nav-btn" data-module="diagnostics" data-settings-scroll-target="settings-section-diagnostics">诊断</button>
+                        <button type="button" class="settings-console-nav-btn" data-module="usage" data-settings-scroll-target="settings-section-usage">用量</button>
                     </div>
                 </div>
 
@@ -184,9 +176,9 @@
                     <div id="settings-section-access" class="settings-console-panel admin-module-panel">
                         <div class="settings-console-panel-heading">
                             <div>
-                                <div class="settings-console-kicker">第一步</div>
-                                <h4 class="text-sm font-medium">先进入后台</h4>
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">先确认当前浏览器能连到服务，再用后台账号登录。登录成功后，其它模块才会依次展开。</p>
+                                <div class="settings-console-kicker">访问</div>
+                                <h4 class="text-sm font-medium">后台登录</h4>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">登录后解锁后台模块。</p>
                             </div>
                         </div>
                         <div class="pt-2 space-y-3">
@@ -207,8 +199,8 @@
                                 <div id="adminAccessLoginCard" class="admin-access-card">
                                     <div>
                                         <div class="settings-console-kicker">登录</div>
-                                        <h5 class="text-sm font-medium">进入后台工作区</h5>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">用后台用户名和密码完成登录。登录后，你会看到更完整的总览、账号、运行时和诊断模块。</p>
+                                        <h5 class="text-sm font-medium">后台登录</h5>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">输入后台用户名和密码后登录。</p>
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">后台用户名</label>
