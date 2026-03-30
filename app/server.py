@@ -275,6 +275,8 @@ async def api_key_auth(request: Request, call_next):
     if api_key:
         public_api_paths = {
             "/v1/admin/oauth/callback",
+            "/v1/chat/access",
+            "/v1/chat/login",
         }
         request_path = request.url.path
         # 跳过 OPTIONS 请求和非受保护的静态路由（如果以后有的话）
