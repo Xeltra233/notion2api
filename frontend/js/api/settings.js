@@ -637,8 +637,8 @@ window.NotionAI.API.Settings = {
         const apiKey = window.NotionAI.Core.State.get('apiKey');
         const adminUsername = window.NotionAI.Core.State.get('adminUsername') || 'admin';
 
-        document.getElementById('baseUrlInput').value = baseUrl;
-        document.getElementById('apiKeyInput').value = apiKey;
+        document.getElementById('baseUrlInput').value = baseUrl || window.location.origin;
+        document.getElementById('apiKeyInput').value = apiKey ? '********' : '';
         document.getElementById('adminUsernameInput').value = adminUsername;
         document.getElementById('adminPasswordInput').value = '';
         this.applySecretVisibility();
@@ -654,6 +654,19 @@ window.NotionAI.API.Settings = {
         this.autoFinalizeOAuthIfPossible();
         if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
             window.NotionAI.Core.App.setActiveModule(moduleName || 'access');
+        }
+    },
+
+    hydrateAccessConnectionFields() {
+        const baseUrl = String(window.NotionAI.Core.State.get('baseUrl') || '').trim() || window.location.origin;
+        const apiKey = String(window.NotionAI.Core.State.get('apiKey') || '').trim();
+        const baseUrlInput = document.getElementById('baseUrlInput');
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        if (baseUrlInput && !baseUrlInput.value.trim()) {
+            baseUrlInput.value = baseUrl;
+        }
+        if (apiKeyInput && !apiKeyInput.value.trim() && apiKey) {
+            apiKeyInput.value = '********';
         }
     },
 
@@ -704,14 +717,25 @@ window.NotionAI.API.Settings = {
     },
 
     async loginAdminSession() {
-        const baseUrl = document.getElementById('baseUrlInput')?.value.trim().replace(/\/$/, '') || window.location.origin;
-        const apiKey = document.getElementById('apiKeyInput')?.value.trim() || '';
+        const baseUrlInput = document.getElementById('baseUrlInput');
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        const existingBaseUrl = String(window.NotionAI.Core.State.get('baseUrl') || '').trim();
+        const existingApiKey = String(window.NotionAI.Core.State.get('apiKey') || '').trim();
+        const baseUrl = baseUrlInput?.value.trim().replace(/\/$/, '') || existingBaseUrl || window.location.origin;
+        const rawApiKey = apiKeyInput?.value.trim() || '';
+        const apiKey = rawApiKey && rawApiKey !== '********' ? rawApiKey : existingApiKey;
         const adminUsername = document.getElementById('adminUsernameInput').value.trim() || 'admin';
         const adminPassword = document.getElementById('adminPasswordInput').value.trim();
         window.NotionAI.Core.State.set('baseUrl', baseUrl);
         window.NotionAI.Core.State.set('apiKey', apiKey);
         localStorage.setItem('claude_base_url', baseUrl);
         window.NotionAI.Core.State.persistApiKey(apiKey);
+        if (baseUrlInput) {
+            baseUrlInput.value = baseUrl;
+        }
+        if (apiKeyInput) {
+            apiKeyInput.value = apiKey ? '********' : '';
+        }
         if (!adminPassword) {
             this.setAdminNotice('请输入后台密码。');
             return;

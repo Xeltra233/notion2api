@@ -183,6 +183,7 @@ function init() {
 
     bindEventListeners();
     populateModels();
+    window.NotionAI.API.Settings.hydrateAccessConnectionFields();
 
     const initialModule = window.NotionAI.Core.State.get('activeModule') || window.NotionAI.Core.App.getDefaultModule();
     window.NotionAI.Core.App.setActiveModule(initialModule);

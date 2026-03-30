@@ -200,22 +200,25 @@
                                 <div>
                                     <div class="settings-console-kicker">登录</div>
                                     <h5 class="text-sm font-medium">后台登录</h5>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">先填服务地址和 API Key，再输入后台用户名和密码。</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">默认使用当前站点地址和已保存的访问密钥。只有连接别的实例时再展开连接设置。</p>
                                 </div>
-                                <div class="grid grid-cols-1 gap-3">
-                                    <div>
-                                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Base URL</label>
-                                        <input type="text" id="baseUrlInput"
-                                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent/50 outline-none transition-shadow"
-                                            placeholder="http://127.0.0.1:8000">
+                                <details class="runtime-details-block">
+                                    <summary>连接设置</summary>
+                                    <div class="grid grid-cols-1 gap-3 mt-3">
+                                        <div>
+                                            <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Base URL</label>
+                                            <input type="text" id="baseUrlInput"
+                                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent/50 outline-none transition-shadow"
+                                                placeholder="默认使用当前站点地址">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">访问密钥</label>
+                                            <input type="password" id="apiKeyInput"
+                                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent/50 outline-none transition-shadow"
+                                                placeholder="仅在需要连接其它实例或补录密钥时填写">
+                                        </div>
                                     </div>
-                                    <div>
-                                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">API Key</label>
-                                        <input type="password" id="apiKeyInput"
-                                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent/50 outline-none transition-shadow"
-                                            placeholder="输入服务端 API Key">
-                                    </div>
-                                </div>
+                                </details>
                                 <div>
                                     <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">后台用户名</label>
                                         <input type="text" id="adminUsernameInput"
