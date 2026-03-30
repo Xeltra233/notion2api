@@ -261,14 +261,51 @@
                         <div id="runtimeSectionStatus" class="admin-section-status" data-state="signed_out"><span class="admin-section-status-dot"></span><strong>已锁定</strong><span>登录后台后解锁运行时控制。</span></div>
                         <div>
                             <div class="settings-console-kicker">运行时</div>
-                            <h4 class="text-sm font-medium">先配当前真的要改的</h4>
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">先处理基础、Chat 和代理。其余能力按需展开，不默认摊开。</p>
+                            <h4 class="text-sm font-medium">先看运行时摘要，再改配置</h4>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">先看当前配置、代理和自动注册状态，再决定要改哪一块。</p>
+                        </div>
+                        <div class="grid grid-cols-1 lg:grid-cols-[0.92fr_1.08fr] gap-3">
+                            <div class="rounded-2xl border border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 p-4 space-y-3">
+                                <div class="flex items-center justify-between gap-3 flex-wrap">
+                                    <div>
+                                        <div class="text-[10px] uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">运行时摘要</div>
+                                        <div class="text-sm font-medium">当前运行时</div>
+                                    </div>
+                                    <button id="runtimeLoadBtn" type="button" class="admin-action-btn">加载配置</button>
+                                </div>
+                                <div id="runtimeConfigSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                                <div id="runtimeConfigHint" class="text-[11px] text-gray-500 dark:text-gray-400">保存后多数运行时设置会立即生效；`ALLOWED_ORIGINS` 这类启动期配置通常仍需重启。</div>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div class="runtime-status-card">
+                                    <div class="runtime-status-title">代理状态</div>
+                                    <div id="runtimeProxyHealthSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                                    <div class="flex flex-wrap gap-2 mt-3">
+                                        <button id="runtimeCheckProxyBtn" type="button" class="admin-action-btn">检查代理</button>
+                                    </div>
+                                    <div id="runtimeProxyChecks" class="text-[11px] text-gray-500 dark:text-gray-400 space-y-1 mt-2"></div>
+                                </div>
+                                <div class="runtime-status-card">
+                                    <div class="runtime-status-title">自动注册</div>
+                                    <div id="runtimeRegisterAutomationSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                                    <div class="flex flex-wrap gap-2 mt-3">
+                                        <button id="runtimeTriggerAutoRegisterBtn" type="button" class="admin-action-btn">触发自动注册</button>
+                                        <button id="runtimeRefreshAutoRegisterBtn" type="button" class="admin-action-btn">刷新自动注册状态</button>
+                                    </div>
+                                    <div id="runtimeRegisterAutomationGuidance" class="text-[11px] text-gray-500 dark:text-gray-400 mt-2"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-2 pt-1">
+                            <button id="runtimeSaveBtn" type="button" class="admin-action-btn admin-action-btn-primary">保存配置</button>
+                            <button id="runtimeToggleSecretsBtn" type="button" class="admin-action-btn">显示密钥</button>
+                            <button id="runtimeAdvancedToggleBtn" type="button" class="admin-action-btn">展开更多能力</button>
                         </div>
                         <div class="runtime-config-section">
                             <div class="runtime-config-section-header">
                                 <div>
                                     <div class="runtime-config-section-title">基础设置</div>
-                                    <div class="runtime-config-section-copy">首次使用时优先关注这些设置。`ALLOWED_ORIGINS` 属于启动期配置，修改后通常仍需重启服务。</div>
+                                    <div class="runtime-config-section-copy">这里放最常改的入口：模式、探测、服务端密钥和 Chat。</div>
                                 </div>
                             </div>
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -335,9 +372,9 @@
                             <div class="runtime-config-section-header">
                                 <div>
                                     <div class="runtime-config-section-title">更多运行时能力</div>
-                                    <div class="runtime-config-section-copy">下面这些能力按场景拆开了。只展开你现在真正要改的那一块，不需要一次把所有字段都看完。</div>
+                                    <div class="runtime-config-section-copy">只在需要时展开，不把所有字段一次摊开。</div>
                                 </div>
-                                <button id="runtimeAdvancedToggleBtn" type="button" class="admin-action-btn">展开更多能力</button>
+                                <button id="runtimeAdvancedToggleBtnSecondary" type="button" class="admin-action-btn">展开更多能力</button>
                             </div>
                             <div id="runtimeAdvancedFields" class="runtime-advanced-fields hidden space-y-4">
                                 <div class="runtime-subsection-card">
@@ -448,36 +485,6 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="text-[11px] text-gray-500 dark:text-gray-400" id="runtimeConfigHint">保存后多数运行时设置会立即生效；`ALLOWED_ORIGINS` 这类启动期配置通常仍需重启。</div>
-                        <div class="flex flex-wrap gap-2 pt-1">
-                            <button id="runtimeLoadBtn" type="button" class="admin-action-btn">加载配置</button>
-                            <button id="runtimeSaveBtn" type="button" class="admin-action-btn">保存配置</button>
-                            <button id="runtimeToggleSecretsBtn" type="button" class="admin-action-btn">显示密钥</button>
-                            <button id="runtimeAdvancedToggleBtn" type="button" class="admin-action-btn">展开更多能力</button>
-                        </div>
-                        <div class="runtime-status-board">
-                            <div class="runtime-status-card">
-                                <div class="runtime-status-title">当前摘要</div>
-                                <div id="runtimeConfigSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
-                            </div>
-                            <div class="runtime-status-card">
-                                <div class="runtime-status-title">代理状态</div>
-                                <div class="flex flex-wrap gap-2 mb-2">
-                                    <button id="runtimeCheckProxyBtn" type="button" class="admin-action-btn">检查代理</button>
-                                </div>
-                                <div id="runtimeProxyHealthSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
-                                <div id="runtimeProxyChecks" class="text-[11px] text-gray-500 dark:text-gray-400 space-y-1 mt-2"></div>
-                            </div>
-                            <div class="runtime-status-card">
-                                <div class="runtime-status-title">自动注册</div>
-                                <div class="flex flex-wrap gap-2 mb-2">
-                                    <button id="runtimeTriggerAutoRegisterBtn" type="button" class="admin-action-btn">触发自动注册</button>
-                                    <button id="runtimeRefreshAutoRegisterBtn" type="button" class="admin-action-btn">刷新自动注册状态</button>
-                                </div>
-                                <div id="runtimeRegisterAutomationSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
-                                <div id="runtimeRegisterAutomationGuidance" class="text-[11px] text-gray-500 dark:text-gray-400 mt-2"></div>
-                            </div>
-                        </div>
                         <details class="runtime-details-block">
                             <summary>查看运行时细节</summary>
                             <div id="runtimeOperationsPanel" class="text-[11px] text-gray-500 dark:text-gray-400 space-y-1 mt-3"></div>
@@ -491,27 +498,66 @@
                     <div class="flex items-center justify-between gap-3 flex-wrap">
                         <div>
                             <div class="settings-console-kicker">总览</div>
-                            <h4 class="text-sm font-medium">先看现在整体是不是健康</h4>
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">如果你刚登录后台，最适合先看这里。它会把账号可用性、OAuth 状态、工作区情况和最近动作先压缩成一眼能读懂的结果。</p>
+                            <h4 class="text-sm font-medium">先看整体，再决定去哪处理</h4>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">先读概览卡、当前配置和告警，再进账号、运行时或诊断。</p>
                         </div>
                         <button id="adminRefreshBtn" type="button"
                             class="px-3 py-1.5 rounded-lg text-xs font-medium bg-black text-white dark:bg-white dark:text-black hover:opacity-90 transition-opacity">刷新总览</button>
                     </div>
-                    <div class="admin-module-intro-card">
-                        <div class="admin-module-intro-title">适合先看的三个信号</div>
-                        <div class="admin-module-intro-copy">先看可用账号和待刷新数量，再看工作区是否缺失。如果这里已经一片红，通常不用急着去更深的模块。</div>
+                    <div class="rounded-3xl border border-black/8 dark:border-white/10 bg-[linear-gradient(135deg,rgba(255,248,240,0.95),rgba(255,255,255,0.72))] dark:bg-[linear-gradient(135deg,rgba(76,29,17,0.34),rgba(255,255,255,0.04))] p-5 sm:p-6">
+                        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                            <div class="space-y-2">
+                                <div id="overviewHeroKicker" class="text-[10px] uppercase tracking-[0.28em] text-accent/80">总览</div>
+                                <div id="overviewHeroGreeting" class="text-2xl sm:text-3xl font-serif font-medium text-gray-900 dark:text-gray-100">欢迎回来</div>
+                                <div id="overviewHeroCopy" class="text-sm text-gray-600 dark:text-gray-300 max-w-2xl">先看账号、配置和当前风险，再决定下一步去哪里。</div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3 text-sm min-w-[240px]">
+                                <div class="rounded-2xl border border-black/6 dark:border-white/10 bg-white/70 dark:bg-white/5 px-4 py-3">
+                                    <div class="text-[10px] uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">当前时间</div>
+                                    <div id="overviewHeroTime" class="mt-1 text-lg font-semibold text-gray-900 dark:text-gray-100">-</div>
+                                </div>
+                                <div class="rounded-2xl border border-black/6 dark:border-white/10 bg-white/70 dark:bg-white/5 px-4 py-3">
+                                    <div class="text-[10px] uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">当前日期</div>
+                                    <div id="overviewHeroDate" class="mt-1 text-sm font-medium text-gray-900 dark:text-gray-100">-</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs" id="adminSummaryCards">
+                    <div class="space-y-2">
+                        <div class="text-[10px] uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">系统概览</div>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs" id="adminSummaryCards">
                         <div class="admin-stat-card"><span>账号总数</span><strong id="adminStatTotal">-</strong></div>
                         <div class="admin-stat-card"><span>可用账号</span><strong id="adminStatUsable">-</strong></div>
                         <div class="admin-stat-card"><span>待刷新</span><strong id="adminStatNeedsRefresh">-</strong></div>
                         <div class="admin-stat-card"><span>工作区</span><strong id="adminStatWorkspace">-</strong></div>
+                        </div>
                     </div>
-                    <div id="adminAlertSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
-                    <div id="adminAlertDetails" class="space-y-2"></div>
-                    <div id="adminQuickSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                    <div class="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-3">
+                        <div class="rounded-2xl border border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 p-4 space-y-3">
+                            <div class="flex items-center justify-between gap-3 flex-wrap">
+                                <div>
+                                    <div class="text-[10px] uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">告警摘要</div>
+                                    <div class="text-sm font-medium">先处理异常和风险</div>
+                                </div>
+                                <button id="overviewOpenAccountsBtn" type="button" class="admin-action-btn">去账号模块</button>
+                            </div>
+                            <div id="adminAlertSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                            <div id="adminAlertDetails" class="space-y-2"></div>
+                        </div>
+                        <div class="rounded-2xl border border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 p-4 space-y-3">
+                            <div class="flex items-center justify-between gap-3 flex-wrap">
+                                <div>
+                                    <div class="text-[10px] uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">当前配置</div>
+                                    <div class="text-sm font-medium">当前配置</div>
+                                </div>
+                                <button id="overviewOpenRuntimeBtn" type="button" class="admin-action-btn">编辑设置</button>
+                            </div>
+                            <div id="overviewConfigSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                            <div id="adminQuickSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                        </div>
+                    </div>
                     <div class="admin-action-group">
-                        <div class="admin-action-group-label">先看这些</div>
+                        <div class="admin-action-group-label">快速筛选</div>
                         <div class="admin-action-group-actions">
                             <button id="adminQuickRefreshBtn" type="button" class="admin-action-btn admin-action-btn-primary">需要刷新</button>
                             <button id="adminQuickWorkspaceBtn" type="button" class="admin-action-btn admin-action-btn-primary">缺少工作区</button>
@@ -523,6 +569,8 @@
                             <button id="adminQuickUsableBtn" type="button" class="admin-action-btn">仅看可用账号</button>
                         </div>
                     </div>
+                    <details class="runtime-details-block">
+                        <summary>展开账号筛选和批量动作</summary>
                     <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
                         <input id="adminSearchInput" type="text" placeholder="搜索邮箱、用户或标签"
                             class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none">
@@ -588,6 +636,7 @@
                             <button id="adminBulkWorkspaceProbeBtn" type="button" class="admin-action-btn">批量探测工作区</button>
                         </div>
                     </div>
+                    </details>
                     <div id="adminPanelNotice" class="text-xs text-gray-500 dark:text-gray-400">请先使用当前后台账号登录。admin session 只保留在当前浏览器会话中，如需更换后台用户名或密码，可在上方直接更新。</div>
                     <div id="adminBulkResultPanel" class="text-xs text-gray-500 dark:text-gray-400 space-y-1"></div>
                     <div id="adminOperationHistory" class="text-xs text-gray-500 dark:text-gray-400 space-y-1"></div>
@@ -632,8 +681,8 @@
                     <div id="usageSectionStatus" class="admin-section-status" data-state="signed_out"><span class="admin-section-status-dot"></span><strong>已锁定</strong><span>登录后台后解锁用量查询。</span></div>
                     <div>
                         <div class="settings-console-kicker">用量</div>
-                        <h4 class="text-sm font-medium">把消耗看清楚</h4>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">先看总量，再看模型、账号和最近事件，不把所有信息堆在一个区里。</p>
+                        <h4 class="text-sm font-medium">先看总量，再看分布</h4>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">先看汇总，再看模型、账号和最近事件。</p>
                     </div>
                     <div class="usage-toolbar-card">
                         <div class="usage-toolbar-row">
@@ -702,46 +751,53 @@
                     <div id="accountsSectionStatus" class="admin-section-status" data-state="signed_out"><span class="admin-section-status-dot"></span><strong>已锁定</strong><span>登录后台后解锁账号操作。</span></div>
                     <div>
                         <div class="settings-console-kicker">账号</div>
-                        <h4 class="text-sm font-medium">把账号池整理清楚</h4>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">这里适合处理“哪些号还能用、哪些要刷新、哪些要补工作区、哪些该新增或导入”。它更像日常管理页，而不是一次性的导入工具。</p>
+                        <h4 class="text-sm font-medium">先看状态，再动账号池</h4>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">这里适合处理可用性、刷新、工作区和新增导入。</p>
                     </div>
-                    <div class="admin-module-intro-card">
-                        <div class="admin-module-intro-title">常见顺序</div>
-                        <div class="admin-module-intro-copy">先看现有账号状态，再决定是探测、刷新还是补工作区；确认结构没问题后，再做新增或批量导入。</div>
-                    </div>
-                    <div class="admin-action-group">
-                        <div class="admin-action-group-label">账号动作</div>
-                        <div class="admin-action-group-actions">
-                            <button id="adminProbeBtn" type="button" class="admin-action-btn admin-action-btn-primary">探测账号</button>
-                            <button id="adminRefreshTokensBtn" type="button" class="admin-action-btn admin-action-btn-primary">刷新令牌</button>
-                            <button id="adminWorkspaceSyncBtn" type="button" class="admin-action-btn">同步工作区</button>
-                            <button id="adminWorkspaceCreateBtn" type="button" class="admin-action-btn">创建工作区</button>
-                            <button id="adminExportAccountsBtn" type="button" class="admin-action-btn">导出账号</button>
-                        </div>
-                    </div>
-                    <div class="accounts-toolbar-card">
-                        <div class="accounts-toolbar-row">
+                    <div class="grid grid-cols-1 lg:grid-cols-[0.95fr_1.05fr] gap-3">
+                        <div class="rounded-2xl border border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 p-4 space-y-3">
                             <div>
-                                <div class="accounts-toolbar-title">账号列表</div>
-                                <div class="accounts-toolbar-copy">一个账号一张卡。默认分页显示，避免一次渲染过多内容。</div>
+                                <div class="text-[10px] uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">账号摘要</div>
+                                <div class="text-sm font-medium">先看账号池状态</div>
                             </div>
-                            <div id="adminAccountsRenderNotice" class="accounts-render-notice hidden"></div>
+                            <div class="admin-module-intro-copy">先看状态，再决定探测、刷新、补工作区还是导入。</div>
+                            <div id="accountsQuickSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                            <div class="admin-action-group">
+                                <div class="admin-action-group-label">常用动作</div>
+                                <div class="admin-action-group-actions">
+                                    <button id="adminProbeBtn" type="button" class="admin-action-btn admin-action-btn-primary">探测账号</button>
+                                    <button id="adminRefreshTokensBtn" type="button" class="admin-action-btn admin-action-btn-primary">刷新令牌</button>
+                                    <button id="adminWorkspaceSyncBtn" type="button" class="admin-action-btn">同步工作区</button>
+                                    <button id="adminWorkspaceCreateBtn" type="button" class="admin-action-btn">创建工作区</button>
+                                    <button id="adminExportAccountsBtn" type="button" class="admin-action-btn">导出账号</button>
+                                </div>
+                            </div>
                         </div>
-                        <div class="accounts-toolbar-controls">
-                            <label class="accounts-toolbar-field">
-                                <span>每页</span>
-                                <select id="adminAccountsPageSizeSelect" class="accounts-toolbar-select">
-                                    <option value="12">12</option>
-                                    <option value="24" selected>24</option>
-                                    <option value="48">48</option>
-                                    <option value="96">96</option>
-                                    <option value="all">全部</option>
-                                </select>
-                            </label>
-                            <div class="accounts-toolbar-pagination">
-                                <button id="adminPrevPageBtn" type="button" class="admin-action-btn">上一页</button>
-                                <span id="adminPaginationSummary">第 1 页</span>
-                                <button id="adminNextPageBtn" type="button" class="admin-action-btn">下一页</button>
+                        <div class="accounts-toolbar-card">
+                            <div class="accounts-toolbar-row">
+                                <div>
+                                    <div class="accounts-toolbar-title">账号列表</div>
+                                    <div class="accounts-toolbar-copy">一个账号一张卡，默认分页显示。</div>
+                                </div>
+                                <div id="adminAccountsRenderNotice" class="accounts-render-notice hidden"></div>
+                            </div>
+                            <div id="accountsListSummary" class="flex flex-wrap gap-2 text-[11px] mt-3"></div>
+                            <div class="accounts-toolbar-controls">
+                                <label class="accounts-toolbar-field">
+                                    <span>每页</span>
+                                    <select id="adminAccountsPageSizeSelect" class="accounts-toolbar-select">
+                                        <option value="12">12</option>
+                                        <option value="24" selected>24</option>
+                                        <option value="48">48</option>
+                                        <option value="96">96</option>
+                                        <option value="all">全部</option>
+                                    </select>
+                                </label>
+                                <div class="accounts-toolbar-pagination">
+                                    <button id="adminPrevPageBtn" type="button" class="admin-action-btn">上一页</button>
+                                    <span id="adminPaginationSummary">第 1 页</span>
+                                    <button id="adminNextPageBtn" type="button" class="admin-action-btn">下一页</button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -750,7 +806,7 @@
                         <div class="accounts-composer-header">
                             <div>
                                 <div class="accounts-toolbar-title">新增账号</div>
-                                <div class="accounts-toolbar-copy">默认收起来。按需要选择手动、JSON、文件或 OAuth。</div>
+                                <div class="accounts-toolbar-copy">默认收起。按需要选择手动、JSON、文件或 OAuth。</div>
                             </div>
                             <button id="adminToggleAccountComposerBtn" type="button" class="admin-action-btn">打开新增入口</button>
                         </div>
@@ -816,30 +872,42 @@
                     <div id="diagnosticsSectionStatus" class="admin-section-status" data-state="signed_out"><span class="admin-section-status-dot"></span><strong>已锁定</strong><span>登录后台后解锁诊断工具。</span></div>
                     <div>
                         <div class="settings-console-kicker">诊断</div>
-                        <h4 class="text-sm font-medium">当流程卡住时，从这里排查</h4>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">如果 OAuth 回调、工作区创建、模板请求或诊断链路哪里不顺，这里是最适合集中检查的地方。</p>
+                        <h4 class="text-sm font-medium">流程卡住时，再进来查</h4>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">这里集中放 OAuth、工作区、模板和快照排查工具。</p>
                     </div>
-                    <div class="admin-module-intro-card">
-                        <div class="admin-module-intro-title">什么时候该进这个模块</div>
-                        <div class="admin-module-intro-copy">通常是在总览里看到异常，或者账号模块动作失败以后，再来这里看诊断、请求模板和快照，而不是一上来就钻细节。</div>
+                    <div class="grid grid-cols-1 lg:grid-cols-[0.95fr_1.05fr] gap-3">
+                        <div class="rounded-2xl border border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 p-4 space-y-3">
+                            <div>
+                                <div class="text-[10px] uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">诊断摘要</div>
+                                <div class="text-sm font-medium">先看诊断入口和当前线索</div>
+                            </div>
+                            <div class="admin-module-intro-copy">通常是在总览看到异常，或账号动作失败后再进来。</div>
+                            <div id="oauthStartSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                            <div class="flex flex-wrap gap-2">
+                                <button id="oauthRefreshDiagnosticsBtn" type="button" class="admin-action-btn admin-action-btn-primary">刷新诊断</button>
+                                <button id="workspaceDiagnosticsBtn" type="button" class="admin-action-btn admin-action-btn-primary">工作区诊断</button>
+                                <button id="adminSnapshotBtn" type="button" class="admin-action-btn">快速快照</button>
+                                <button id="adminReportBtn" type="button" class="admin-action-btn">导出完整报告</button>
+                            </div>
+                        </div>
+                        <div class="runtime-status-card">
+                            <div class="runtime-status-title">诊断工具</div>
+                            <div class="flex flex-wrap gap-2">
+                                <button id="oauthStartBtn" type="button" class="admin-action-btn">准备 OAuth 启动参数</button>
+                                <button id="oauthRefreshStatusBtn" type="button" class="admin-action-btn">刷新状态</button>
+                                <button id="workspaceCreateStatusBtn" type="button" class="admin-action-btn">工作区创建状态</button>
+                                <button id="requestTemplatesBtn" type="button" class="admin-action-btn">请求模板</button>
+                                <button id="copyRequestTemplateBtn" type="button" class="admin-action-btn">复制 JSON 模板</button>
+                                <button id="showGenericTemplatesBtn" type="button" class="admin-action-btn">查看通用模板</button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="flex flex-wrap gap-2">
-                        <button id="oauthStartBtn" type="button" class="admin-action-btn">准备 OAuth 启动参数</button>
-                        <button id="oauthRefreshStatusBtn" type="button" class="admin-action-btn">刷新状态</button>
-                        <button id="workspaceCreateStatusBtn" type="button" class="admin-action-btn">工作区创建状态</button>
-                        <button id="oauthRefreshDiagnosticsBtn" type="button" class="admin-action-btn">刷新诊断</button>
-                        <button id="workspaceDiagnosticsBtn" type="button" class="admin-action-btn">工作区诊断</button>
-                        <button id="requestTemplatesBtn" type="button" class="admin-action-btn">请求模板</button>
-                        <button id="adminReportBtn" type="button" class="admin-action-btn">导出完整报告</button>
-                        <button id="adminSnapshotBtn" type="button" class="admin-action-btn">快速快照</button>
-                        <div id="oauthStartSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        <div id="oauthRefreshDiagnosticsPanel" class="space-y-2 runtime-status-card"></div>
+                        <div id="workspaceDiagnosticsPanel" class="space-y-2 runtime-status-card"></div>
                     </div>
-                    <div id="oauthRefreshDiagnosticsPanel" class="space-y-2"></div>
-                    <div id="workspaceDiagnosticsPanel" class="space-y-2"></div>
-                    <div class="flex flex-wrap gap-2">
-                        <button id="copyRequestTemplateBtn" type="button" class="admin-action-btn">复制 JSON 模板</button>
-                        <button id="showGenericTemplatesBtn" type="button" class="admin-action-btn">查看通用模板</button>
-                    </div>
+                    <details class="runtime-details-block">
+                        <summary>展开 OAuth 导入和模板载荷</summary>
                     <textarea id="requestTemplateOutput" rows="8" readonly placeholder="请求模板与诊断载荷会显示在这里"
                         class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
                     <textarea id="oauthStartUrlOutput" rows="3" readonly placeholder="准备好的 OAuth 启动链接会显示在这里"
@@ -865,6 +933,7 @@
                         <button id="oauthImportCallbackBtn" type="button" class="admin-action-btn">解析并落库</button>
                         <button id="oauthFinalizeBtn" type="button" class="admin-action-btn">完成 OAuth 账号落库</button>
                     </div>
+                    </details>
                 </div>
                 </div>
 

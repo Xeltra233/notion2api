@@ -222,6 +222,9 @@ function bindEventListeners() {
                     }
                 });
             }
+            if (moduleName === 'runtime' && window.NotionAI.Core.State.get('adminSessionToken')) {
+                window.NotionAI.API.Settings.loadRuntimeConfigIntoForm();
+            }
             if (window.innerWidth < 768) {
                 window.NotionAI.UI.Sidebar.close();
             }
@@ -306,6 +309,12 @@ function bindEventListeners() {
 
     document.getElementById('adminLoginBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.loginAdminSession();
+    });
+    document.getElementById('overviewOpenAccountsBtn')?.addEventListener('click', () => {
+        window.NotionAI.Core.App.setActiveModule('accounts');
+    });
+    document.getElementById('overviewOpenRuntimeBtn')?.addEventListener('click', () => {
+        window.NotionAI.Core.App.setActiveModule('runtime');
     });
     ['adminUsernameInput', 'adminPasswordInput'].forEach((id) => {
         document.getElementById(id).addEventListener('keydown', (e) => {
@@ -474,6 +483,9 @@ function bindEventListeners() {
         });
     });
     document.getElementById('runtimeAdvancedToggleBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.toggleRuntimeAdvanced();
+    });
+    document.getElementById('runtimeAdvancedToggleBtnSecondary')?.addEventListener('click', () => {
         window.NotionAI.API.Settings.toggleRuntimeAdvanced();
     });
     document.getElementById('runtimeProxyAdvancedToggleBtn').addEventListener('click', () => {

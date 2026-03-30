@@ -140,22 +140,27 @@ html.dark .model-beta-badge {
     transform: none;
 }
 
-.admin-account-row {
+.admin-accounts-grid {
     display: grid;
-    grid-template-columns: 1.3fr 0.8fr 0.8fr 0.8fr;
-    gap: 10px;
-    padding: 12px 16px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
 }
 
-.admin-account-row:last-child {
-    border-bottom: none;
+.admin-account-row {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 18px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 24px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(250, 246, 241, 0.84));
+    box-shadow: 0 16px 40px rgba(68, 49, 37, 0.06);
 }
 
 .admin-account-main {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 8px;
 }
 
 .admin-badge {
@@ -179,14 +184,150 @@ html.dark .model-beta-badge {
 .admin-badge[data-state="probe_failures"] { background: rgba(220, 38, 38, 0.18); color: #991b1b; }
 
 .admin-kv {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
 }
 
 .admin-kv strong {
     font-size: 12px;
     color: #111827;
+}
+
+.admin-account-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.admin-account-metric-label {
+    font-size: 11px;
+    color: #6b7280;
+}
+
+.admin-account-metric-value {
+    font-size: 13px;
+    color: #111827;
+    font-weight: 600;
+}
+
+.admin-account-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.admin-account-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 4px;
+}
+
+.accounts-toolbar-card {
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 24px;
+    padding: 16px 18px;
+    background: rgba(255, 255, 255, 0.74);
+}
+
+.accounts-toolbar-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.accounts-toolbar-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #111827;
+}
+
+.accounts-toolbar-copy {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.accounts-toolbar-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+}
+
+.accounts-toolbar-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.accounts-toolbar-select {
+    min-width: 90px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 14px;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.8);
+    color: #111827;
+}
+
+.accounts-toolbar-pagination {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.accounts-composer-card {
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 24px;
+    padding: 16px 18px;
+    background: rgba(255, 255, 255, 0.74);
+}
+
+.accounts-composer-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.accounts-composer-body {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.accounts-composer-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.accounts-composer-section {
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    padding-top: 14px;
+}
+
+.accounts-render-notice {
+    max-width: 360px;
+    padding: 10px 12px;
+    border-radius: 16px;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.24);
+    color: #92400e;
+    font-size: 12px;
+    line-height: 1.5;
 }
 
 .admin-mini-pill {
@@ -517,7 +658,53 @@ body[data-admin-auth="signed_out"] .admin-action-btn {
 }
 
 html.dark .admin-account-row {
-    border-bottom-color: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.08);
+    background: linear-gradient(180deg, rgba(42, 39, 36, 0.94), rgba(34, 31, 29, 0.9));
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
+}
+
+html.dark .admin-account-metric {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+html.dark .admin-account-metric-label {
+    color: rgba(255, 255, 255, 0.56);
+}
+
+html.dark .admin-account-metric-value,
+html.dark .accounts-toolbar-title {
+    color: #f3f4f6;
+}
+
+html.dark .accounts-toolbar-card,
+html.dark .accounts-composer-card {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+html.dark .accounts-toolbar-copy,
+html.dark .accounts-toolbar-field {
+    color: rgba(255, 255, 255, 0.64);
+}
+
+html.dark .accounts-composer-section,
+html.dark .runtime-proxy-card,
+html.dark .runtime-status-card,
+html.dark .runtime-details-block {
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+html.dark .accounts-toolbar-select {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.08);
+    color: #f3f4f6;
+}
+
+html.dark .accounts-render-notice {
+    background: rgba(245, 158, 11, 0.16);
+    border-color: rgba(245, 158, 11, 0.28);
+    color: #fde68a;
 }
 
 .settings-console-header {
@@ -712,6 +899,49 @@ body[data-admin-auth="signed_in"] .runtime-config-section {
     padding: 14px;
 }
 
+.runtime-proxy-card,
+.runtime-status-card,
+.runtime-details-block {
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.68);
+    padding: 14px;
+}
+
+.runtime-proxy-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.runtime-status-board {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+}
+
+.runtime-status-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+}
+
+.runtime-details-block summary {
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    color: #6b7280;
+    list-style: none;
+}
+
+.runtime-details-block summary::-webkit-details-marker {
+    display: none;
+}
+
 body[data-admin-auth="signed_in"] .runtime-config-section-header {
     margin-bottom: 14px;
 }
@@ -819,37 +1049,73 @@ body[data-admin-auth="signed_in"] .runtime-config-section-header {
     color: #991b1b;
 }
 
-.usage-hero-panel,
+.usage-toolbar-card,
 .usage-breakdown-panel {
     border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 18px;
-    background: rgba(255, 255, 255, 0.72);
-    padding: 14px;
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.74);
+    padding: 16px 18px;
 }
 
-.usage-section-kicker {
-    font-size: 10px;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: #9a5b3f;
-    margin-bottom: 4px;
+.usage-toolbar-row,
+.usage-breakdown-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.usage-toolbar-title,
+.usage-breakdown-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #111827;
+}
+
+.usage-toolbar-copy,
+.usage-breakdown-copy {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #6b7280;
+    line-height: 1.5;
+}
+
+.usage-toolbar-meta {
+    max-width: 320px;
+    font-size: 12px;
+    color: #6b7280;
+    line-height: 1.5;
+}
+
+.usage-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+}
+
+.usage-toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
 }
 
 .usage-summary-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
 }
 
 .usage-summary-card {
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 16px;
-    padding: 12px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(247, 242, 236, 0.9));
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 22px;
+    padding: 16px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(250, 246, 241, 0.86));
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    min-height: 90px;
+    gap: 8px;
+    min-height: 118px;
+    box-shadow: 0 14px 32px rgba(68, 49, 37, 0.05);
 }
 
 .usage-summary-card-label {
@@ -860,45 +1126,45 @@ body[data-admin-auth="signed_in"] .runtime-config-section-header {
 }
 
 .usage-summary-card-value {
-    font-size: 24px;
+    font-size: 28px;
     font-weight: 700;
     color: #1f2937;
 }
 
 .usage-summary-card-hint {
-    font-size: 11px;
+    font-size: 12px;
     color: #6b7280;
+    line-height: 1.5;
 }
 
-.usage-breakdown-title {
-    font-size: 12px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #6b7280;
-    margin-bottom: 10px;
+.usage-breakdown-list,
+.usage-events-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 14px;
 }
 
 .usage-breakdown-row,
 .usage-event-row {
     border: 1px solid rgba(0, 0, 0, 0.06);
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.7);
-    padding: 10px 12px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.76);
+    padding: 14px 16px;
 }
 
 .usage-breakdown-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
-    gap: 12px;
+    gap: 14px;
 }
 
 .usage-breakdown-main,
 .usage-event-main {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
     min-width: 0;
 }
 
@@ -932,7 +1198,7 @@ body[data-admin-auth="signed_in"] .runtime-config-section-header {
 
 html.dark .settings-console-nav-btn,
 html.dark .settings-console-panel,
-html.dark .usage-hero-panel,
+html.dark .usage-toolbar-card,
 html.dark .usage-breakdown-panel,
 html.dark .usage-summary-card,
 html.dark .usage-breakdown-row,
@@ -940,7 +1206,8 @@ html.dark .usage-event-row,
 html.dark .admin-module-intro-card,
 html.dark .runtime-chat-group,
 html.dark .runtime-toggle-card,
-html.dark .runtime-subsection-card {
+html.dark .runtime-subsection-card,
+html.dark .runtime-save-scope-note {
     background: rgba(255, 255, 255, 0.05);
     border-color: rgba(255, 255, 255, 0.08);
 }
@@ -951,7 +1218,6 @@ html.dark .runtime-subsection-card-media {
 }
 
 html.dark .settings-console-kicker,
-html.dark .usage-section-kicker,
 html.dark .usage-breakdown-value,
 html.dark .admin-module-intro-title,
 html.dark .runtime-subsection-title,
@@ -960,6 +1226,8 @@ html.dark .runtime-subsection-badge {
     color: #f2b08e;
 }
 
+html.dark .usage-toolbar-title,
+html.dark .usage-breakdown-title,
 html.dark .usage-summary-card-value,
 html.dark .usage-breakdown-name,
 html.dark .usage-event-title,
@@ -967,16 +1235,19 @@ html.dark .runtime-toggle-card strong {
     color: #f9fafb;
 }
 
+html.dark .usage-toolbar-copy,
+html.dark .usage-toolbar-meta,
 html.dark .usage-summary-card-label,
 html.dark .usage-summary-card-hint,
-html.dark .usage-breakdown-title,
+html.dark .usage-breakdown-copy,
 html.dark .usage-breakdown-meta,
 html.dark .usage-event-meta,
 html.dark .usage-empty-state,
 html.dark .admin-module-intro-copy,
 html.dark .runtime-chat-group-copy,
 html.dark .runtime-toggle-card small,
-html.dark .runtime-subsection-copy {
+html.dark .runtime-subsection-copy,
+html.dark .runtime-save-scope-note {
     color: #d1d5db;
 }
 
@@ -996,7 +1267,22 @@ html.dark .runtime-media-guidance-pill-error {
 
 @media (max-width: 768px) {
     .admin-account-row {
+        padding: 16px;
+        border-radius: 20px;
+    }
+
+    .admin-kv {
         grid-template-columns: 1fr;
+    }
+
+    .accounts-toolbar-row,
+    .accounts-toolbar-controls {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .accounts-toolbar-pagination {
+        width: 100%;
     }
 
     .admin-access-banner {
@@ -1040,9 +1326,15 @@ html.dark .runtime-media-guidance-pill-error {
         white-space: nowrap;
     }
 
+    .usage-toolbar-row,
+    .usage-breakdown-heading,
     .usage-breakdown-row {
         flex-direction: column;
         align-items: flex-start;
+    }
+
+    .usage-toolbar-meta {
+        max-width: none;
     }
 
     #settings-section-access .grid.grid-cols-1.lg\:grid-cols-2 {

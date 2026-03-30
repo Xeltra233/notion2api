@@ -490,11 +490,11 @@ window.NotionAI.API.Settings = {
         }
         const accounts = Array.isArray(result.accounts) ? result.accounts : [];
         if (!accounts.length) {
-            panel.innerHTML = '';
+            panel.innerHTML = '<div class="text-xs text-gray-500 dark:text-gray-400">暂无刷新诊断结果。</div>';
             return;
         }
         panel.innerHTML = `
-            <div class="text-xs font-medium text-gray-700 dark:text-gray-200">刷新诊断</div>
+            <div class="runtime-status-title">刷新诊断</div>
             ${accounts.slice(0, 5).map((item) => `
                 <div class="rounded-xl border border-black/10 dark:border-white/10 px-3 py-2 text-xs bg-black/[0.02] dark:bg-white/[0.03]">
                     <div><strong>${this.escapeHtml(item.user_email || item.user_id || item.account_id)}</strong></div>
@@ -518,11 +518,11 @@ window.NotionAI.API.Settings = {
         }
         const accounts = Array.isArray(result.accounts) ? result.accounts : [];
         if (!accounts.length) {
-            panel.innerHTML = '';
+            panel.innerHTML = '<div class="text-xs text-gray-500 dark:text-gray-400">暂无工作区诊断结果。</div>';
             return;
         }
         panel.innerHTML = `
-            <div class="text-xs font-medium text-gray-700 dark:text-gray-200">工作区诊断</div>
+            <div class="runtime-status-title">工作区诊断</div>
             ${accounts.slice(0, 5).map((item) => `
                 <div class="rounded-xl border border-black/10 dark:border-white/10 px-3 py-2 text-xs bg-black/[0.02] dark:bg-white/[0.03]">
                     <div><strong>${this.escapeHtml(item.user_email || item.user_id || item.account_id)}</strong></div>
@@ -1204,6 +1204,118 @@ window.NotionAI.API.Settings = {
         return date.toLocaleString();
     },
 
+    formatClockLabel(date = new Date()) {
+        try {
+            return new Intl.DateTimeFormat('zh-CN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+            }).format(date);
+        } catch (error) {
+            return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+        }
+    },
+
+    formatDateLabel(date = new Date()) {
+        try {
+            return new Intl.DateTimeFormat('zh-CN', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                weekday: 'long',
+            }).format(date);
+        } catch (error) {
+            return date.toLocaleDateString();
+        }
+    },
+
+    renderOverviewHero() {
+        const greeting = document.getElementById('overviewHeroGreeting');
+        const copy = document.getElementById('overviewHeroCopy');
+        const time = document.getElementById('overviewHeroTime');
+        const date = document.getElementById('overviewHeroDate');
+        if (!greeting || !copy || !time || !date) {
+            return;
+        }
+        const now = new Date();
+        const hour = now.getHours();
+        let title = '欢迎回来';
+        let message = '先看账号、配置和当前风险，再决定下一步去哪里。';
+        if (hour < 6) {
+            title = '夜深了';
+            message = '先看异常和待处理项，再决定今晚只修哪里。';
+        } else if (hour < 11) {
+            title = '早上好';
+            message = '先读概览卡和当前配置，再排今天的优先级。';
+        } else if (hour < 14) {
+            title = '中午好';
+            message = '先快速过一遍系统状态，再决定下午先处理哪一块。';
+        } else if (hour < 18) {
+            title = '下午继续';
+            message = '先看待刷新、工作区和失败动作，再进细节。';
+        } else {
+            title = '晚上好';
+            message = '先确认系统稳不稳，再决定今晚只修哪里。';
+        }
+        greeting.textContent = title;
+        copy.textContent = message;
+        time.textContent = this.formatClockLabel(now);
+        date.textContent = this.formatDateLabel(now);
+    },
+
+    renderOverviewConfigSummary(runtimeConfig = {}, usageSummary = {}) {
+        const container = document.getElementById('overviewConfigSummary');
+        if (!container) {
+            return;
+        }
+        const settings = runtimeConfig.settings || {};
+        const auth = runtimeConfig.admin_auth || {};
+        const items = [
+            ['后台入口', auth.username || 'admin'],
+            ['模式', settings.app_mode || 'standard'],
+            ['服务端密钥', (settings.has_api_key || settings.api_key) ? '已设置' : '为空'],
+            ['Chat', settings.chat_enabled ? '开启' : '关闭'],
+            ['代理', settings.upstream_proxy_mode || 'direct'],
+            ['自动注册', settings.auto_register_enabled ? '开启' : '关闭'],
+            ['用量统计', usageSummary.enabled ? '开启' : '关闭'],
+            ['最近事件', usageSummary.event_count ?? usageSummary.total_events ?? 0],
+        ];
+        container.innerHTML = items
+            .map(([label, value]) => `<span class="admin-mini-pill"><strong>${this.escapeHtml(label)}</strong><span>${this.escapeHtml(value)}</span></span>`)
+            .join('');
+    },
+
+    renderAccountsSnapshot(summary = {}, pagination = {}) {
+        const quick = document.getElementById('accountsQuickSummary');
+        const list = document.getElementById('accountsListSummary');
+        const total = Number(pagination.total || summary.total || 0);
+        const page = Number(pagination.page || 1);
+        const pageSize = pagination.page_size === 'all' ? '全部' : Number(pagination.page_size || 24);
+        if (quick) {
+            const items = [
+                ['总数', summary.total ?? 0],
+                ['可用', summary.usable ?? 0],
+                ['待刷新', summary.needs_refresh ?? 0],
+                ['缺工作区', summary.no_workspace ?? 0],
+                ['补全挂起', summary.workspace_creation_pending ?? 0],
+                ['无效', summary.invalid ?? 0],
+            ];
+            quick.innerHTML = items
+                .map(([label, value]) => `<span class="admin-mini-pill"><strong>${this.escapeHtml(label)}</strong><span>${this.escapeHtml(value)}</span></span>`)
+                .join('');
+        }
+        if (list) {
+            const items = [
+                ['当前页', page],
+                ['每页', pageSize],
+                ['当前总量', total],
+            ];
+            list.innerHTML = items
+                .map(([label, value]) => `<span class="admin-mini-pill"><strong>${this.escapeHtml(label)}</strong><span>${this.escapeHtml(value)}</span></span>`)
+                .join('');
+        }
+    },
+
     renderAdminAccounts(data) {
         const panel = document.getElementById('adminAccountsPanel');
         if (!panel) {
@@ -1219,6 +1331,7 @@ window.NotionAI.API.Settings = {
         const requestedShowAll = pageSizeValue === 'all';
         const blockedShowAll = requestedShowAll && total > this._adminMaxShowAllAccounts;
         this.showAdminAccountsRenderNotice(blockedShowAll ? `当前共有 ${total} 个账号。为防止当前页面一次渲染过多内容，已禁止“全部显示”。请改用分页或较小的每页数量。` : '');
+        this.renderAccountsSnapshot(data.summary || {}, pagination || {});
         const viewBanner = `<div class="accounts-toolbar-copy">视图模式：<strong>${safeViewMode}</strong>${viewMode === 'safe' ? '，敏感字段已遮罩。' : '，当前响应可见原始账号数据。'}</div>`;
         if (!accounts.length) {
             panel.innerHTML = `<div class="admin-access-card"><div class="text-sm text-gray-500 dark:text-gray-400">未加载到账号。</div></div>`;
@@ -1553,6 +1666,7 @@ window.NotionAI.API.Settings = {
     },
 
     renderAdminSummary(summary = {}) {
+        this.renderOverviewHero();
         document.getElementById('adminStatTotal').textContent = summary.total ?? '-';
         document.getElementById('adminStatUsable').textContent = summary.usable ?? '-';
         document.getElementById('adminStatNeedsRefresh').textContent = summary.needs_refresh ?? '-';
@@ -1666,6 +1780,7 @@ window.NotionAI.API.Settings = {
             this.renderAdminAccessStatus(runtimeConfig.admin_auth || {});
             this.renderAdminSessionSummary(runtimeConfig.admin_auth || {});
             this.renderAdminAlerts(alerts || {});
+            this.renderOverviewConfigSummary(runtimeConfig || {}, usageSummary || {});
             this.applyAdminConsoleAccessState(runtimeConfig.admin_auth || {});
             this.renderOperationLogs(operations || {});
             this.renderUsageSummary(usageSummary || {});
