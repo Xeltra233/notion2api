@@ -2401,12 +2401,41 @@ window.NotionAI.API.Settings = {
         `;
     },
 
+    setRuntimeSaveNotice(message = '', tone = 'success') {
+        const notice = document.getElementById('runtimeSaveNotice');
+        if (!notice) {
+            return;
+        }
+        if (!message) {
+            notice.textContent = '';
+            notice.classList.add('hidden');
+            notice.dataset.tone = '';
+            return;
+        }
+        notice.textContent = message;
+        notice.classList.remove('hidden');
+        notice.dataset.tone = tone;
+        notice.classList.toggle('border-emerald-200/70', tone === 'success');
+        notice.classList.toggle('bg-emerald-50', tone === 'success');
+        notice.classList.toggle('text-emerald-700', tone === 'success');
+        notice.classList.toggle('dark:border-emerald-500/20', tone === 'success');
+        notice.classList.toggle('dark:bg-emerald-500/10', tone === 'success');
+        notice.classList.toggle('dark:text-emerald-200', tone === 'success');
+        notice.classList.toggle('border-amber-200/70', tone !== 'success');
+        notice.classList.toggle('bg-amber-50', tone !== 'success');
+        notice.classList.toggle('text-amber-700', tone !== 'success');
+        notice.classList.toggle('dark:border-amber-500/20', tone !== 'success');
+        notice.classList.toggle('dark:bg-amber-500/10', tone !== 'success');
+        notice.classList.toggle('dark:text-amber-200', tone !== 'success');
+    },
+
     async loadRuntimeConfigIntoForm() {
         if (!window.NotionAI.Core.State.get('adminSessionToken')) {
             return;
         }
         try {
             const data = await window.NotionAI.API.Admin.loadConfig();
+            this.setRuntimeSaveNotice('');
             this.applyRuntimeSettingsToForm(data.settings || {});
             this.renderAdminAuthSource(data.admin_auth || {});
             this.renderAdminAccessStatus(data.admin_auth || {});
@@ -2491,6 +2520,7 @@ window.NotionAI.API.Settings = {
                 media_validation_warnings: mediaValidation.warnings,
                 media_validation_error: mediaValidation.error,
             });
+            this.setRuntimeSaveNotice(mediaValidation.error, 'warning');
             this.setAdminNotice(mediaValidation.error);
             const hint = document.getElementById('runtimeConfigHint');
             if (hint) {
@@ -2501,23 +2531,6 @@ window.NotionAI.API.Settings = {
 
         try {
             await window.NotionAI.API.Admin.saveRuntimeSettings(payload);
-            this.renderRuntimeConfigSummary({
-                ...payload,
-                media_validation_warnings: mediaValidation.warnings,
-                media_validation_error: '',
-            });
-            this.renderRuntimeProxyHealth({
-                mode: payload.upstream_proxy_mode,
-                active: Boolean(payload.upstream_proxy || payload.upstream_http_proxy || payload.upstream_https_proxy || payload.upstream_socks5_proxy || (payload.upstream_warp_enabled && payload.upstream_warp_proxy)),
-                warp_enabled: Boolean(payload.upstream_warp_enabled),
-                warp_configured: Boolean(payload.upstream_warp_proxy),
-                socks5_configured: Boolean(payload.upstream_socks5_proxy),
-                http_configured: Boolean(payload.upstream_http_proxy),
-                https_configured: Boolean(payload.upstream_https_proxy),
-            });
-            this.renderRegisterAutomationSummary({});
-            this.renderRuntimeProxyChecks({});
-            this.renderRuntimeOperationsPanel({});
             window.NotionAI.Core.State.set('chatEnabled', Boolean(payload.chat_enabled));
             window.NotionAI.Core.State.set('chatPasswordEnabled', Boolean(payload.chat_password_enabled));
             if (!payload.chat_enabled || !payload.chat_password_enabled) {
@@ -2526,16 +2539,19 @@ window.NotionAI.API.Settings = {
             if (typeof window.NotionAI.Core.App?.syncShellFromState === 'function') {
                 window.NotionAI.Core.App.syncShellFromState();
             }
+            await this.loadRuntimeConfigIntoForm();
             await this.refreshChatAccessState(true);
             const hint = document.getElementById('runtimeConfigHint');
             if (hint) {
                 hint.textContent = `运行时配置已保存。后台探测间隔：${payload.account_probe_interval_seconds} 秒。自动创建工作区：${payload.auto_create_workspace ? '开启' : '关闭'}。媒体链接：${payload.media_public_base_url || '跟随当前服务地址'}。`;
             }
+            this.setRuntimeSaveNotice('运行时配置已保存，并已从服务端重新加载。');
             localStorage.setItem('claude_runtime_config_saved', 'true');
             if (!silent) {
                 this.setAdminNotice('运行时配置已保存。');
             }
         } catch (error) {
+            this.setRuntimeSaveNotice(error.message || '保存运行时配置失败。', 'warning');
             this.setAdminNotice(error.message || '保存运行时配置失败。');
         }
     },
