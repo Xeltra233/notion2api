@@ -202,7 +202,7 @@
                                     <h5 class="text-sm font-medium">后台登录</h5>
                                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">默认使用当前站点地址和已保存的访问密钥。只有连接别的实例时再展开连接设置。</p>
                                 </div>
-                                <details class="runtime-details-block">
+                                <details class="runtime-details-block" id="adminConnectionSettingsDetails">
                                     <summary>连接设置</summary>
                                     <div class="grid grid-cols-1 gap-3 mt-3">
                                         <div>
@@ -216,6 +216,7 @@
                                             <input type="password" id="apiKeyInput"
                                                 class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent/50 outline-none transition-shadow"
                                                 placeholder="仅在需要连接其它实例或补录密钥时填写">
+                                            <div class="mt-2 text-[11px] text-gray-500 dark:text-gray-400">如果当前实例要求 API Key 才能进入后台，在这里补录即可。</div>
                                         </div>
                                     </div>
                                 </details>

@@ -670,6 +670,16 @@ window.NotionAI.API.Settings = {
         }
     },
 
+    revealConnectionSettingsIfNeeded(reason = '') {
+        const details = document.getElementById('adminConnectionSettingsDetails');
+        if (details && !details.open) {
+            details.open = true;
+        }
+        if (reason) {
+            this.setAdminNotice(reason);
+        }
+    },
+
     close() {
         if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
             window.NotionAI.Core.App.setActiveModule(window.NotionAI.Core.App.getDefaultModule());
@@ -748,7 +758,12 @@ window.NotionAI.API.Settings = {
                 window.NotionAI.Core.App.setActiveModule('overview');
             }
         } catch (error) {
-            this.setAdminNotice(error.message || '后台登录失败。');
+            const message = error.message || '后台登录失败。';
+            if (/api key|invalid_api_key/i.test(message)) {
+                this.revealConnectionSettingsIfNeeded('当前实例要求有效的 API Key。请展开连接设置后补录访问密钥。');
+                return;
+            }
+            this.setAdminNotice(message);
         }
     },
 
