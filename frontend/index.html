@@ -814,7 +814,7 @@
                         <div class="accounts-composer-header">
                             <div>
                                 <div class="accounts-toolbar-title">新增账号</div>
-                                <div class="accounts-toolbar-copy">默认收起。按需要选择手动、JSON、文件或 OAuth。</div>
+                                <div class="accounts-toolbar-copy">默认收起。按需要选择手动、JSON、文件或邮箱验证码导入。</div>
                             </div>
                             <button id="adminToggleAccountComposerBtn" type="button" class="admin-action-btn">打开新增入口</button>
                         </div>
@@ -823,7 +823,7 @@
                                 <button id="adminAccountModeManualBtn" type="button" class="admin-action-btn admin-action-btn-primary">手动输入 v2</button>
                                 <button id="adminAccountModeJsonBtn" type="button" class="admin-action-btn">JSON 输入</button>
                                 <button id="adminAccountModeFileBtn" type="button" class="admin-action-btn">文件导入</button>
-                                <button id="adminAccountModeOauthBtn" type="button" class="admin-action-btn">OAuth 导入</button>
+                                <button id="adminAccountModeOauthBtn" type="button" class="admin-action-btn">邮箱验证码导入</button>
                             </div>
                             <input id="adminAccountIdInput" type="hidden">
                             <div id="adminAccountManualSection" class="accounts-composer-section space-y-3">
@@ -866,9 +866,9 @@
                                 </div>
                             </div>
                             <div id="adminAccountOauthSection" class="accounts-composer-section hidden space-y-3">
-                                <div class="text-sm text-gray-700 dark:text-gray-300">直接进入 Notion OAuth 主流程，不再额外跳到诊断工具堆里兜圈子。</div>
+                                <div class="text-sm text-gray-700 dark:text-gray-300">直接用邮箱验证码注册并导入账号，不再依赖 OAuth 回调流。</div>
                                 <div class="flex flex-wrap gap-2">
-                                    <button id="adminOpenOAuthStartBtn" type="button" class="admin-action-btn admin-action-btn-primary">开始 OAuth 导入</button>
+                                    <button id="adminOpenOAuthStartBtn" type="button" class="admin-action-btn admin-action-btn-primary">开始邮箱验证码导入</button>
                                 </div>
                             </div>
                         </div>
@@ -880,7 +880,7 @@
                     <div>
                         <div class="settings-console-kicker">诊断</div>
                         <h4 class="text-sm font-medium">流程卡住时，再进来查</h4>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">这里集中放 OAuth、工作区、模板和快照排查工具。</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">这里集中放邮箱验证码导入、工作区、模板和快照排查工具。</p>
                     </div>
                     <div class="grid grid-cols-1 lg:grid-cols-[0.95fr_1.05fr] gap-3">
                         <div class="rounded-2xl border border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 p-4 space-y-3">
@@ -900,7 +900,7 @@
                         <div class="runtime-status-card">
                             <div class="runtime-status-title">诊断工具</div>
                             <div class="flex flex-wrap gap-2">
-                                <button id="oauthStartBtn" type="button" class="admin-action-btn">准备 OAuth 启动参数</button>
+                                <button id="oauthStartBtn" type="button" class="admin-action-btn">发送邮箱验证码</button>
                                 <button id="oauthRefreshStatusBtn" type="button" class="admin-action-btn">刷新状态</button>
                                 <button id="workspaceCreateStatusBtn" type="button" class="admin-action-btn">工作区创建状态</button>
                                 <button id="requestTemplatesBtn" type="button" class="admin-action-btn">请求模板</button>
@@ -914,39 +914,35 @@
                     <div class="space-y-3">
                     <div class="rounded-2xl border border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 p-4 space-y-3">
                         <div>
-                            <div class="text-sm font-medium">Notion OAuth 登录</div>
-                            <div class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">当前是 Notion Web 回调导入流。最短路径是：点击登录链接、完成网页登录、复制 localhost 回调、粘贴回来、完成导入。</div>
+                            <div class="text-sm font-medium">Notion 邮箱验证码注册</div>
+                            <div class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">最短路径是：输入邮箱、发送验证码、去邮箱查看验证码、填回这里并完成导入。</div>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px] text-gray-500 dark:text-gray-400">
-                            <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">1. 点击下面的登录链接</div>
-                            <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">2. 在外部完成网页登录</div>
-                            <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">3. 复制回调后的 localhost URL</div>
-                            <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">4. 粘回这里并点“导入回调并完成”</div>
+                            <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">1. 输入邮箱地址</div>
+                            <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">2. 点击发送验证码</div>
+                            <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">3. 去邮箱查看验证码</div>
+                            <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">4. 填回这里并完成导入</div>
                         </div>
                     </div>
                     <div class="rounded-2xl border border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 p-4 space-y-3">
-                        <div class="text-[11px] text-gray-500 dark:text-gray-400">这里会直接给你一个可点的 Notion 登录链接。如果你的网页登录环境不能直接回 localhost，也会同时给出回调桥接地址。</div>
+                        <div class="text-[11px] text-gray-500 dark:text-gray-400">这里会显示当前邮箱验证码发送状态与会话有效期。</div>
                         <a id="oauthStartLink" href="#" target="_blank" rel="noopener noreferrer"
-                            class="hidden break-all text-sm text-accent underline underline-offset-4">打开 Notion 登录链接</a>
-                        <textarea id="oauthStartUrlOutput" rows="3" readonly placeholder="生成的登录链接会显示在这里"
+                            class="hidden break-all text-sm text-accent underline underline-offset-4">占位链接</a>
+                        <textarea id="oauthStartUrlOutput" rows="3" readonly placeholder="验证码发送结果会显示在这里"
                             class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
                     </div>
-                    <textarea id="oauthCallbackBridgeOutput" rows="2" readonly placeholder="如果网页登录环境不能直接回 localhost，可改用这里的回调桥接地址"
+                    <textarea id="oauthCallbackBridgeOutput" rows="2" readonly placeholder="验证码会话有效期会显示在这里"
                         class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <input id="oauthSpaceIdInput" type="text" placeholder="space_id"
-                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
                         <input id="oauthEmailInput" type="text" placeholder="用户邮箱"
                             class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                        <input id="oauthRedirectUriInput" type="text" placeholder="redirect URI，例如 http://localhost:8000"
-                            class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                        <textarea id="oauthCallbackUrlInput" rows="3" placeholder="把浏览器里完成登录后的完整 localhost 回调 URL 粘贴到这里"
+                        <textarea id="oauthCallbackUrlInput" rows="3" placeholder="把邮箱收到的验证码填到这里"
                             class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none resize-y"></textarea>
                     </div>
                     <div class="flex flex-wrap gap-2">
-                        <button id="oauthStartBtnPrimary" type="button" class="admin-action-btn admin-action-btn-primary">生成并显示登录链接</button>
-                        <button id="oauthImportCallbackBtn" type="button" class="admin-action-btn admin-action-btn-primary">导入回调并完成</button>
-                        <button id="oauthParseCallbackBtn" type="button" class="admin-action-btn">只解析回调</button>
+                        <button id="oauthStartBtnPrimary" type="button" class="admin-action-btn admin-action-btn-primary">发送验证码并聚焦到这里</button>
+                        <button id="oauthImportCallbackBtn" type="button" class="admin-action-btn admin-action-btn-primary">提交验证码并导入</button>
+                        <button id="oauthParseCallbackBtn" type="button" class="admin-action-btn">重复提交验证码</button>
                         <button id="oauthFinalizeBtn" type="button" class="admin-action-btn">仅完成导入</button>
                     </div>
                     <textarea id="requestTemplateOutput" rows="8" readonly placeholder="请求模板与诊断载荷会显示在这里"
@@ -955,7 +951,7 @@
                         </div>
                     </div>
                     <details class="runtime-details-block">
-                        <summary>展开 OAuth 诊断与模板工具</summary>
+                        <summary>展开邮箱验证码导入诊断与模板工具</summary>
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
                             <div id="oauthRefreshDiagnosticsPanel" class="space-y-2 runtime-status-card"></div>
                             <div id="workspaceDiagnosticsPanel" class="space-y-2 runtime-status-card"></div>
@@ -963,7 +959,7 @@
                         <div class="runtime-status-card mt-3 space-y-3">
                             <div class="runtime-status-title">诊断工具</div>
                             <div class="flex flex-wrap gap-2">
-                                <button id="oauthStartBtn" type="button" class="admin-action-btn">准备 OAuth 启动参数</button>
+                                <button id="oauthStartBtn" type="button" class="admin-action-btn">发送邮箱验证码</button>
                                 <button id="oauthRefreshStatusBtn" type="button" class="admin-action-btn">刷新状态</button>
                                 <button id="workspaceCreateStatusBtn" type="button" class="admin-action-btn">工作区创建状态</button>
                                 <button id="requestTemplatesBtn" type="button" class="admin-action-btn">请求模板</button>

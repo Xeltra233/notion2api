@@ -22,6 +22,13 @@ from app.api.register import (
     retry_pending_register_hydration,
 )
 from app.register.mail_client import build_runtime_proxy_dict
+from app.register.notion_register import (
+    NOTION_API_GET_SELF,
+    NOTION_API_LOAD_USER_CONTENT,
+    NOTION_API_SEND_EMAIL_CODE,
+    NOTION_API_SIGNUP,
+    NOTION_API_VERIFY_EMAIL_CODE,
+)
 from app.usage import UsageStore
 from app.config import (
     ACCOUNTS_PATH,
@@ -32,6 +39,10 @@ from app.config import (
     get_chat_auth,
     get_chat_session_ttl_seconds,
     get_config_store,
+    get_oauth_client_id,
+    get_oauth_client_secret,
+    get_oauth_redirect_uri,
+    has_oauth_credentials,
     should_auto_select_workspace,
     update_admin_credentials,
     update_chat_password,
@@ -50,10 +61,12 @@ _RUNTIME_SECRET_FIELDS = {
     "siliconflow_api_key",
     "auto_register_mail_api_key",
     "refresh_client_secret",
+    "oauth_client_secret",
 }
 _ACCOUNT_SECRET_FIELDS = {"token_v2"}
 _OAUTH_SECRET_FIELDS = {"access_token", "refresh_token"}
 _OAUTH_CALLBACK_TTL_SECONDS = 10 * 60
+_EMAIL_LOGIN_SESSION_TTL_SECONDS = 15 * 60
 
 
 def _mask_secret(value: Any) -> str:
@@ -845,6 +858,9 @@ class RuntimeSettingsRequest(BaseModel):
     workspace_create_dry_run: bool = True
     workspace_creation_template_space_id: str = Field(default="")
     account_probe_interval_seconds: int = 300
+    oauth_client_id: str = Field(default="")
+    oauth_client_secret: str | None = Field(default=None)
+    oauth_redirect_uri: str = Field(default="")
     refresh_execution_mode: str = Field(default="manual")
     refresh_request_url: str = Field(default="")
     refresh_client_id: str = Field(default="")
@@ -939,6 +955,15 @@ class OAuthStartRequest(BaseModel):
     provider: str = "notion-web"
 
 
+class EmailCodeSendRequest(BaseModel):
+    email: str
+
+
+class EmailCodeVerifyRequest(BaseModel):
+    email: str
+    code: str
+
+
 class OAuthFinalizeRequest(BaseModel):
     token_v2: str
     user_id: str
@@ -955,6 +980,21 @@ class OAuthFinalizeRequest(BaseModel):
     scopes: list[str] = Field(default_factory=list)
     plan_type: str = "unknown"
     notes: str = ""
+    tags: list[str] = Field(default_factory=list)
+
+
+class EmailCodeStartRequest(BaseModel):
+    email: str = Field(default="")
+
+
+class EmailCodeFinalizeRequest(BaseModel):
+    email: str = Field(default="")
+    code: str = Field(default="")
+    first_name: str = Field(default="Notion")
+    last_name: str = Field(default="User")
+    username: str = Field(default="")
+    plan_type: str = Field(default="unknown")
+    notes: str = Field(default="")
     tags: list[str] = Field(default_factory=list)
 
 
@@ -1253,6 +1293,344 @@ def _consume_oauth_callback_session_payload(
     return payload
 
 
+def _prune_email_login_sessions(request: Request) -> None:
+    sessions = getattr(request.app.state, "email_login_sessions", {})
+    now_ts = int(time.time())
+    expired_tokens = [
+        token
+        for token, session in sessions.items()
+        if int(session.get("expires_at") or 0) <= now_ts
+    ]
+    for token in expired_tokens:
+        sessions.pop(token, None)
+
+
+def _register_email_login_session(request: Request, email: str) -> dict[str, Any]:
+    _prune_email_login_sessions(request)
+    normalized_email = str(email or "").strip().lower()
+    now_ts = int(time.time())
+    session = {
+        "email": normalized_email,
+        "created_at": now_ts,
+        "expires_at": now_ts + _EMAIL_LOGIN_SESSION_TTL_SECONDS,
+        "status": "code_sent",
+    }
+    getattr(request.app.state, "email_login_sessions", {})[normalized_email] = session
+    return session
+
+
+def _get_email_login_session(request: Request, email: str) -> dict[str, Any] | None:
+    _prune_email_login_sessions(request)
+    normalized_email = str(email or "").strip().lower()
+    return getattr(request.app.state, "email_login_sessions", {}).get(normalized_email)
+
+
+def _consume_email_login_session(request: Request, email: str) -> dict[str, Any] | None:
+    sessions = getattr(request.app.state, "email_login_sessions", {})
+    normalized_email = str(email or "").strip().lower()
+    session = _get_email_login_session(request, normalized_email)
+    if session:
+        sessions.pop(normalized_email, None)
+    return session
+
+
+def _build_notion_session() -> requests.Session:
+    session = requests.Session()
+    session.headers.update(
+        {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Content-Type": "application/json",
+            "Accept": "*/*",
+            "Origin": "https://www.notion.so",
+            "Referer": "https://www.notion.so/signup",
+        }
+    )
+    proxies = build_runtime_proxy_dict()
+    if proxies:
+        session.proxies = proxies
+    return session
+
+
+def _find_value_recursive(payload: Any, target_keys: set[str]) -> str:
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            if key in target_keys and isinstance(value, str) and value.strip():
+                return value.strip()
+            found = _find_value_recursive(value, target_keys)
+            if found:
+                return found
+    elif isinstance(payload, list):
+        for item in payload:
+            found = _find_value_recursive(item, target_keys)
+            if found:
+                return found
+    return ""
+
+
+def _extract_space_view_id_from_content(payload: dict[str, Any]) -> str:
+    if not isinstance(payload, dict):
+        return ""
+    record_map = (
+        payload.get("recordMap")
+        if isinstance(payload.get("recordMap"), dict)
+        else payload
+    )
+    collection_view = (
+        record_map.get("collection_view")
+        if isinstance(record_map.get("collection_view"), dict)
+        else {}
+    )
+    for view_id, view_obj in collection_view.items():
+        if not isinstance(view_obj, dict):
+            continue
+        value = view_obj.get("value") if isinstance(view_obj.get("value"), dict) else {}
+        if str(value.get("space_id") or "").strip():
+            return str(view_id or "").strip()
+    return _find_value_recursive(payload, {"space_view_id", "spaceViewId"})
+
+
+def _get_user_spaces(
+    session: requests.Session, token_v2: str, user_id: str
+) -> list[dict[str, Any]]:
+    try:
+        session.cookies.set("token_v2", token_v2, domain=".notion.so")
+        resp = session.post(
+            "https://www.notion.so/api/v3/getSpaces", json={}, timeout=30
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        user_root = data.get(user_id, {})
+        if not user_root:
+            first_val = next(iter(data.values()), None)
+            if isinstance(first_val, dict):
+                user_root = first_val
+        spaces = user_root.get("space", {})
+        result: list[dict[str, Any]] = []
+        for space_id, space_obj in spaces.items():
+            if isinstance(space_obj, dict) and "value" in space_obj:
+                value = space_obj["value"]
+                result.append(
+                    {
+                        "id": str(space_id or "").strip(),
+                        "name": str(value.get("name") or "").strip(),
+                    }
+                )
+        return result
+    except Exception:
+        return []
+
+
+def _hydrate_email_login_account(account: dict[str, Any]) -> dict[str, Any]:
+    hydrated = dict(account)
+    token_v2 = str(hydrated.get("token_v2") or "").strip()
+    user_id = str(hydrated.get("user_id") or "").strip()
+    if not token_v2 or not user_id:
+        return hydrated
+    session = _build_notion_session()
+    session.cookies.set("token_v2", token_v2, domain=".notion.so")
+
+    spaces = _get_user_spaces(session, token_v2, user_id)
+    if spaces:
+        hydrated["space_id"] = str(
+            hydrated.get("space_id") or spaces[0].get("id") or ""
+        )
+        hydrated["workspace"] = {
+            **(
+                hydrated.get("workspace")
+                if isinstance(hydrated.get("workspace"), dict)
+                else {}
+            ),
+            "workspace_count": len(spaces),
+            "workspaces": spaces,
+            "state": "ready",
+        }
+
+    try:
+        profile_resp = session.post(NOTION_API_GET_SELF, json={}, timeout=30)
+        if profile_resp.ok:
+            profile = profile_resp.json()
+            if not str(hydrated.get("user_email") or "").strip():
+                hydrated["user_email"] = _find_value_recursive(
+                    profile, {"email", "user_email", "userEmail"}
+                )
+            if not str(hydrated.get("user_name") or "").strip():
+                hydrated["user_name"] = _find_value_recursive(
+                    profile,
+                    {"name", "full_name", "fullName", "given_name", "givenName"},
+                )
+            if not str(hydrated.get("space_id") or "").strip():
+                hydrated["space_id"] = _find_value_recursive(
+                    profile,
+                    {"space_id", "spaceId", "active_space_id", "activeSpaceId"},
+                )
+    except Exception:
+        pass
+
+    try:
+        content_resp = session.post(NOTION_API_LOAD_USER_CONTENT, json={}, timeout=30)
+        if content_resp.ok and not str(hydrated.get("space_view_id") or "").strip():
+            hydrated["space_view_id"] = _extract_space_view_id_from_content(
+                content_resp.json()
+            )
+    except Exception:
+        pass
+    return hydrated
+
+
+def _build_email_code_account(
+    *,
+    token_v2: str,
+    user_id: str,
+    email: str,
+    first_name: str,
+    last_name: str,
+    plan_type: str,
+    notes: str,
+    tags: list[str],
+    source: str,
+) -> dict[str, Any]:
+    base_account = {
+        "token_v2": token_v2,
+        "user_id": user_id,
+        "space_id": "",
+        "space_view_id": "",
+        "user_name": f"{first_name} {last_name}".strip(),
+        "user_email": email,
+        "plan_type": str(plan_type or "unknown").strip() or "unknown",
+        "enabled": True,
+        "source": source,
+        "notes": notes,
+        "tags": tags,
+        "oauth": {},
+        "workspace": {},
+        "status": {},
+    }
+    return _hydrate_email_login_account(base_account)
+
+
+def _create_account_from_email_code(
+    payload: EmailCodeFinalizeRequest,
+) -> dict[str, Any]:
+    email = str(payload.email or "").strip().lower()
+    code = str(payload.code or "").strip()
+    if not email or not code:
+        raise HTTPException(
+            status_code=400, detail="Email and verification code are required"
+        )
+
+    username = str(payload.username or "").strip() or email.split("@", 1)[0]
+    first_name = str(payload.first_name or "").strip() or "Notion"
+    last_name = str(payload.last_name or "").strip() or "User"
+    session = _build_notion_session()
+
+    try:
+        verify_resp = session.post(
+            NOTION_API_VERIFY_EMAIL_CODE,
+            json={"email": email, "code": code},
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Failed to verify email code: {str(exc)[:300]}"
+        ) from exc
+
+    if verify_resp.status_code not in (200, 201):
+        try:
+            detail = verify_resp.text[:300]
+        except Exception:
+            detail = f"HTTP {verify_resp.status_code}"
+        raise HTTPException(status_code=400, detail=f"验证码校验失败: {detail}")
+
+    verify_data = verify_resp.json()
+    temp_token = str(verify_data.get("token") or "").strip()
+    if not temp_token:
+        raise HTTPException(
+            status_code=400, detail="验证码校验成功，但未返回临时 token"
+        )
+
+    try:
+        create_resp = session.post(
+            NOTION_API_SIGNUP,
+            json={
+                "email": email,
+                "firstName": first_name,
+                "lastName": last_name,
+                "username": username,
+                "token": temp_token,
+            },
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Failed to create account: {str(exc)[:300]}"
+        ) from exc
+
+    if create_resp.status_code not in (200, 201):
+        try:
+            detail = create_resp.text[:300]
+        except Exception:
+            detail = f"HTTP {create_resp.status_code}"
+        lowered_detail = str(detail).lower()
+        if "existing" in lowered_detail or "already" in lowered_detail:
+            existing_token_v2 = ""
+            for cookie in session.cookies:
+                if cookie.name == "token_v2" and cookie.value:
+                    existing_token_v2 = str(cookie.value).strip()
+                    break
+            existing_user_id = _find_value_recursive(
+                verify_data, {"userId", "user_id", "notion_user_id", "notionUserId"}
+            )
+            if existing_token_v2 and existing_user_id:
+                return _build_email_code_account(
+                    token_v2=existing_token_v2,
+                    user_id=existing_user_id,
+                    email=email,
+                    first_name=first_name,
+                    last_name=last_name,
+                    plan_type=payload.plan_type,
+                    notes=payload.notes,
+                    tags=payload.tags,
+                    source="email_code_existing",
+                )
+            raise HTTPException(
+                status_code=400,
+                detail="该邮箱已注册，但当前回包未带完整登录凭据，暂时无法自动导入。",
+            )
+        raise HTTPException(status_code=400, detail=f"创建账户失败: {detail}")
+
+    create_data = create_resp.json()
+    token_v2 = ""
+    for cookie in session.cookies:
+        if cookie.name == "token_v2" and cookie.value:
+            token_v2 = str(cookie.value).strip()
+            break
+
+    user_id = str(create_data.get("userId") or create_data.get("user_id") or "").strip()
+    user_record = create_data.get("user", {}) or create_data.get("recordMap", {}).get(
+        "notion_user", {}
+    )
+    if not user_id and isinstance(user_record, dict):
+        for uid, uobj in user_record.items():
+            if isinstance(uobj, dict) and "value" in uobj:
+                user_id = str(uid or "").strip()
+                break
+
+    if not token_v2 or not user_id:
+        raise HTTPException(status_code=400, detail="创建成功，但未提取到完整账号凭据")
+
+    return _build_email_code_account(
+        token_v2=token_v2,
+        user_id=user_id,
+        email=email,
+        first_name=first_name,
+        last_name=last_name,
+        plan_type=payload.plan_type,
+        notes=payload.notes,
+        tags=payload.tags,
+        source="email_code",
+    )
+
+
 def _normalize_callback_redirect_uri(value: str, fallback: str) -> str:
     candidate = str(value or "").strip()
     if not candidate:
@@ -1318,6 +1696,28 @@ def _build_oauth_start_payload(
         f"{base_redirect_uri}/v1/admin/oauth/callback",
         {"redirect_uri": redirect_uri, "state": state, "provider": provider},
     )
+    oauth_client_id = get_oauth_client_id()
+    oauth_client_secret = get_oauth_client_secret()
+    configured_redirect_uri = get_oauth_redirect_uri() or redirect_uri
+    if oauth_client_id and oauth_client_secret:
+        authorization_url = (
+            f"https://api.notion.com/v1/oauth/authorize?"
+            f"client_id={oauth_client_id}&"
+            f"redirect_uri={urlencode({'': configured_redirect_uri}).lstrip('=')}&"
+            f"response_type=code&"
+            f"state={state}"
+        )
+        return {
+            "provider": provider,
+            "redirect_uri": configured_redirect_uri,
+            "state": state,
+            "authorization_url": authorization_url,
+            "callback_bridge_url": callback_bridge_url,
+            "oauth_client_id": oauth_client_id,
+            "status": "oauth_authorization_url_ready",
+            "message": "Notion OAuth 授权链接已生成。请点击链接完成授权，系统将自动处理 callback 并获取 token。",
+            "flow_type": "standard_oauth",
+        }
     return {
         "provider": provider,
         "redirect_uri": redirect_uri,
@@ -1326,6 +1726,7 @@ def _build_oauth_start_payload(
         "callback_bridge_url": callback_bridge_url,
         "status": "manual_callback_required",
         "message": "当前环境未配置真实 Notion OAuth App。请在完成网页登录后，将 localhost callback URL 粘回管理面板完成导入。",
+        "flow_type": "manual_session",
     }
 
 
@@ -1402,6 +1803,11 @@ async def admin_report(
             "account_probe_interval_seconds": config.get(
                 "account_probe_interval_seconds", 300
             ),
+            "oauth_client_id": config.get("oauth_client_id", ""),
+            "oauth_client_secret": config.get("oauth_client_secret", ""),
+            "oauth_redirect_uri": config.get("oauth_redirect_uri", ""),
+            "has_oauth_credentials": bool(config.get("oauth_client_id"))
+            and bool(config.get("oauth_client_secret")),
             "refresh_execution_mode": config.get("refresh_execution_mode", "manual"),
             "refresh_request_url": config.get("refresh_request_url", ""),
             "refresh_client_id": config.get("refresh_client_id", ""),
@@ -3214,6 +3620,11 @@ async def get_admin_config(
             ),
             "auto_register_mail_api_key": config.get("auto_register_mail_api_key", ""),
             "auto_register_domain": config.get("auto_register_domain", ""),
+            "oauth_client_id": config.get("oauth_client_id", ""),
+            "oauth_client_secret": config.get("oauth_client_secret", ""),
+            "oauth_redirect_uri": config.get("oauth_redirect_uri", ""),
+            "has_oauth_credentials": bool(config.get("oauth_client_id"))
+            and bool(config.get("oauth_client_secret")),
             "refresh_execution_mode": config.get("refresh_execution_mode", "manual"),
             "refresh_request_url": config.get("refresh_request_url", ""),
             "refresh_client_id": config.get("refresh_client_id", ""),
@@ -3367,6 +3778,8 @@ async def update_runtime_settings(
         "auto_register_mail_provider": payload.auto_register_mail_provider,
         "auto_register_mail_base_url": payload.auto_register_mail_base_url,
         "auto_register_domain": payload.auto_register_domain,
+        "oauth_client_id": payload.oauth_client_id,
+        "oauth_redirect_uri": payload.oauth_redirect_uri,
         "refresh_execution_mode": payload.refresh_execution_mode,
         "refresh_request_url": refresh_request_url,
         "refresh_client_id": payload.refresh_client_id,
@@ -3385,6 +3798,8 @@ async def update_runtime_settings(
         updates["auto_register_mail_api_key"] = payload.auto_register_mail_api_key
     if payload.refresh_client_secret is not None:
         updates["refresh_client_secret"] = payload.refresh_client_secret
+    if payload.oauth_client_secret is not None:
+        updates["oauth_client_secret"] = payload.oauth_client_secret
     config.update(updates)
     saved = store.save_config(config)
     if payload.chat_password is not None:
@@ -3582,6 +3997,110 @@ async def oauth_callback_redirect(request: Request):
         fallback_redirect_uri,
     )
     state = str(request.query_params.get("state") or "").strip()
+    code = str(request.query_params.get("code") or "").strip()
+    oauth_client_id = get_oauth_client_id()
+    oauth_client_secret = get_oauth_client_secret()
+    configured_redirect_uri = get_oauth_redirect_uri() or redirect_uri
+    if code and oauth_client_id and oauth_client_secret:
+        token_result = _exchange_oauth_code_for_token(
+            code=code,
+            redirect_uri=configured_redirect_uri,
+            client_id=oauth_client_id,
+            client_secret=oauth_client_secret,
+        )
+        if token_result.get("ok") and token_result.get("access_token"):
+            user_info = _fetch_notion_user_info(token_result.get("access_token"))
+            callback_payload = {
+                "token_v2": "",
+                "user_id": str(user_info.get("user_id") or "").strip(),
+                "space_id": str(user_info.get("space_id") or "").strip(),
+                "user_email": str(user_info.get("user_email") or "").strip(),
+                "access_token": str(token_result.get("access_token") or "").strip(),
+                "refresh_token": str(token_result.get("refresh_token") or "").strip(),
+                "expires_at": str(token_result.get("expires_at") or "").strip(),
+                "state": state,
+                "provider": "notion-oauth",
+                "source": "oauth_code_exchange",
+            }
+            session = _get_oauth_callback_session(request, state)
+            if session:
+                _store_oauth_callback_session_payload(
+                    request, state=state, payload=callback_payload
+                )
+            saved = get_config_store().upsert_account(
+                _build_saved_oauth_account(
+                    OAuthCallbackPayload(
+                        token_v2=callback_payload.get("token_v2", ""),
+                        user_id=callback_payload.get("user_id", ""),
+                        space_id=callback_payload.get("space_id", ""),
+                        space_view_id=callback_payload.get("space_view_id", ""),
+                        user_name=callback_payload.get("user_name", ""),
+                        user_email=callback_payload.get("user_email", ""),
+                        access_token=callback_payload.get("access_token", ""),
+                        refresh_token=callback_payload.get("refresh_token", ""),
+                        expires_at=int(callback_payload.get("expires_at") or 0) or None,
+                        provider=callback_payload.get("provider", "notion-oauth"),
+                        scopes=callback_payload.get("scopes", []),
+                        plan_type=callback_payload.get("plan_type", "unknown"),
+                        source="oauth_code_exchange",
+                        notes="Auto-imported via OAuth code exchange",
+                        tags=["oauth-auto"],
+                    )
+                )
+            )
+            _rebuild_pool(request)
+            html = f"""
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OAuth 登录成功</title>
+    <style>
+      body {{ font-family: Arial, sans-serif; background: #f6f3ef; color: #1f2937; margin: 0; padding: 32px; }}
+      .card {{ max-width: 720px; margin: 0 auto; background: white; border-radius: 20px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }}
+      h1 {{ font-size: 24px; margin: 0 0 12px; color: #10b981; }}
+      p {{ line-height: 1.7; margin: 10px 0; }}
+      code {{ background: #f3f4f6; padding: 2px 6px; border-radius: 6px; }}
+      .success {{ color: #10b981; font-weight: bold; }}
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>OAuth 登录成功</h1>
+      <p class="success">账号已自动导入并激活。</p>
+      <p>用户: <code>{callback_payload.get("user_email") or callback_payload.get("user_id")}</code></p>
+      <p>请返回管理面板查看账号详情。</p>
+    </div>
+  </body>
+</html>
+""".strip()
+            return HTMLResponse(content=html)
+        html = f"""
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OAuth 交换失败</title>
+    <style>
+      body {{ font-family: Arial, sans-serif; background: #f6f3ef; color: #1f2937; margin: 0; padding: 32px; }}
+      .card {{ max-width: 720px; margin: 0 auto; background: white; border-radius: 20px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }}
+      h1 {{ font-size: 24px; margin: 0 0 12px; color: #ef4444; }}
+      p {{ line-height: 1.7; margin: 10px 0; }}
+      code {{ background: #f3f4f6; padding: 2px 6px; border-radius: 6px; }}
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>OAuth Token 交换失败</h1>
+      <p>错误: <code>{token_result.get("error") or "未知错误"}</code></p>
+      <p>请检查 OAuth 配置或返回管理面板重试。</p>
+    </div>
+  </body>
+</html>
+""".strip()
+        return HTMLResponse(content=html)
     if state:
         callback_payload = {
             "token_v2": str(request.query_params.get("token_v2") or "").strip(),
@@ -3611,10 +4130,10 @@ async def oauth_callback_redirect(request: Request):
             )
             html = f"""
 <!doctype html>
-<html lang=\"zh-CN\">
+<html lang="zh-CN">
   <head>
-    <meta charset=\"utf-8\" />
-    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Callback Received</title>
     <style>
       body {{ font-family: Arial, sans-serif; background: #f6f3ef; color: #1f2937; margin: 0; padding: 32px; }}
@@ -3625,7 +4144,7 @@ async def oauth_callback_redirect(request: Request):
     </style>
   </head>
   <body>
-    <div class=\"card\">
+    <div class="card">
       <h1>Notion callback 已接收</h1>
       <p>当前回调参数已经写入服务端临时会话。</p>
       <p>请返回管理面板，继续点击 <code>导入 callback 并完成</code>。</p>
@@ -3640,6 +4159,90 @@ async def oauth_callback_redirect(request: Request):
         {key: value for key, value in request.query_params.items()},
     )
     return RedirectResponse(url=redirect_url, status_code=307)
+
+
+def _exchange_oauth_code_for_token(
+    code: str,
+    redirect_uri: str,
+    client_id: str,
+    client_secret: str,
+) -> dict[str, Any]:
+    try:
+        response = requests.post(
+            "https://api.notion.com/v1/oauth/token",
+            json={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": redirect_uri,
+            },
+            auth=(client_id, client_secret),
+            headers={"Content-Type": "application/json"},
+            timeout=30,
+        )
+        if response.ok:
+            data = response.json()
+            return {
+                "ok": True,
+                "access_token": str(data.get("access_token") or "").strip(),
+                "refresh_token": str(data.get("refresh_token") or "").strip(),
+                "expires_in": int(data.get("expires_in") or 0),
+                "expires_at": int(time.time()) + int(data.get("expires_in") or 3600),
+                "token_type": str(data.get("token_type") or "bearer").strip(),
+                "workspace_id": str(data.get("workspace_id") or "").strip(),
+                "workspace_name": str(data.get("workspace_name") or "").strip(),
+            }
+        return {
+            "ok": False,
+            "error": str(response.text[:500] or "Unknown error"),
+            "status_code": response.status_code,
+        }
+    except requests.RequestException as exc:
+        return {
+            "ok": False,
+            "error": str(exc)[:500],
+            "status_code": 0,
+        }
+
+
+def _fetch_notion_user_info(access_token: str) -> dict[str, Any]:
+    if not access_token:
+        return {}
+    try:
+        response = requests.post(
+            "https://api.notion.com/v1/loadUserContent",
+            json={},
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+                "Notion-Version": "2022-06-28",
+            },
+            timeout=30,
+        )
+        if response.ok:
+            data = response.json()
+            record_map = data.get("recordMap") or {}
+            user_ids = list((record_map.get("notion_user") or {}).keys())
+            space_ids = list((record_map.get("space") or {}).keys())
+            user_id = user_ids[0] if user_ids else ""
+            space_id = space_ids[0] if space_ids else ""
+            user_email = ""
+            user_name = ""
+            if user_id:
+                user_val = (record_map.get("notion_user") or {}).get(user_id) or {}
+                user_val = user_val.get("value") or {}
+                user_email = str(user_val.get("email") or "").strip()
+                user_name = str(
+                    user_val.get("given_name") or user_val.get("name") or ""
+                ).strip()
+            return {
+                "user_id": user_id,
+                "space_id": space_id,
+                "user_email": user_email,
+                "user_name": user_name,
+            }
+    except requests.RequestException:
+        pass
+    return {}
 
 
 @router.post("/admin/oauth/start")
@@ -3662,6 +4265,42 @@ async def start_oauth(
         **_build_oauth_start_payload(
             request, redirect_uri=redirect_uri, state=state, provider=payload.provider
         ),
+    }
+
+
+@router.post("/admin/email-login/start")
+async def start_email_login(
+    request: Request,
+    payload: EmailCodeStartRequest,
+    x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
+):
+    _ensure_admin(request, x_admin_session)
+    email = str(payload.email or "").strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="请输入有效邮箱地址")
+    session = _build_notion_session()
+    try:
+        response = session.post(
+            NOTION_API_SEND_EMAIL_CODE,
+            json={"email": email},
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(
+            status_code=502, detail=f"发送验证码失败: {str(exc)[:300]}"
+        ) from exc
+    if response.status_code not in (200, 201):
+        raise HTTPException(
+            status_code=400,
+            detail=f"发送验证码失败: {str(response.text or '')[:300] or f'HTTP {response.status_code}'}",
+        )
+    email_session = _register_email_login_session(request, email)
+    return {
+        "ok": True,
+        "email": email,
+        "status": "code_sent",
+        "expires_at": int(email_session.get("expires_at") or 0),
+        "message": "验证码已发送，请输入邮箱收到的验证码完成导入。",
     }
 
 
@@ -3822,6 +4461,33 @@ async def finalize_oauth(
         or _default_local_redirect_uri(request),
         "state": effective_payload.state,
         "source": "oauth_finalize",
+    }
+
+
+@router.post("/admin/email-login/finalize")
+async def finalize_email_login(
+    request: Request,
+    payload: EmailCodeFinalizeRequest,
+    x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
+):
+    _ensure_admin(request, x_admin_session)
+    email = str(payload.email or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="请输入邮箱地址")
+    if not _get_email_login_session(request, email):
+        raise HTTPException(
+            status_code=400,
+            detail="该邮箱没有有效的验证码会话，请先发送验证码。",
+        )
+    created_account = _create_account_from_email_code(payload)
+    saved = get_config_store().upsert_account(created_account)
+    _consume_email_login_session(request, email)
+    _rebuild_pool(request)
+    return {
+        "ok": True,
+        "account": _redact_account_payload(saved),
+        "source": "email_code_finalize",
+        "message": "邮箱验证码注册成功，账号已导入账号池。",
     }
 
 

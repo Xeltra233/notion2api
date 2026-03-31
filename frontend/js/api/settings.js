@@ -2,7 +2,7 @@ window.NotionAI = window.NotionAI || {};
 window.NotionAI.API = window.NotionAI.API || {};
 
 window.NotionAI.API.Settings = {
-    _oauthCallbackCache: null,
+    _emailLoginCache: null,
     _runtimeSecretsVisible: false,
     _runtimeAdvancedVisible: false,
     _runtimeProxyAdvancedVisible: false,
@@ -253,148 +253,6 @@ window.NotionAI.API.Settings = {
         this.refreshAdminPanel(`已应用告警筛选：${type}。`);
     },
 
-    getOAuthCallbackParams() {
-        if (this._oauthCallbackCache) {
-            return this._oauthCallbackCache;
-        }
-        return this.parseOAuthCallbackUrl(window.location.href);
-    },
-
-    parseOAuthCallbackUrl(rawUrl) {
-        const fallback = {
-            token_v2: '',
-            user_id: '',
-            space_id: '',
-            user_email: '',
-            access_token: '',
-            refresh_token: '',
-            expires_at: '',
-            state: '',
-            consumed: false,
-            autoFinalized: false,
-            detected: false
-        };
-
-        let parsedUrl;
-        try {
-            parsedUrl = new URL(rawUrl || window.location.href, window.location.origin);
-        } catch (error) {
-            return fallback;
-        }
-
-        const params = parsedUrl.searchParams;
-        const hash = String(parsedUrl.hash || '').replace(/^#/, '');
-        const hashParams = new URLSearchParams(hash);
-        const pick = (key) => params.get(key) || hashParams.get(key) || '';
-
-        this._oauthCallbackCache = {
-            token_v2: pick('token_v2'),
-            user_id: pick('user_id'),
-            space_id: pick('space_id'),
-            user_email: pick('user_email') || pick('email'),
-            access_token: pick('access_token'),
-            refresh_token: pick('refresh_token'),
-            expires_at: pick('expires_at'),
-            state: pick('state'),
-            consumed: false,
-            autoFinalized: false,
-            detected: Boolean(
-                pick('token_v2') || pick('user_id') || pick('access_token')
-            )
-        };
-        return this._oauthCallbackCache;
-    },
-
-    fillOAuthFinalizeForm(payload = {}) {
-        const mappings = {
-            oauthTokenInput: payload.token_v2 || '',
-            oauthUserIdInput: payload.user_id || '',
-            oauthSpaceIdInput: payload.space_id || '',
-            oauthEmailInput: payload.user_email || '',
-            oauthRedirectUriInput: payload.redirect_uri || window.location.origin,
-        };
-
-        Object.entries(mappings).forEach(([id, value]) => {
-            const input = document.getElementById(id);
-            if (input && !input.value.trim() && value) {
-                input.value = value;
-            }
-        });
-    },
-
-    consumeOAuthCallbackParams() {
-        const callback = this.getOAuthCallbackParams();
-        const hasUsefulData = Boolean(callback.detected);
-        if (!hasUsefulData || callback.consumed) {
-            return;
-        }
-
-        this.fillOAuthFinalizeForm({
-            ...callback,
-            redirect_uri: window.location.origin,
-        });
-        this.setAdminNotice('已从本地 URL 检测到 OAuth 回调参数。请检查后点击“完成 OAuth 导入”。');
-        callback.consumed = true;
-
-        const cleanUrl = `${window.location.origin}${window.location.pathname}`;
-        window.history.replaceState({}, document.title, cleanUrl);
-    },
-
-    extractCallbackUrl(rawValue) {
-        const text = String(rawValue || '').trim();
-        if (!text) {
-            return '';
-        }
-
-        const directUrlMatch = text.match(/https?:\/\/[^\s'"<>]+/i);
-        if (directUrlMatch) {
-            return directUrlMatch[0];
-        }
-
-        if (text.startsWith('/') || text.startsWith('?') || text.startsWith('#')) {
-            return `${window.location.origin}${text.startsWith('/') ? text : `${window.location.pathname}${text}`}`;
-        }
-
-        const callbackPathMatch = text.match(/(?:\/|^)(?:callback|oauth|auth)[^\s'"<>]*/i);
-        if (callbackPathMatch) {
-            const path = callbackPathMatch[0].startsWith('/')
-                ? callbackPathMatch[0]
-                : `/${callbackPathMatch[0]}`;
-            return `${window.location.origin}${path}`;
-        }
-
-        return '';
-    },
-
-    parseManualCallbackUrl() {
-        const input = document.getElementById('oauthCallbackUrlInput');
-        const rawValue = input ? input.value.trim() : '';
-        if (!rawValue) {
-            this.setAdminNotice('请先粘贴完整的回调 URL。');
-            return false;
-        }
-
-        const extractedUrl = this.extractCallbackUrl(rawValue);
-        if (!extractedUrl) {
-            this.setAdminNotice('在粘贴的内容中未找到有效的回调 URL。');
-            return false;
-        }
-
-        this._oauthCallbackCache = null;
-        const parsed = this.parseOAuthCallbackUrl(extractedUrl);
-        if (!parsed.detected) {
-            this.setAdminNotice('粘贴的 URL 中未找到支持的 OAuth 回调参数。');
-            return false;
-        }
-
-        this.fillOAuthFinalizeForm({
-            ...parsed,
-            redirect_uri: window.location.origin,
-        });
-        this.setAdminNotice('已解析回调 URL。请检查字段后点击“完成 OAuth 导入”。');
-        return true;
-    },
-
     renderOAuthStartSummary(payload = {}) {
         const summary = document.getElementById('oauthStartSummary');
         const output = document.getElementById('oauthStartUrlOutput');
@@ -403,7 +261,7 @@ window.NotionAI.API.Settings = {
         if (!summary) {
             return;
         }
-        if (!payload || (!payload.authorization_url && !payload.callback_bridge_url)) {
+        if (!payload || !payload.email) {
             summary.innerHTML = '';
             if (output) {
                 output.value = '';
@@ -418,33 +276,35 @@ window.NotionAI.API.Settings = {
             return;
         }
         summary.innerHTML = `
-            <span class="admin-mini-pill"><strong>状态</strong><span>${this.escapeHtml(payload.state || 'generated')}</span></span>
-            <span class="admin-mini-pill"><strong>redirect URI</strong><span>${this.escapeHtml(payload.redirect_uri || window.location.origin)}</span></span>
+            <span class="admin-mini-pill"><strong>邮箱</strong><span>${this.escapeHtml(payload.email || '')}</span></span>
+            <span class="admin-mini-pill"><strong>状态</strong><span>${this.escapeHtml(payload.status || 'code_sent')}</span></span>
         `;
         if (output) {
-            output.value = payload.callback_bridge_url || payload.authorization_url || '';
+            output.value = payload.message || '验证码已发送，请填写邮箱验证码。';
         }
         if (bridge) {
-            bridge.value = payload.callback_bridge_url || '';
+            bridge.value = payload.expires_at ? `会话有效期至：${this.formatTimestamp(payload.expires_at)}` : '';
         }
         if (link) {
-            const target = payload.callback_bridge_url || payload.authorization_url || '';
-            link.href = target || '#';
-            link.classList.toggle('hidden', !target);
+            link.href = '#';
+            link.classList.add('hidden');
         }
     },
 
     async startOAuthFlow() {
-        const redirectUri = document.getElementById('oauthRedirectUriInput').value.trim() || window.location.origin;
+        const email = document.getElementById('oauthEmailInput').value.trim();
+        if (!email) {
+            this.setAdminNotice('请先输入邮箱地址。');
+            return;
+        }
         try {
-            const result = await window.NotionAI.API.Admin.startOAuth({
-                redirect_uri: redirectUri,
-                provider: '网页会话',
+            const result = await window.NotionAI.API.Admin.startEmailLogin({
+                email,
             });
             this.renderOAuthStartSummary(result);
-            this.setAdminNotice('登录链接已准备好。请点击登录，在外部完成网页登录后，再把 localhost 回调 URL 粘回来完成导入。');
+            this.setAdminNotice(result.message || '验证码已发送，请输入邮箱验证码完成导入。');
         } catch (error) {
-            this.setAdminNotice(error.message || '准备 OAuth 启动参数失败。');
+            this.setAdminNotice(error.message || '发送邮箱验证码失败。');
         }
     },
 
@@ -604,39 +464,7 @@ window.NotionAI.API.Settings = {
     },
 
     async autoFinalizeOAuthIfPossible() {
-        const callback = this.getOAuthCallbackParams();
-        if (!callback.detected || callback.autoFinalized) {
-            return;
-        }
-
-        const adminSessionToken = window.NotionAI.Core.State.get('adminSessionToken');
-        if (!adminSessionToken || !callback.token_v2 || !callback.user_id) {
-            return;
-        }
-
-        callback.autoFinalized = true;
-        this.fillOAuthFinalizeForm({
-            ...callback,
-            redirect_uri: window.location.origin,
-        });
-
-        try {
-            await window.NotionAI.API.Admin.finalizeOAuth({
-                token_v2: callback.token_v2,
-                user_id: callback.user_id,
-                space_id: callback.space_id,
-                user_email: callback.user_email,
-                redirect_uri: window.location.origin,
-                access_token: callback.access_token,
-                refresh_token: callback.refresh_token,
-                expires_at: callback.expires_at ? Number(callback.expires_at) : undefined,
-                state: callback.state,
-            });
-            await this.refreshAdminPanel('OAuth callback 已自动导入账号池。');
-        } catch (error) {
-            callback.autoFinalized = false;
-            this.setAdminNotice(error.message || '自动完成 OAuth callback 失败。');
-        }
+        return;
     },
 
     open(moduleName = 'access') {
@@ -652,12 +480,7 @@ window.NotionAI.API.Settings = {
         this.applyRuntimeAdvancedVisibility();
         this.applyRuntimeProxyAdvancedVisibility();
         this.applyAccountComposerState();
-        const redirectInput = document.getElementById('oauthRedirectUriInput');
-        if (redirectInput && !redirectInput.value.trim()) {
-            redirectInput.value = window.location.origin;
-        }
         this.loadRuntimeConfigIntoForm();
-        this.consumeOAuthCallbackParams();
         this.autoFinalizeOAuthIfPossible();
         if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
             window.NotionAI.Core.App.setActiveModule(moduleName || 'access');
@@ -890,7 +713,7 @@ window.NotionAI.API.Settings = {
             const oauthCard = diagnosticsSection.querySelector('.notion-oauth-card');
             oauthCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
-        this.setAdminNotice('已切到 Notion OAuth 导入区。');
+        this.setAdminNotice('已切到邮箱验证码导入区。');
         if (startImmediately) {
             this.startOAuthFlow();
         }
@@ -2837,42 +2660,31 @@ window.NotionAI.API.Settings = {
     },
 
     async finalizeOAuthFromForm() {
-        const callback = this.getOAuthCallbackParams();
         const payload = {
-            token_v2: document.getElementById('oauthTokenInput').value.trim(),
-            user_id: document.getElementById('oauthUserIdInput').value.trim(),
-            space_id: document.getElementById('oauthSpaceIdInput').value.trim(),
             user_email: document.getElementById('oauthEmailInput').value.trim(),
-            redirect_uri: document.getElementById('oauthRedirectUriInput').value.trim() || window.location.origin,
-            access_token: callback.access_token,
-            refresh_token: callback.refresh_token,
-            expires_at: callback.expires_at ? Number(callback.expires_at) : undefined,
-            state: callback.state,
+            email: document.getElementById('oauthEmailInput').value.trim(),
+            code: document.getElementById('oauthCallbackUrlInput').value.trim(),
+            first_name: 'Notion',
+            last_name: 'User',
         };
 
-        if (!payload.token_v2 || !payload.user_id) {
-            this.setAdminNotice('完成 OAuth 导入必须提供 token_v2 和 user_id。');
+        if (!payload.email || !payload.code) {
+            this.setAdminNotice('请先输入邮箱和验证码。');
             return;
         }
 
         try {
-            await window.NotionAI.API.Admin.finalizeOAuth(payload);
-            document.getElementById('oauthTokenInput').value = '';
-            document.getElementById('oauthUserIdInput').value = '';
-            document.getElementById('oauthSpaceIdInput').value = '';
+            await window.NotionAI.API.Admin.finalizeEmailLogin(payload);
             document.getElementById('oauthEmailInput').value = '';
-            document.getElementById('oauthRedirectUriInput').value = window.location.origin;
-            await this.refreshAdminPanel('OAuth 账号已导入。');
+            document.getElementById('oauthCallbackUrlInput').value = '';
+            this.renderOAuthStartSummary({});
+            await this.refreshAdminPanel('邮箱验证码账号已导入。');
         } catch (error) {
-            this.setAdminNotice(error.message || '完成 OAuth 账号导入失败。');
+            this.setAdminNotice(error.message || '邮箱验证码导入失败。');
         }
     },
 
     async parseAndFinalizeCallbackUrl() {
-        const parsed = this.parseManualCallbackUrl();
-        if (!parsed) {
-            return;
-        }
         await this.finalizeOAuthFromForm();
     },
 
