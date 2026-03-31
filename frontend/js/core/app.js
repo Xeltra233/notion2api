@@ -438,7 +438,7 @@ function bindEventListeners() {
     document.getElementById('adminOpenEmailLoginModuleBtn')?.addEventListener('click', () => {
         window.NotionAI.API.Settings.openEmailLoginImporter(false);
     });
-    document.getElementById('adminOpenEmailLoginStartBtn').addEventListener('click', () => {
+    document.getElementById('adminOpenEmailLoginStartBtn')?.addEventListener('click', () => {
         window.NotionAI.API.Settings.startAndFocusEmailLoginFlow();
     });
     document.getElementById('adminExportAccountsBtn').addEventListener('click', () => {
@@ -505,7 +505,7 @@ function bindEventListeners() {
             window.NotionAI.API.Settings.unlockChatAccess();
         }
     });
-    document.getElementById('emailLoginStartBtn').addEventListener('click', () => {
+    document.getElementById('emailLoginStartBtn')?.addEventListener('click', () => {
         window.NotionAI.API.Settings.startEmailLoginFlow();
     });
     document.getElementById('emailLoginContinueBtn')?.addEventListener('click', () => {
@@ -544,7 +544,7 @@ function bindEventListeners() {
     document.getElementById('adminSnapshotBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.loadAdminSnapshot();
     });
-    document.getElementById('emailLoginImportBtn').addEventListener('click', () => {
+    document.getElementById('emailLoginImportBtn')?.addEventListener('click', () => {
         window.NotionAI.API.Settings.parseAndFinalizeCallbackUrl();
     });
 
