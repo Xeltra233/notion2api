@@ -4,12 +4,26 @@ FROM python:3.11-slim
 # 设置环境变量
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    TZ=Asia/Shanghai
+    TZ=Asia/Shanghai \
+    CHROME_BIN=/usr/bin/chromium \
+    CHROMIUM_BIN=/usr/bin/chromium
 
 # 安装系统依赖
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     tzdata \
+    chromium \
+    chromium-driver \
+    libnss3 \
+    libatk-bridge2.0-0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    libgtk-3-0 \
+    libx11-xcb1 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -r appuser && useradd -r -g appuser appuser
 
