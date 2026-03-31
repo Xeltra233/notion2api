@@ -158,6 +158,8 @@ def _evaluate_auto_register_gate(now_ts: int | None = None) -> dict[str, Any]:
             config.get("accounts") if isinstance(config.get("accounts"), list) else []
         )
     min_spacing = int(config.get("auto_register_min_spacing_seconds") or 900)
+    interval_seconds = int(config.get("auto_register_interval_seconds") or 1800)
+    idle_only = bool(config.get("auto_register_idle_only", True))
     busy_cooldown = int(config.get("auto_register_busy_cooldown_seconds") or 1200)
     proxy_mode = str(config.get("upstream_proxy_mode") or "direct").strip().lower()
     last_started_at = int(REGISTER_AUTOMATION_STATE.get("last_started_at") or 0)
@@ -170,8 +172,9 @@ def _evaluate_auto_register_gate(now_ts: int | None = None) -> dict[str, Any]:
     pending_total, pending_due = _count_pending_hydration_accounts(
         accounts, effective_now
     )
+    effective_spacing = max(min_spacing, interval_seconds)
     spacing_remaining = (
-        max(0, min_spacing - (effective_now - last_started_at))
+        max(0, effective_spacing - (effective_now - last_started_at))
         if last_started_at
         else 0
     )
@@ -200,7 +203,7 @@ def _evaluate_auto_register_gate(now_ts: int | None = None) -> dict[str, Any]:
     elif pending_due > 0:
         reason = "pending_hydration_due"
         next_eligible_at = 0
-    elif busy_remaining > 0:
+    elif idle_only and busy_remaining > 0:
         reason = "busy_cooldown_active"
         next_eligible_at = effective_now + busy_remaining
     return {
@@ -211,6 +214,9 @@ def _evaluate_auto_register_gate(now_ts: int | None = None) -> dict[str, Any]:
         "proxy_gate_reason": proxy_gate or "",
         "last_started_at": last_started_at,
         "min_spacing_seconds": min_spacing,
+        "interval_seconds": interval_seconds,
+        "idle_only": idle_only,
+        "effective_spacing_seconds": effective_spacing,
         "spacing_remaining_seconds": spacing_remaining,
         "busy_cooldown_seconds": busy_cooldown,
         "busy_cooldown_remaining_seconds": busy_remaining,
@@ -298,7 +304,6 @@ def _start_register_thread(
     worker.start()
 
 
-
 def maybe_start_auto_register(request: Request) -> Dict[str, Any]:
     now_ts = int(time.time())
     allowed, reason = _can_start_auto_register(now_ts)
@@ -334,9 +339,15 @@ def maybe_start_auto_register(request: Request) -> Dict[str, Any]:
         str(config.get("auto_register_mail_api_key") or "") or None,
         bool(config.get("auto_register_use_api", True)),
         bool(config.get("auto_register_headless", False)),
-        str(config.get("upstream_proxy") or "") or None,
+        _effective_proxy(None) or None,
     )
-    return {"ok": True, "status": "queued", "reason": "queued", "task_id": task_id, "count": count}
+    return {
+        "ok": True,
+        "status": "queued",
+        "reason": "queued",
+        "task_id": task_id,
+        "count": count,
+    }
 
 
 def get_register_automation_state() -> Dict[str, Any]:
@@ -450,12 +461,21 @@ def _register_one(
             "token_v2": result.token_v2[:20] + "..." if result.token_v2 else "",
             "user_id": result.user_id,
             "space_id": str(account.get("space_id") or resolved_space_id),
-            "space_view_id": str(account.get("space_view_id") or result.space_view_id or ""),
-            "register_method": result.register_method or ("api" if use_api else "browser"),
+            "space_view_id": str(
+                account.get("space_view_id") or result.space_view_id or ""
+            ),
+            "register_method": result.register_method
+            or ("api" if use_api else "browser"),
             "attempted_api": bool(result.attempted_api),
             "used_browser_fallback": bool(result.used_browser_fallback),
-            "workspace_count": int((account.get("workspace") or {}).get("workspace_count") or result.workspace_count or 0),
-            "pending_workspace_hydration": bool(((account.get("status") or {}).get("workspace_hydration_pending"))),
+            "workspace_count": int(
+                (account.get("workspace") or {}).get("workspace_count")
+                or result.workspace_count
+                or 0
+            ),
+            "pending_workspace_hydration": bool(
+                ((account.get("status") or {}).get("workspace_hydration_pending"))
+            ),
         }
     else:
         log_cb("error", f"Notion 注册失败: {result.error}")

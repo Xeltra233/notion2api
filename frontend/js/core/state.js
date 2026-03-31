@@ -16,7 +16,7 @@ window.NotionAI.Core.State = {
         adminPassword: '',
         adminSessionToken: sessionStorage.getItem('claude_admin_session') || '',
         adminSessionExpiresAt: Number(sessionStorage.getItem('claude_admin_session_expires_at') || 0),
-        adminMustChangePassword: false,
+        adminMustChangePassword: sessionStorage.getItem('claude_admin_must_change_password') === 'true',
         activeModule: sessionStorage.getItem('claude_active_module') || '',
         chatEnabled: false,
         chatPasswordEnabled: false,
@@ -73,6 +73,7 @@ window.NotionAI.Core.State = {
             sessionStorage.removeItem('claude_admin_session_expires_at');
         }
         sessionStorage.setItem('claude_admin_must_change_password', mustChangePassword ? 'true' : 'false');
+        this._state.adminMustChangePassword = Boolean(mustChangePassword);
     },
 
     clearAdminSession() {

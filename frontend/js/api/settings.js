@@ -560,8 +560,25 @@ window.NotionAI.API.Settings = {
             return;
         }
         try {
-            await window.NotionAI.API.Admin.login(adminUsername, adminPassword);
+            const loginResult = await window.NotionAI.API.Admin.login(adminUsername, adminPassword);
             document.getElementById('adminPasswordInput').value = '';
+            if (loginResult?.must_change_password) {
+                this.renderAdminAccessStatus({
+                    username: loginResult.username || adminUsername,
+                    must_change_password: true,
+                    updated_at: Math.floor(Date.now() / 1000),
+                });
+                this.renderAdminSessionSummary({
+                    username: loginResult.username || adminUsername,
+                    updated_at: Math.floor(Date.now() / 1000),
+                });
+                this.applyAdminConsoleAccessState({ must_change_password: true });
+                this.setAdminNotice('当前账号需先修改后台密码，修改前其它后台模块保持锁定。');
+                if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
+                    window.NotionAI.Core.App.setActiveModule('access');
+                }
+                return;
+            }
             await this.refreshAdminPanel('当前浏览器会话的 admin session 已就绪。');
             if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
                 window.NotionAI.Core.App.setActiveModule('overview');
@@ -1687,7 +1704,17 @@ window.NotionAI.API.Settings = {
             this._lastAdminSnapshot = {};
             this.renderAdminAccounts({ accounts: [] });
             const messageText = error.message || '加载后台账号失败。';
-            if (window.NotionAI.Core.State.get('adminSessionToken') && /(api key|invalid_api_key|401|unauthorized|forbidden|admin session)/i.test(messageText)) {
+            if (
+                window.NotionAI.Core.State.get('adminSessionToken')
+                && /password change required/i.test(messageText)
+            ) {
+                this.renderAdminAccessStatus({ must_change_password: true });
+                this.renderAdminSessionSummary({});
+                this.applyAdminConsoleAccessState({ must_change_password: true });
+                this.setAdminNotice('当前账号需先修改后台密码，修改前其它后台模块保持锁定。');
+                return;
+            }
+            if (window.NotionAI.Core.State.get('adminSessionToken') && /(api key|invalid_api_key|401|unauthorized|admin session)/i.test(messageText)) {
                 this.resetInvalidAdminSession(messageText);
                 return;
             }
@@ -1882,14 +1909,21 @@ window.NotionAI.API.Settings = {
         }
         const sessionToken = window.NotionAI.Core.State.get('adminSessionToken') || '';
         const sessionExpiresAt = Number(window.NotionAI.Core.State.get('adminSessionExpiresAt') || 0);
+        const mustChangePassword = Boolean(window.NotionAI.Core.State.get('adminMustChangePassword') || auth.must_change_password);
         const adminUsername = window.NotionAI.Core.State.get('adminUsername') || auth.username || 'admin';
         let state = 'signed_out';
         let titleText = '登录后台';
         let detailText = '输入后台用户名和密码后进入管理后台。';
         if (sessionToken) {
-            state = 'ready';
-            titleText = '后台已登录';
-            detailText = `当前浏览器中的登录状态已生效${sessionExpiresAt ? `，有效期至 ${this.formatTimestamp(sessionExpiresAt)}` : ''}。现在可以查看运行时、账号、诊断和用量信息。`;
+            if (mustChangePassword) {
+                state = 'warning';
+                titleText = '需先修改后台密码';
+                detailText = `当前浏览器中的登录状态已生效${sessionExpiresAt ? `，有效期至 ${this.formatTimestamp(sessionExpiresAt)}` : ''}，但当前账号被要求先修改后台密码，修改前无法进入其它后台模块。`;
+            } else {
+                state = 'ready';
+                titleText = '后台已登录';
+                detailText = `当前浏览器中的登录状态已生效${sessionExpiresAt ? `，有效期至 ${this.formatTimestamp(sessionExpiresAt)}` : ''}。现在可以查看运行时、账号、诊断和用量信息。`;
+            }
         }
         const metaItems = [
             ['后台用户', adminUsername],
@@ -1908,6 +1942,10 @@ window.NotionAI.API.Settings = {
 
     buildAdminConsoleEmptyState() {
         const sessionToken = window.NotionAI.Core.State.get('adminSessionToken') || '';
+        const mustChangePassword = Boolean(window.NotionAI.Core.State.get('adminMustChangePassword'));
+        if (sessionToken && mustChangePassword) {
+            return '<div class="admin-empty-state" data-state="password_change_required"><div class="admin-empty-state-title">需先修改后台密码</div><div class="admin-empty-state-copy">当前浏览器已经持有 admin session，但系统要求先修改后台密码。完成修改前，其它运维模块会保持锁定。</div></div>';
+        }
         if (sessionToken) {
             return '';
         }
@@ -1917,26 +1955,32 @@ window.NotionAI.API.Settings = {
     applyAdminConsoleAccessState() {
         const emptyState = this.buildAdminConsoleEmptyState();
         const sessionToken = window.NotionAI.Core.State.get('adminSessionToken') || '';
-        const accessState = sessionToken ? 'ready' : 'signed_out';
+        const mustChangePassword = Boolean(window.NotionAI.Core.State.get('adminMustChangePassword'));
+        const accessState = sessionToken ? (mustChangePassword ? 'password_change_required' : 'ready') : 'signed_out';
         const sectionStatuses = {
             runtimeSectionStatus: {
                 ready: '运行时控制已就绪',
+                password_change_required: '需先修改后台密码后解锁运行时控制',
                 signed_out: '登录后台后解锁运行时控制',
             },
             overviewSectionStatus: {
                 ready: '总览已就绪',
+                password_change_required: '需先修改后台密码后解锁总览',
                 signed_out: '登录后台后解锁总览',
             },
             usageSectionStatus: {
                 ready: '用量已就绪',
+                password_change_required: '需先修改后台密码后解锁用量查询',
                 signed_out: '登录后台后解锁用量查询',
             },
             accountsSectionStatus: {
                 ready: '账号管理已就绪',
+                password_change_required: '需先修改后台密码后解锁账号管理',
                 signed_out: '登录后台后解锁账号管理',
             },
             diagnosticsSectionStatus: {
                 ready: '诊断已就绪',
+                password_change_required: '需先修改后台密码后解锁诊断',
                 signed_out: '登录后台后解锁诊断',
             },
         };
@@ -2033,7 +2077,7 @@ window.NotionAI.API.Settings = {
         });
         const usageMeta = document.getElementById('adminUsageEventsMeta');
         if (usageMeta) {
-            usageMeta.textContent = '登录后台后，才可查看用量查询。';
+            usageMeta.textContent = accessState === 'password_change_required' ? '请先修改后台密码，再查看用量查询。' : '登录后台后，才可查看用量查询。';
             usageMeta.dataset.locked = 'true';
         }
     },

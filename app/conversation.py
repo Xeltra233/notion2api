@@ -1,5 +1,6 @@
 import datetime
 import json
+import os
 import re
 import sqlite3
 import uuid
@@ -581,28 +582,43 @@ class ConversationManager:
         rows = conn.execute(
             """
             SELECT round_index
-            FROM compressed_summaries
-            WHERE conversation_id = ?
-              AND (
-                  user_content LIKE ?
-                  OR assistant_content LIKE ?
-                  OR COALESCE(summary, '') LIKE ?
-              )
-            ORDER BY
-              CASE
-                WHEN COALESCE(summary, '') LIKE ? THEN 0
-                WHEN user_content LIKE ? THEN 1
-                ELSE 2
-              END,
-              round_index DESC
+            FROM (
+                SELECT
+                    round_index,
+                    CASE
+                        WHEN COALESCE(summary, '') LIKE ? THEN 0
+                        WHEN user_content LIKE ? THEN 1
+                        ELSE 2
+                    END AS priority
+                FROM compressed_summaries
+                WHERE conversation_id = ?
+                  AND (
+                      user_content LIKE ?
+                      OR assistant_content LIKE ?
+                      OR COALESCE(summary, '') LIKE ?
+                  )
+
+                UNION ALL
+
+                SELECT
+                    round_index,
+                    3 AS priority
+                FROM full_archive
+                WHERE conversation_id = ?
+                  AND content LIKE ?
+            ) matched_rounds
+            GROUP BY round_index
+            ORDER BY MIN(priority) ASC, round_index DESC
             LIMIT ?
             """,
             (
+                like_pattern,
+                like_pattern,
                 conversation_id,
                 like_pattern,
                 like_pattern,
                 like_pattern,
-                like_pattern,
+                conversation_id,
                 like_pattern,
                 self.RECALL_LIMIT,
             ),

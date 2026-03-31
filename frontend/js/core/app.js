@@ -12,7 +12,10 @@ let memoryDegradedNotified = false;
 
 window.NotionAI.Core.App = window.NotionAI.Core.App || {
     getDefaultModule() {
-        return window.NotionAI.Core.State.get('adminSessionToken') ? 'overview' : 'access';
+        if (!window.NotionAI.Core.State.get('adminSessionToken')) {
+            return 'access';
+        }
+        return window.NotionAI.Core.State.get('adminMustChangePassword') ? 'access' : 'overview';
     },
 
     getModuleTitle(moduleName) {
@@ -31,11 +34,15 @@ window.NotionAI.Core.App = window.NotionAI.Core.App || {
     resolveAllowedModule(moduleName) {
         const requested = String(moduleName || '').trim() || this.getDefaultModule();
         const hasAdminSession = Boolean(window.NotionAI.Core.State.get('adminSessionToken'));
+        const mustChangePassword = Boolean(window.NotionAI.Core.State.get('adminMustChangePassword'));
         const chatEnabled = Boolean(window.NotionAI.Core.State.get('chatEnabled'));
         const chatPasswordEnabled = Boolean(window.NotionAI.Core.State.get('chatPasswordEnabled'));
         const hasChatSession = Boolean(window.NotionAI.Core.State.get('chatSessionToken'));
         const canAccessChatModule = chatEnabled && (hasAdminSession || !chatPasswordEnabled || hasChatSession);
         if (!hasAdminSession && requested !== 'chat') {
+            return 'access';
+        }
+        if (hasAdminSession && mustChangePassword && requested !== 'access') {
             return 'access';
         }
         if (requested === 'chat' && !canAccessChatModule) {

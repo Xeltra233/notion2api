@@ -3,6 +3,7 @@ import os
 import sqlite3
 import threading
 import time
+import uuid
 from typing import Any
 
 from app.config import get_db_path
@@ -83,9 +84,10 @@ class UsageStore:
         conversation_id: str = "",
         created_at: int | None = None,
     ) -> dict[str, Any]:
+        created_ts = int(created_at or time.time())
         event = {
-            "id": f"usage_{request_id}_{int(time.time() * 1000)}",
-            "created_at": int(created_at or time.time()),
+            "id": f"usage_{request_id}_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}",
+            "created_at": created_ts,
             "request_id": str(request_id or "").strip(),
             "request_type": str(request_type or "chat.completions").strip(),
             "stream": 1 if stream else 0,

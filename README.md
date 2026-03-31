@@ -212,6 +212,9 @@ API 同时支持纯文本消息，以及 OpenAI 风格的多模态 `content` 数
 - 这是 wire-format compatibility，不是新增三个独立 provider
 - 模型名会先归一化到当前服务支持的 canonical model，再映射到内部 Notion model
 - 第一版主要覆盖：文本、当前已支持的图片 URL / data URL、多数基础采样参数、流式响应
+- `POST /v1/responses` 当前只稳定支持字符串输入、文本型 item 数组、以及 message 数组
+- `responses.input` 的复杂 typed items、完整 reasoning item、文件/图片 item 当前不支持
+- `tools` / `tool_choice` 当前只接受搜索型 tool 声明；通用 tool calling 尚未实现
 - 当前不会伪造 provider-native 的 tool use、Gemini safety feedback、或完整 reasoning 语义
 - 对无法忠实映射的字段，服务会选择明确拒绝或忽略，而不是静默假兼容
 
@@ -427,6 +430,17 @@ uvicorn app.server:app --host 0.0.0.0 --port 8000
 - 项目仍支持聊天 API 使用，但后台运维已经成为一等功能
 
 ### 兼容入口调用示例
+
+### OpenAI Responses / Tools 兼容边界
+
+- `POST /v1/responses` 当前是轻量兼容层，会转成内部的 chat request 处理
+- `responses.input` 当前稳定支持：
+  - 纯字符串
+  - 文本型 item 数组，例如 `[{"type":"input_text","text":"hello"}]`
+  - message 数组，例如 `[{"role":"user","content":"hello"}]`
+- `responses.input` 里的复杂 typed items（例如图片、文件、函数调用结果、多阶段 reasoning item）当前不支持，会直接返回 `400`
+- `tools` / `tool_choice` 当前只接受搜索型 tool 声明；通用 function calling / tool calling 尚未实现，会直接返回 `400`
+- 当前不会伪造 provider-native 的完整 Responses 语义，例如多类型 output item、完整 tool call 生命周期、或 reasoning item 回放
 
 #### OpenAI
 

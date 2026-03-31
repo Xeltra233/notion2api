@@ -256,6 +256,48 @@ def _build_retry_prompt(original_prompt: Any, partial_text: str) -> str:
     )
 
 
+def _validate_sampling_params(req_body: ChatCompletionRequest) -> None:
+    if req_body.temperature is not None and not (0 <= req_body.temperature <= 2):
+        raise HTTPException(
+            status_code=400, detail="temperature must be between 0 and 2."
+        )
+    if req_body.top_p is not None and not (0 <= req_body.top_p <= 1):
+        raise HTTPException(status_code=400, detail="top_p must be between 0 and 1.")
+    if req_body.max_tokens is not None and req_body.max_tokens <= 0:
+        raise HTTPException(
+            status_code=400, detail="max_tokens must be greater than 0."
+        )
+    if req_body.presence_penalty is not None and not (
+        -2 <= req_body.presence_penalty <= 2
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="presence_penalty must be between -2 and 2.",
+        )
+    if req_body.frequency_penalty is not None and not (
+        -2 <= req_body.frequency_penalty <= 2
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="frequency_penalty must be between -2 and 2.",
+        )
+
+
+def _validate_tooling_params(req_body: ChatCompletionRequest) -> None:
+    tools = req_body.tools if isinstance(req_body.tools, list) else []
+    if not tools:
+        return
+    if _wants_search_tools(tools):
+        return
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            "This API only supports search-style tools for tool declarations. "
+            "General tool calling is not implemented."
+        ),
+    )
+
+
 def _max_attempts_for_request(
     req_body: ChatCompletionRequest, client_count: int
 ) -> int:
@@ -396,6 +438,40 @@ def _build_messages_from_responses_input(
 
     if isinstance(payload, list):
         if payload and all(
+            isinstance(item, dict) and "type" in item for item in payload
+        ):
+            unsupported_types = sorted(
+                {
+                    str(item.get("type", "") or "").strip()
+                    for item in payload
+                    if isinstance(item, dict)
+                    and str(item.get("type", "") or "").strip()
+                    not in {"input_text", "text"}
+                }
+            )
+            if unsupported_types:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "responses.input item arrays currently only support text-like items; "
+                        f"unsupported item types: {', '.join(unsupported_types)}"
+                    ),
+                )
+            text_parts = [
+                str(item.get("text", "") or "")
+                for item in payload
+                if isinstance(item, dict)
+            ]
+            text_content = "\n".join(part for part in text_parts if part)
+            if not text_content.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail="responses.input text item arrays cannot be empty.",
+                )
+            normalized_messages.append(ChatMessage(role="user", content=text_content))
+            return _normalize_request_messages(normalized_messages)
+
+        if payload and all(
             isinstance(item, dict) and "role" in item for item in payload
         ):
             for item in payload:
@@ -413,7 +489,7 @@ def _build_messages_from_responses_input(
 
     raise HTTPException(
         status_code=400,
-        detail="responses.input must be a string, content array, or messages array.",
+        detail="responses.input must be a string, text item array, content array, or messages array.",
     )
 
 
@@ -1002,19 +1078,6 @@ def _wrap_chat_stream_as_gemini_stream(
                     continue
                 payload_text = frame[5:].strip()
                 if payload_text == "[DONE]":
-                    if aggregate_text:
-                        yield (
-                            json.dumps(
-                                _build_gemini_stream_chunk(
-                                    model=model,
-                                    text=aggregate_text,
-                                    finish_reason="STOP",
-                                    grounding_metadata=grounding_metadata,
-                                ),
-                                ensure_ascii=False,
-                            )
-                            + "\n"
-                        )
                     continue
                 try:
                     payload = json.loads(payload_text)
@@ -1030,7 +1093,7 @@ def _wrap_chat_stream_as_gemini_stream(
                             json.dumps(
                                 _build_gemini_stream_chunk(
                                     model=model,
-                                    text=aggregate_text,
+                                    text="",
                                     finish_reason=None,
                                     grounding_metadata=grounding_metadata,
                                 ),
@@ -1052,7 +1115,7 @@ def _wrap_chat_stream_as_gemini_stream(
                         json.dumps(
                             _build_gemini_stream_chunk(
                                 model=model,
-                                text=aggregate_text,
+                                text=content_delta,
                                 finish_reason=None,
                                 grounding_metadata=grounding_metadata,
                             ),
@@ -1065,7 +1128,7 @@ def _wrap_chat_stream_as_gemini_stream(
                         json.dumps(
                             _build_gemini_stream_chunk(
                                 model=model,
-                                text=aggregate_text,
+                                text="",
                                 finish_reason=str(finish_reason).upper(),
                                 grounding_metadata=grounding_metadata,
                             ),
@@ -2577,6 +2640,8 @@ async def create_chat_completion(
 
     _ensure_chat_access(request, x_chat_session)
     req_body.messages = _normalize_request_messages(req_body.messages)
+    _validate_sampling_params(req_body)
+    _validate_tooling_params(req_body)
 
     # Lite 模式：单轮问答，无记忆
     if is_lite_mode():
@@ -3363,7 +3428,12 @@ async def delete_conversation(
     x_chat_session: str | None = Header(default=None, alias="X-Chat-Session"),
 ):
     _ensure_chat_access(request, x_chat_session)
-    manager = request.app.state.conversation_manager
+    manager = getattr(request.app.state, "conversation_manager", None)
+    if manager is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Conversation management is only available in heavy mode.",
+        )
     deleted = manager.delete_conversation(conversation_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Conversation not found.")

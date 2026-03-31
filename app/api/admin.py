@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from app.account_pool import AccountPool
 from app.api.register import (
+    _effective_proxy,
     get_register_automation_state,
     get_register_automation_snapshot,
     list_due_pending_hydration_account_ids,
@@ -1078,6 +1079,11 @@ def _current_admin_session(
     if session.get("username") != auth_status["username"]:
         sessions.pop(token, None)
         raise HTTPException(status_code=401, detail="Admin session is no longer valid")
+    if auth_status["must_change_password"] and not allow_password_change_required:
+        raise HTTPException(
+            status_code=403,
+            detail="Password change required before accessing admin features",
+        )
     return session
 
 
@@ -1220,10 +1226,8 @@ def _consume_email_login_session(request: Request, email: str) -> dict[str, Any]
 
 
 def _build_email_login_register_service() -> NotionRegisterService:
-    config = get_config_store().get_config()
-    proxy = str(config.get("upstream_proxy") or "").strip()
     return NotionRegisterService(
-        proxy=proxy,
+        proxy=_effective_proxy(None),
         headless=True,
         timeout=180,
     )
@@ -1256,11 +1260,18 @@ def _submit_email_for_browser_login(
             continue_btn.click()
         else:
             email_input.input("\n")
-        time.sleep(2)
+        time.sleep(5)
+        if not register_service._page_still_on_verification_step(page):
+            register_service._write_debug_artifacts(
+                page, email, "admin_email_login_start_state"
+            )
     except HTTPException:
         register_service.stop()
         raise
     except Exception as exc:
+        register_service._write_debug_artifacts(
+            page, email, "admin_email_login_start_exception"
+        )
         register_service.stop()
         raise HTTPException(
             status_code=502, detail=f"发送验证码失败: {str(exc)[:300]}"
@@ -1283,12 +1294,72 @@ def _finalize_browser_email_login(
         raise HTTPException(
             status_code=400, detail="浏览器验证码会话已失效，请重新开始。"
         )
+    finalize_started_at = time.time()
+    register_service._log("info", "开始提交邮箱验证码")
     if not register_service._submit_verification_code(page, code):
+        register_service._write_debug_artifacts(
+            page, email, "admin_email_login_no_code_input"
+        )
         raise HTTPException(status_code=400, detail="未找到验证码输入框，请重新开始。")
+    register_service._log("info", "验证码输入已提交，等待页面更新")
     time.sleep(3)
+    visible_text = register_service._get_visible_text(page)
+    lowered_visible_text = visible_text.lower() if visible_text else ""
+    if visible_text and (
+        "登录码不正确" in visible_text
+        or "验证码不正确" in visible_text
+        or "please try again" in lowered_visible_text
+        or "incorrect" in lowered_visible_text
+    ):
+        register_service._write_debug_artifacts(
+            page, email, "admin_email_login_invalid_code"
+        )
+        raise HTTPException(status_code=400, detail="验证码错误或已过期，请重新获取。")
+    token_v2 = register_service._extract_token_v2(page)
+    user_id = register_service._extract_user_id(page)
+    if token_v2 and user_id:
+        register_service._log("info", "验证码提交后已直接拿到登录凭据")
+        account = _build_email_code_account(
+            token_v2=token_v2,
+            user_id=user_id,
+            email=email,
+            first_name=str(payload.first_name or "Notion").strip() or "Notion",
+            last_name=str(payload.last_name or "User").strip() or "User",
+            plan_type=payload.plan_type,
+            notes=payload.notes,
+            tags=payload.tags,
+            source="email_code_browser",
+        )
+        return register_service.finalize_account_record(account)
     if register_service._retry_verification_step(page, code):
+        register_service._log("warning", "验证码页面仍停留，已触发重试提交")
         time.sleep(3)
+    visible_text = register_service._get_visible_text(page)
+    lowered_visible_text = visible_text.lower() if visible_text else ""
+    if visible_text and (
+        "登录码不正确" in visible_text
+        or "验证码不正确" in visible_text
+        or "please try again" in lowered_visible_text
+        or "incorrect" in lowered_visible_text
+    ):
+        register_service._write_debug_artifacts(
+            page, email, "admin_email_login_invalid_code_after_retry"
+        )
+        raise HTTPException(status_code=400, detail="验证码错误或已过期，请重新获取。")
+    if time.time() - finalize_started_at > 20:
+        register_service._write_debug_artifacts(
+            page, email, "admin_email_login_finalize_timeout_before_post_signup"
+        )
+        raise HTTPException(
+            status_code=504, detail="验证码提交后页面响应超时，请重试。"
+        )
+    register_service._log("info", "开始处理注册后续引导")
     register_service._complete_post_signup_flow(page)
+    if time.time() - finalize_started_at > 20:
+        register_service._write_debug_artifacts(
+            page, email, "admin_email_login_finalize_timeout_after_post_signup"
+        )
+        raise HTTPException(status_code=504, detail="注册后续页面处理超时，请重试。")
 
     token_v2 = register_service._extract_token_v2(page)
     user_id = register_service._extract_user_id(page)
@@ -3742,37 +3813,48 @@ async def update_runtime_settings(
         updates["refresh_client_secret"] = payload.refresh_client_secret
     config.update(updates)
     saved = store.save_config(config)
+    chat_auth_before = get_chat_auth()
+    chat_sessions_changed = False
     if payload.chat_password is not None:
         chat_password_value = str(payload.chat_password or "").strip()
         has_existing_chat_password = bool(
-            str(get_chat_auth().get("password_hash") or "").strip()
+            str(chat_auth_before.get("password_hash") or "").strip()
         )
         if chat_password_value and chat_password_value != "********":
             update_chat_password(
                 password=chat_password_value, enabled=payload.chat_password_enabled
             )
+            chat_sessions_changed = True
         elif not chat_password_value:
             update_chat_password(password="", enabled=False)
+            chat_sessions_changed = True
         elif chat_password_value == "********" and has_existing_chat_password:
+            if bool(payload.chat_password_enabled) != bool(
+                chat_auth_before.get("enabled", False)
+            ):
+                chat_sessions_changed = True
             store.update_config(
                 {
                     "chat_auth": {
-                        **get_chat_auth(),
+                        **chat_auth_before,
                         "enabled": bool(payload.chat_password_enabled),
                     }
                 }
             )
     elif bool(payload.chat_password_enabled) != bool(
-        get_chat_auth().get("enabled", False)
+        chat_auth_before.get("enabled", False)
     ):
+        chat_sessions_changed = True
         store.update_config(
             {
                 "chat_auth": {
-                    **get_chat_auth(),
+                    **chat_auth_before,
                     "enabled": bool(payload.chat_password_enabled),
                 }
             }
         )
+    if chat_sessions_changed:
+        request.app.state.chat_sessions = {}
     saved = store.get_config()
     _rebuild_pool(request)
     return {

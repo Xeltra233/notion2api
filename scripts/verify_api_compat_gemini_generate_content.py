@@ -199,12 +199,15 @@ def main() -> None:
             == "compat "
         ), stream_payloads
         assert (
-            stream_payloads[-1]["candidates"][0]["content"]["parts"][0]["text"]
-            == "compat gemini stream"
+            stream_payloads[1]["candidates"][0]["content"]["parts"][0]["text"]
+            == "gemini stream"
         ), stream_payloads
         assert stream_payloads[-1]["candidates"][0]["finishReason"] == "STOP", (
             stream_payloads
         )
+        assert (
+            stream_payloads[-1]["candidates"][0]["content"]["parts"][0]["text"] == ""
+        ), stream_payloads
 
         stream_search_lines = [
             line for line in stream_search_response.text.splitlines() if line.strip()
@@ -227,8 +230,8 @@ def main() -> None:
             ],
         }, stream_search_payloads
         assert (
-            stream_search_payloads[-1]["candidates"][0]["content"]["parts"][0]["text"]
-            == "compat gemini stream"
+            stream_search_payloads[2]["candidates"][0]["content"]["parts"][0]["text"]
+            == "gemini stream"
         ), stream_search_payloads
         assert stream_search_payloads[-1]["candidates"][0]["groundingMetadata"] == {
             "webSearchQueries": ["stream search please"],
@@ -244,6 +247,10 @@ def main() -> None:
         assert stream_search_payloads[-1]["candidates"][0]["finishReason"] == "STOP", (
             stream_search_payloads
         )
+        assert (
+            stream_search_payloads[-1]["candidates"][0]["content"]["parts"][0]["text"]
+            == ""
+        ), stream_search_payloads
 
         invalid_role_payload = invalid_role_response.json()
         assert invalid_role_response.status_code == 400, invalid_role_response.text

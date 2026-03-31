@@ -790,8 +790,37 @@ class AccountPool:
         store = get_config_store()
         accounts = store.get_accounts()
         updated = False
+        target_account_id = str(client.account_id or "").strip()
+        target_space_id = str(client.space_id or "").strip()
+        target_space_view_id = str(client.space_view_id or "").strip()
+        target_user_id = str(client.user_id or "").strip()
+
+        def _matches_account(account: Dict[str, Any]) -> bool:
+            account_id = str(account.get("id") or "").strip()
+            account_space_id = str(account.get("space_id") or "").strip()
+            account_space_view_id = str(account.get("space_view_id") or "").strip()
+            account_user_id = str(account.get("user_id") or "").strip()
+
+            if target_account_id and account_id == target_account_id:
+                return True
+            if (
+                target_user_id
+                and target_space_id
+                and account_user_id == target_user_id
+                and account_space_id == target_space_id
+            ):
+                return True
+            if (
+                target_user_id
+                and target_space_view_id
+                and account_user_id == target_user_id
+                and account_space_view_id == target_space_view_id
+            ):
+                return True
+            return bool(target_user_id and account_user_id == target_user_id)
+
         for account in accounts:
-            if account.get("user_id") != client.user_id:
+            if not _matches_account(account):
                 continue
             session_status = client.get_session_status()
             existing_status = (
