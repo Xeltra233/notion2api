@@ -866,10 +866,9 @@
                                 </div>
                             </div>
                             <div id="adminAccountOauthSection" class="accounts-composer-section hidden space-y-3">
-                                <div class="text-sm text-gray-700 dark:text-gray-300">OAuth 账号导入保留在诊断模块里，但账号这里给直接入口，不用自己去找。</div>
+                                <div class="text-sm text-gray-700 dark:text-gray-300">直接进入 Notion OAuth 主流程，不再额外跳到诊断工具堆里兜圈子。</div>
                                 <div class="flex flex-wrap gap-2">
-                                    <button id="adminOpenOAuthModuleBtn" type="button" class="admin-action-btn admin-action-btn-primary">去 OAuth 导入</button>
-                                    <button id="adminOpenOAuthStartBtn" type="button" class="admin-action-btn">打开后准备 OAuth 启动参数</button>
+                                    <button id="adminOpenOAuthStartBtn" type="button" class="admin-action-btn admin-action-btn-primary">开始 OAuth 导入</button>
                                 </div>
                             </div>
                         </div>
@@ -916,23 +915,23 @@
                     <div class="rounded-2xl border border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 p-4 space-y-3">
                         <div>
                             <div class="text-sm font-medium">Notion OAuth 登录</div>
-                            <div class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">当前是 Notion Web callback 导入流，不是假 OAuth App 跳转器。最短路径是：完成网页登录、复制 localhost callback、粘贴回来、完成导入。</div>
+                            <div class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">当前是 Notion Web 回调导入流。最短路径是：点击登录链接、完成网页登录、复制 localhost 回调、粘贴回来、完成导入。</div>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px] text-gray-500 dark:text-gray-400">
-                            <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">1. 点击“准备 callback 导入”</div>
+                            <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">1. 点击下面的登录链接</div>
                             <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">2. 在外部完成网页登录</div>
                             <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">3. 复制回调后的 localhost URL</div>
-                            <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">4. 粘回这里并点“导入 callback 并完成”</div>
+                            <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">4. 粘回这里并点“导入回调并完成”</div>
                         </div>
                     </div>
                     <div class="rounded-2xl border border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 p-4 space-y-3">
-                        <div class="text-[11px] text-gray-500 dark:text-gray-400">这里会给你一个 callback bridge 地址。如果你的网页登录环境不能直接回 localhost，可以把回调先指到这个桥接地址。</div>
+                        <div class="text-[11px] text-gray-500 dark:text-gray-400">这里会直接给你一个可点的 Notion 登录链接。如果你的网页登录环境不能直接回 localhost，也会同时给出回调桥接地址。</div>
                         <a id="oauthStartLink" href="#" target="_blank" rel="noopener noreferrer"
-                            class="hidden break-all text-sm text-accent underline underline-offset-4">打开 callback bridge</a>
-                        <textarea id="oauthStartUrlOutput" rows="3" readonly placeholder="准备好的 callback bridge 会显示在这里"
+                            class="hidden break-all text-sm text-accent underline underline-offset-4">打开 Notion 登录链接</a>
+                        <textarea id="oauthStartUrlOutput" rows="3" readonly placeholder="生成的登录链接会显示在这里"
                             class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
                     </div>
-                    <textarea id="oauthCallbackBridgeOutput" rows="2" readonly placeholder="如果上游环境不能直接回 localhost，可改用这里的桥接地址"
+                    <textarea id="oauthCallbackBridgeOutput" rows="2" readonly placeholder="如果网页登录环境不能直接回 localhost，可改用这里的回调桥接地址"
                         class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <input id="oauthSpaceIdInput" type="text" placeholder="space_id"
@@ -941,24 +940,15 @@
                             class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
                         <input id="oauthRedirectUriInput" type="text" placeholder="redirect URI，例如 http://localhost:8000"
                             class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                        <textarea id="oauthCallbackUrlInput" rows="3" placeholder="把浏览器里完成登录后的完整 localhost callback URL 粘贴到这里"
+                        <textarea id="oauthCallbackUrlInput" rows="3" placeholder="把浏览器里完成登录后的完整 localhost 回调 URL 粘贴到这里"
                             class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none resize-y"></textarea>
                     </div>
                     <div class="flex flex-wrap gap-2">
-                        <button id="oauthStartBtnPrimary" type="button" class="admin-action-btn admin-action-btn-primary">准备 callback 导入</button>
-                        <button id="oauthImportCallbackBtn" type="button" class="admin-action-btn admin-action-btn-primary">导入 callback 并完成</button>
-                        <button id="oauthParseCallbackBtn" type="button" class="admin-action-btn">只解析 callback</button>
+                        <button id="oauthStartBtnPrimary" type="button" class="admin-action-btn admin-action-btn-primary">生成并显示登录链接</button>
+                        <button id="oauthImportCallbackBtn" type="button" class="admin-action-btn admin-action-btn-primary">导入回调并完成</button>
+                        <button id="oauthParseCallbackBtn" type="button" class="admin-action-btn">只解析回调</button>
                         <button id="oauthFinalizeBtn" type="button" class="admin-action-btn">仅完成导入</button>
                     </div>
-                    <details id="oauthFallbackFieldsDetails" class="runtime-details-block">
-                        <summary>展开手动兜底字段</summary>
-                        <div id="oauthFallbackFieldsPanel" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                            <input id="oauthTokenInput" type="text" placeholder="token_v2 令牌（仅在自动解析失败时手动填写）"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                            <input id="oauthUserIdInput" type="text" placeholder="user_id（仅在自动解析失败时手动填写）"
-                                class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                        </div>
-                    </details>
                     <textarea id="requestTemplateOutput" rows="8" readonly placeholder="请求模板与诊断载荷会显示在这里"
                         class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
                     </div>

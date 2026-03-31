@@ -441,7 +441,7 @@ function bindEventListeners() {
         window.NotionAI.API.Settings.openOAuthImporter(false);
     });
     document.getElementById('adminOpenOAuthStartBtn').addEventListener('click', () => {
-        window.NotionAI.API.Settings.openOAuthImporter(true);
+        window.NotionAI.API.Settings.startAndFocusOAuthFlow();
     });
     document.getElementById('adminExportAccountsBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.exportAccountsToTextarea();
@@ -548,9 +548,6 @@ function bindEventListeners() {
     });
     document.getElementById('oauthImportCallbackBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.parseAndFinalizeCallbackUrl();
-    });
-    document.getElementById('oauthFallbackFieldsDetails')?.addEventListener('toggle', () => {
-        window.NotionAI.API.Settings.applyOAuthFallbackVisibility();
     });
 
     // Rename modal

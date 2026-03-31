@@ -333,7 +333,7 @@ window.NotionAI.API.Settings = {
             ...callback,
             redirect_uri: window.location.origin,
         });
-        this.setAdminNotice('已从本地 URL 检测到 OAuth callback 参数。请检查后点击“完成 OAuth 导入”。');
+        this.setAdminNotice('已从本地 URL 检测到 OAuth 回调参数。请检查后点击“完成 OAuth 导入”。');
         callback.consumed = true;
 
         const cleanUrl = `${window.location.origin}${window.location.pathname}`;
@@ -370,20 +370,20 @@ window.NotionAI.API.Settings = {
         const input = document.getElementById('oauthCallbackUrlInput');
         const rawValue = input ? input.value.trim() : '';
         if (!rawValue) {
-            this.setAdminNotice('请先粘贴完整的 callback URL。');
+            this.setAdminNotice('请先粘贴完整的回调 URL。');
             return false;
         }
 
         const extractedUrl = this.extractCallbackUrl(rawValue);
         if (!extractedUrl) {
-            this.setAdminNotice('在粘贴的内容中未找到有效的 callback URL。');
+            this.setAdminNotice('在粘贴的内容中未找到有效的回调 URL。');
             return false;
         }
 
         this._oauthCallbackCache = null;
         const parsed = this.parseOAuthCallbackUrl(extractedUrl);
         if (!parsed.detected) {
-            this.setAdminNotice('粘贴的 URL 中未找到支持的 OAuth callback 参数。');
+            this.setAdminNotice('粘贴的 URL 中未找到支持的 OAuth 回调参数。');
             return false;
         }
 
@@ -391,7 +391,7 @@ window.NotionAI.API.Settings = {
             ...parsed,
             redirect_uri: window.location.origin,
         });
-        this.setAdminNotice('已解析 callback URL。请检查字段后点击“完成 OAuth 导入”。');
+        this.setAdminNotice('已解析回调 URL。请检查字段后点击“完成 OAuth 导入”。');
         return true;
     },
 
@@ -442,7 +442,7 @@ window.NotionAI.API.Settings = {
                 provider: '网页会话',
             });
             this.renderOAuthStartSummary(result);
-            this.setAdminNotice('callback 导入已准备好。请在外部完成网页登录，再把 localhost callback URL 粘回来完成导入。');
+            this.setAdminNotice('登录链接已准备好。请点击登录，在外部完成网页登录后，再把 localhost 回调 URL 粘回来完成导入。');
         } catch (error) {
             this.setAdminNotice(error.message || '准备 OAuth 启动参数失败。');
         }
@@ -818,14 +818,6 @@ window.NotionAI.API.Settings = {
         }
     },
 
-    applyOAuthFallbackVisibility() {
-        const details = document.getElementById('oauthFallbackFieldsDetails');
-        const panel = document.getElementById('oauthFallbackFieldsPanel');
-        if (panel) {
-            panel.classList.toggle('hidden', !details?.open);
-        }
-    },
-
     toggleRuntimeProxyAdvanced() {
         this._runtimeProxyAdvancedVisible = !this._runtimeProxyAdvancedVisible;
         this.applyRuntimeProxyAdvancedVisibility();
@@ -893,7 +885,12 @@ window.NotionAI.API.Settings = {
         if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
             window.NotionAI.Core.App.setActiveModule('diagnostics');
         }
-        this.setAdminNotice('已切到诊断模块的 OAuth 导入区。');
+        const diagnosticsSection = document.getElementById('settings-section-diagnostics');
+        if (diagnosticsSection) {
+            const oauthCard = diagnosticsSection.querySelector('.notion-oauth-card');
+            oauthCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        this.setAdminNotice('已切到 Notion OAuth 导入区。');
         if (startImmediately) {
             this.startOAuthFlow();
         }
@@ -2880,7 +2877,14 @@ window.NotionAI.API.Settings = {
     },
 
     async startAndFocusOAuthFlow() {
-        this.openOAuthImporter(false);
+        if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
+            window.NotionAI.Core.App.setActiveModule('diagnostics');
+        }
+        const diagnosticsSection = document.getElementById('settings-section-diagnostics');
+        if (diagnosticsSection) {
+            const oauthCard = diagnosticsSection.querySelector('.notion-oauth-card');
+            oauthCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
         await this.startOAuthFlow();
     },
 
