@@ -507,6 +507,9 @@ function bindEventListeners() {
     document.getElementById('oauthStartBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.startOAuthFlow();
     });
+    document.getElementById('oauthStartBtnPrimary')?.addEventListener('click', () => {
+        window.NotionAI.API.Settings.startAndFocusOAuthFlow();
+    });
     document.getElementById('oauthRefreshStatusBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.loadOAuthRefreshStatus();
     });

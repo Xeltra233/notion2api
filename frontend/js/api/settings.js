@@ -435,7 +435,7 @@ window.NotionAI.API.Settings = {
             if (result.authorization_url) {
                 window.open(result.authorization_url, '_blank', 'noopener,noreferrer');
             }
-            this.setAdminNotice('已生成 OAuth 启动链接和 callback bridge URL。如果上游 callback 无法直接访问 localhost，请在远端环境使用该桥接地址。');
+            this.setAdminNotice('OAuth 登录链接已生成。请在新窗口完成登录，再把 localhost callback URL 粘回来完成导入。');
         } catch (error) {
             this.setAdminNotice(error.message || '准备 OAuth 启动参数失败。');
         }
@@ -773,11 +773,14 @@ window.NotionAI.API.Settings = {
             const input = document.getElementById(id);
             if (input) {
                 input.type = type;
+                if (input.dataset.maskedValue === 'true' && !this._runtimeSecretsVisible) {
+                    input.value = '********';
+                }
             }
         });
         const toggle = document.getElementById('runtimeToggleSecretsBtn');
         if (toggle) {
-            toggle.textContent = this._runtimeSecretsVisible ? '隐藏密钥' : '显示密钥';
+            toggle.textContent = this._runtimeSecretsVisible ? '隐藏密钥字段' : '显示密钥字段';
         }
     },
 
@@ -1939,8 +1942,14 @@ window.NotionAI.API.Settings = {
         }
         Object.entries(secretPlaceholders).forEach(([id, hasValue]) => {
             const element = document.getElementById(id);
-            if (element && hasValue) {
-                element.placeholder = '已存储在 server，留空则保持不变。';
+            if (element) {
+                element.dataset.maskedValue = hasValue ? 'true' : 'false';
+                if (hasValue && !element.value.trim()) {
+                    element.value = '********';
+                }
+                if (hasValue) {
+                    element.placeholder = '已存储在 server，留空则保持不变。';
+                }
             }
         });
 
@@ -2834,6 +2843,11 @@ window.NotionAI.API.Settings = {
             return;
         }
         await this.finalizeOAuthFromForm();
+    },
+
+    async startAndFocusOAuthFlow() {
+        this.openOAuthImporter(false);
+        await this.startOAuthFlow();
     },
 
     bindActionHistoryFilters() {
