@@ -1198,7 +1198,7 @@ def _build_email_login_register_service() -> NotionRegisterService:
     proxy = str(config.get("upstream_proxy") or "").strip()
     return NotionRegisterService(
         proxy=proxy,
-        headless=bool(config.get("auto_register_headless", False)),
+        headless=True,
         timeout=180,
     )
 
