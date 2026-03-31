@@ -93,6 +93,7 @@ async def lifespan(app: FastAPI):
     app.state.admin_auth = get_admin_auth()
     app.state.admin_sessions = {}
     app.state.chat_sessions = {}
+    app.state.email_login_sessions = {}
     app.state.admin_session_ttl_seconds = get_admin_session_ttl_seconds()
     app.state.chat_session_ttl_seconds = get_chat_session_ttl_seconds()
     app.state.admin_request_context = type("RequestContext", (), {"app": app})()

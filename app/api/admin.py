@@ -1153,7 +1153,10 @@ def _get_usage_store(request: Request) -> UsageStore:
 
 
 def _prune_email_login_sessions(request: Request) -> None:
-    sessions = getattr(request.app.state, "email_login_sessions", {})
+    sessions = getattr(request.app.state, "email_login_sessions", None)
+    if not isinstance(sessions, dict):
+        sessions = {}
+        request.app.state.email_login_sessions = sessions
     now_ts = int(time.time())
     expired_tokens = [
         token
@@ -1188,18 +1191,27 @@ def _register_email_login_session(
         "status": "code_sent",
         "register_service": register_service,
     }
-    getattr(request.app.state, "email_login_sessions", {})[normalized_email] = session
+    sessions = getattr(request.app.state, "email_login_sessions", None)
+    if not isinstance(sessions, dict):
+        sessions = {}
+        request.app.state.email_login_sessions = sessions
+    sessions[normalized_email] = session
     return session
 
 
 def _get_email_login_session(request: Request, email: str) -> dict[str, Any] | None:
     _prune_email_login_sessions(request)
     normalized_email = str(email or "").strip().lower()
-    return getattr(request.app.state, "email_login_sessions", {}).get(normalized_email)
+    sessions = getattr(request.app.state, "email_login_sessions", None)
+    if not isinstance(sessions, dict):
+        return None
+    return sessions.get(normalized_email)
 
 
 def _consume_email_login_session(request: Request, email: str) -> dict[str, Any] | None:
-    sessions = getattr(request.app.state, "email_login_sessions", {})
+    sessions = getattr(request.app.state, "email_login_sessions", None)
+    if not isinstance(sessions, dict):
+        return None
     normalized_email = str(email or "").strip().lower()
     session = _get_email_login_session(request, normalized_email)
     if session:
