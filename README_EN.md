@@ -1,6 +1,6 @@
 # Notion2API
 
-> A Notion-based OpenAI-compatible API service that now includes an admin operations console, account pool, runtime controls, usage reporting, OAuth/register tooling, workspace operations, and multimodal chat support.
+> A Notion-based OpenAI-compatible API service that now includes an admin operations console, account pool, runtime controls, usage reporting, email-login/register tooling, workspace operations, and multimodal chat support.
 
 🌐 [中文](./README.md) | English
 
@@ -18,7 +18,7 @@ It now combines:
 - session-based admin authentication for the admin console
 - runtime config editing and proxy diagnostics
 - usage summary and event queries
-- OAuth callback tooling and register automation
+- email-login import tooling and register automation
 - workspace sync / probe / create operations
 - a growing set of non-manual verification scripts
 
@@ -86,7 +86,7 @@ Key admin UX behavior:
 - safe/masked rendering by default
 - operational status cards and account health views
 - usage filters and event list rendering
-- callback parsing for OAuth import flows
+- callback parsing and code import assistance for email-login flows
 - a dedicated Chat module instead of chat being the default landing page
 
 ### 5. Runtime controls and diagnostics
@@ -117,13 +117,13 @@ Current filters cover dimensions such as:
 
 This allows the admin console to answer operational questions instead of only showing account health.
 
-### 7. OAuth, register, and callback tooling
+### 7. Email Login, register, and session tooling
 
-This project now includes a more complete operational flow around OAuth-style account import and register automation:
+This project now includes a more complete operational flow around email-login account import and register automation:
 
-- OAuth start payload generation
-- localhost-friendly callback bridge support
-- callback parsing / finalize flows in the admin panel
+- email verification start flow generation
+- localhost-friendly import bridge support
+- code parsing / finalize flows in the admin panel
 - refresh-status and refresh-diagnostics views
 - auto-register state visibility
 - hydration retry and register protection logic
@@ -220,7 +220,7 @@ Important boundaries:
 
 ### 1. Prepare the minimum startup configuration
 
-If your deployment flow is to bring up the admin console first and import accounts later via OAuth or the register flow, you only need to care about the admin password and the port.
+If your deployment flow is to bring up the admin console first and import accounts later via email login or the register flow, you only need to care about the admin password and the port.
 
 Minimum startup example:
 
@@ -237,7 +237,7 @@ The default admin login is:
 - username: `admin`
 - password: the `ADMIN_PASSWORD` you configured
 
-The account pool is no longer treated as a default startup prerequisite. You can bring the service up first and then add accounts through the admin OAuth / register / import flows.
+The account pool is no longer treated as a default startup prerequisite. You can bring the service up first and then add accounts through the admin email-login / register / import flows.
 
 ### Minimum env surface
 
@@ -320,13 +320,11 @@ uvicorn app.server:app --host 0.0.0.0 --port 8000
 - `GET /v1/admin/config`
 - `PUT /v1/admin/config/settings`
 - `GET /v1/admin/config/proxy-health`
-- `GET /v1/admin/oauth/refresh-status`
-- `GET /v1/admin/oauth/refresh-diagnostics`
+- `GET /v1/admin/session/refresh-status`
+- `GET /v1/admin/session/refresh-diagnostics`
 - `GET /v1/admin/workspaces/create-status`
 - `GET /v1/admin/workspaces/diagnostics`
 - `GET /v1/admin/request-templates`
-- `GET /v1/admin/oauth/callback`
-- `POST /v1/admin/oauth/callback`
 
 ### Admin usage
 
@@ -353,7 +351,7 @@ The frontend also supports:
 
 - admin login state restore within the current browser session
 - admin credential update entry points
-- callback parsing for OAuth import flows
+- callback parsing and code import assistance for email-login flows
 - masked/safe rendering for admin data by default
 - usage filters and event list rendering
 - workspace and runtime action surfaces

@@ -210,7 +210,7 @@ window.NotionAI.API.Settings = {
 
     applyAlertFilter(type) {
         this.clearAdminFilters();
-        if (type === 'oauth_expired' || type === 'needs_refresh' || type === 'invalid' || type === 'no_workspace' || type === 'workspace_creation_pending') {
+        if (type === 'session_expired' || type === 'needs_refresh' || type === 'invalid' || type === 'no_workspace' || type === 'workspace_creation_pending') {
             document.getElementById('adminStateFilterInput').value = type;
             this.refreshAdminPanel(`已应用告警筛选：${type}。`);
             return;
@@ -253,11 +253,11 @@ window.NotionAI.API.Settings = {
         this.refreshAdminPanel(`已应用告警筛选：${type}。`);
     },
 
-    renderOAuthStartSummary(payload = {}) {
-        const summary = document.getElementById('oauthStartSummary');
-        const output = document.getElementById('oauthStartUrlOutput');
-        const bridge = document.getElementById('oauthCallbackBridgeOutput');
-        const link = document.getElementById('oauthStartLink');
+    renderEmailLoginSummary(payload = {}) {
+        const summary = document.getElementById('emailLoginStartSummary');
+        const output = document.getElementById('emailLoginStartOutput');
+        const bridge = document.getElementById('emailLoginSessionOutput');
+        const link = document.getElementById('emailLoginStartLink');
         if (!summary) {
             return;
         }
@@ -291,8 +291,8 @@ window.NotionAI.API.Settings = {
         }
     },
 
-    async startOAuthFlow() {
-        const email = document.getElementById('oauthEmailInput').value.trim();
+    async startEmailLoginFlow() {
+        const email = document.getElementById('emailLoginEmailInput').value.trim();
         if (!email) {
             this.setAdminNotice('请先输入邮箱地址。');
             return;
@@ -301,19 +301,19 @@ window.NotionAI.API.Settings = {
             const result = await window.NotionAI.API.Admin.startEmailLogin({
                 email,
             });
-            this.renderOAuthStartSummary(result);
+            this.renderEmailLoginSummary(result);
             this.setAdminNotice(result.message || '验证码已发送，请输入邮箱验证码完成导入。');
         } catch (error) {
             this.setAdminNotice(error.message || '发送邮箱验证码失败。');
         }
     },
 
-    async loadOAuthRefreshStatus() {
+    async loadSessionRefreshStatus() {
         try {
-            const result = await window.NotionAI.API.Admin.getOAuthRefreshStatus();
-            this.setAdminNotice(result.message || result.status || 'OAuth 刷新状态已加载。');
+            const result = await window.NotionAI.API.Admin.getSessionRefreshStatus();
+            this.setAdminNotice(result.message || result.status || '会话刷新状态已加载。');
         } catch (error) {
-            this.setAdminNotice(error.message || '加载 OAuth 刷新状态失败。');
+            this.setAdminNotice(error.message || '加载会话刷新状态失败。');
         }
     },
 
@@ -327,14 +327,14 @@ window.NotionAI.API.Settings = {
         }
     },
 
-    async loadOAuthRefreshDiagnostics() {
+    async loadSessionRefreshDiagnostics() {
         try {
-            const result = await window.NotionAI.API.Admin.getOAuthRefreshDiagnostics();
+            const result = await window.NotionAI.API.Admin.getSessionRefreshDiagnostics();
             const summary = result.summary || {};
             this.renderRefreshDiagnostics(result);
             this.setAdminNotice(`刷新诊断已更新：可直接刷新 ${summary.refresh_ready ?? 0}，需手动重新授权 ${summary.manual_reauthorize ?? 0}，已过期 ${summary.expired ?? 0}。`);
         } catch (error) {
-            this.setAdminNotice(error.message || '加载 OAuth 刷新诊断失败。');
+            this.setAdminNotice(error.message || '加载会话刷新诊断失败。');
         }
     },
 
@@ -350,7 +350,7 @@ window.NotionAI.API.Settings = {
     },
 
     renderRefreshDiagnostics(result = {}) {
-        const panel = document.getElementById('oauthRefreshDiagnosticsPanel');
+        const panel = document.getElementById('sessionRefreshDiagnosticsPanel');
         const output = document.getElementById('requestTemplateOutput');
         if (!panel) {
             return;
@@ -463,10 +463,6 @@ window.NotionAI.API.Settings = {
         }
     },
 
-    async autoFinalizeOAuthIfPossible() {
-        return;
-    },
-
     open(moduleName = 'access') {
         const baseUrl = window.NotionAI.Core.State.get('baseUrl');
         const apiKey = window.NotionAI.Core.State.get('apiKey');
@@ -481,7 +477,6 @@ window.NotionAI.API.Settings = {
         this.applyRuntimeProxyAdvancedVisibility();
         this.applyAccountComposerState();
         this.loadRuntimeConfigIntoForm();
-        this.autoFinalizeOAuthIfPossible();
         if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
             window.NotionAI.Core.App.setActiveModule(moduleName || 'access');
         }
@@ -659,7 +654,7 @@ window.NotionAI.API.Settings = {
             manual: 'adminAccountManualSection',
             json: 'adminAccountJsonSection',
             file: 'adminAccountFileSection',
-            oauth: 'adminAccountOauthSection',
+            email_login: 'adminAccountEmailLoginSection',
         };
         Object.entries(sections).forEach(([mode, id]) => {
             const element = document.getElementById(id);
@@ -671,7 +666,7 @@ window.NotionAI.API.Settings = {
             manual: 'adminAccountModeManualBtn',
             json: 'adminAccountModeJsonBtn',
             file: 'adminAccountModeFileBtn',
-            oauth: 'adminAccountModeOauthBtn',
+            email_login: 'adminAccountModeEmailLoginBtn',
         };
         Object.entries(buttons).forEach(([mode, id]) => {
             const button = document.getElementById(id);
@@ -704,18 +699,18 @@ window.NotionAI.API.Settings = {
         return this.parseBulkAccountsText(raw);
     },
 
-    openOAuthImporter(startImmediately = false) {
+    openEmailLoginImporter(startImmediately = false) {
         if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
             window.NotionAI.Core.App.setActiveModule('diagnostics');
         }
         const diagnosticsSection = document.getElementById('settings-section-diagnostics');
         if (diagnosticsSection) {
-            const oauthCard = diagnosticsSection.querySelector('.notion-oauth-card');
-            oauthCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            const sessionCard = diagnosticsSection.querySelector('.notion-session-card');
+            sessionCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
         this.setAdminNotice('已切到邮箱验证码导入区。');
         if (startImmediately) {
-            this.startOAuthFlow();
+            this.startEmailLoginFlow();
         }
     },
 
@@ -1233,7 +1228,7 @@ window.NotionAI.API.Settings = {
         }
 
         const severityOrder = {
-            oauth_expired: 0,
+            session_expired: 0,
             invalid: 1,
             needs_refresh: 2,
             workspace_creation_pending: 3,
@@ -1257,7 +1252,7 @@ window.NotionAI.API.Settings = {
         panel.innerHTML = sortedAccounts.map((account) => {
             const status = account.status || {};
             const workspace = account.workspace || {};
-            const oauth = account.oauth || {};
+            const session = account.session || account.oauth || {};
             const label = this.escapeHtml(account.user_email || account.user_id || account.id || '未知');
             const toggleLabel = account.enabled === false ? '启用' : '停用';
             const tags = Array.isArray(account.tags) ? account.tags : [];
@@ -1295,7 +1290,7 @@ window.NotionAI.API.Settings = {
                             ${badgeItems.map((badge) => `<span class="admin-badge" data-state="${this.escapeHtmlAttribute(badge.state)}">${this.escapeHtml(badge.label)}</span>`).join('')}
                             ${safeTags.map((tag) => `<span class="admin-mini-pill">${tag}</span>`).join('')}
                         </div>
-                        <div class="admin-account-summary-line text-[11px] text-gray-500 dark:text-gray-400">工作区 ${this.escapeHtml(status.workspace_state || workspace.state || '缺失')} · OAuth ${oauth.expired ? '已过期' : '有效'} · 刷新 ${oauth.needs_refresh ? '需要' : '正常'}</div>
+                        <div class="admin-account-summary-line text-[11px] text-gray-500 dark:text-gray-400">工作区 ${this.escapeHtml(status.workspace_state || workspace.state || '缺失')} · 会话 ${session.expired ? '已过期' : '有效'} · 刷新 ${session.needs_refresh ? '需要' : '正常'}</div>
                     </div>
                     <div class="admin-account-actions">
                         <button type="button" class="admin-action-btn admin-probe-btn">探测</button>
@@ -1310,7 +1305,7 @@ window.NotionAI.API.Settings = {
                             <div class="admin-account-metric"><span class="admin-account-metric-label">可用状态</span><span class="admin-account-metric-value">${status.usable ? '可用' : '需关注'}</span></div>
                             <div class="admin-account-metric"><span class="admin-account-metric-label">工作区</span><span class="admin-account-metric-value">${this.escapeHtml(status.workspace_state || workspace.state || '缺失')}</span></div>
                             <div class="admin-account-metric"><span class="admin-account-metric-label">工作区数量</span><span class="admin-account-metric-value">${workspace.workspace_count || 0}</span></div>
-                            <div class="admin-account-metric"><span class="admin-account-metric-label">OAuth</span><span class="admin-account-metric-value">${oauth.expired ? '已过期' : '有效'}</span></div>
+                            <div class="admin-account-metric"><span class="admin-account-metric-label">会话</span><span class="admin-account-metric-value">${session.expired ? '已过期' : '有效'}</span></div>
                             <div class="admin-account-metric"><span class="admin-account-metric-label">最近刷新</span><span class="admin-account-metric-value">${this.escapeHtml(this.formatTimestamp(status.last_refresh_at))}</span></div>
                             <div class="admin-account-metric"><span class="admin-account-metric-label">最近成功</span><span class="admin-account-metric-value">${this.escapeHtml(this.formatTimestamp(status.last_success_at))}</span></div>
                         </div>
@@ -1593,7 +1588,7 @@ window.NotionAI.API.Settings = {
             ['已停用', summary.disabled ?? 0],
             ['无效', summary.invalid ?? 0],
             ['冷却中', summary.cooling ?? 0],
-            ['OAuth 已过期', summary.oauth_expired ?? 0],
+            ['会话已过期', summary.session_expired ?? 0],
             ['缺少工作区', summary.no_workspace ?? 0],
             ['补全挂起', summary.workspace_creation_pending ?? 0],
             ['补全到期', summary.workspace_hydration_due ?? 0],
@@ -1611,7 +1606,7 @@ window.NotionAI.API.Settings = {
         const counts = alerts.summary || {};
         const items = [
             ['无效', counts.invalid ?? 0],
-            ['已过期', counts.oauth_expired ?? 0],
+            ['已过期', counts.session_expired ?? 0],
             ['待刷新', counts.needs_refresh ?? 0],
             ['缺少工作区', counts.no_workspace ?? 0],
             ['工作区待处理', counts.workspace_creation_pending ?? 0],
@@ -1631,7 +1626,7 @@ window.NotionAI.API.Settings = {
         const grouped = alerts.items || {};
         const sections = [
             ['invalid', '无效'],
-            ['oauth_expired', 'OAuth 已过期'],
+            ['session_expired', '会话已过期'],
             ['needs_refresh', '需要刷新'],
             ['no_workspace', '缺少工作区'],
             ['workspace_creation_pending', '工作区待处理'],
@@ -2026,10 +2021,10 @@ window.NotionAI.API.Settings = {
             'adminClearAccountFormBtn',
             'adminImportAccountsBtn',
             'adminReplaceAccountsBtn',
-            'oauthStartBtn',
-            'oauthRefreshStatusBtn',
+            'emailLoginStartBtn',
+            'sessionRefreshStatusBtn',
             'workspaceCreateStatusBtn',
-            'oauthRefreshDiagnosticsBtn',
+            'sessionRefreshDiagnosticsBtn',
             'workspaceDiagnosticsBtn',
             'requestTemplatesBtn',
             'adminReportBtn',
@@ -2659,11 +2654,11 @@ window.NotionAI.API.Settings = {
         }
     },
 
-    async finalizeOAuthFromForm() {
+    async finalizeEmailLoginFromForm() {
         const payload = {
-            user_email: document.getElementById('oauthEmailInput').value.trim(),
-            email: document.getElementById('oauthEmailInput').value.trim(),
-            code: document.getElementById('oauthCallbackUrlInput').value.trim(),
+            user_email: document.getElementById('emailLoginEmailInput').value.trim(),
+            email: document.getElementById('emailLoginEmailInput').value.trim(),
+            code: document.getElementById('emailLoginCodeInput').value.trim(),
             first_name: 'Notion',
             last_name: 'User',
         };
@@ -2675,9 +2670,9 @@ window.NotionAI.API.Settings = {
 
         try {
             await window.NotionAI.API.Admin.finalizeEmailLogin(payload);
-            document.getElementById('oauthEmailInput').value = '';
-            document.getElementById('oauthCallbackUrlInput').value = '';
-            this.renderOAuthStartSummary({});
+            document.getElementById('emailLoginEmailInput').value = '';
+            document.getElementById('emailLoginCodeInput').value = '';
+            this.renderEmailLoginSummary({});
             await this.refreshAdminPanel('邮箱验证码账号已导入。');
         } catch (error) {
             this.setAdminNotice(error.message || '邮箱验证码导入失败。');
@@ -2685,19 +2680,19 @@ window.NotionAI.API.Settings = {
     },
 
     async parseAndFinalizeCallbackUrl() {
-        await this.finalizeOAuthFromForm();
+        await this.finalizeEmailLoginFromForm();
     },
 
-    async startAndFocusOAuthFlow() {
+    async startAndFocusEmailLoginFlow() {
         if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
             window.NotionAI.Core.App.setActiveModule('diagnostics');
         }
         const diagnosticsSection = document.getElementById('settings-section-diagnostics');
         if (diagnosticsSection) {
-            const oauthCard = diagnosticsSection.querySelector('.notion-oauth-card');
-            oauthCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            const sessionCard = diagnosticsSection.querySelector('.notion-session-card');
+            sessionCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
-        await this.startOAuthFlow();
+        await this.startEmailLoginFlow();
     },
 
     bindActionHistoryFilters() {

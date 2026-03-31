@@ -585,7 +585,7 @@
                             <option value="active">可用</option>
                             <option value="cooling">冷却中</option>
                             <option value="invalid">无效</option>
-                            <option value="oauth_expired">OAuth 已过期</option>
+                            <option value="session_expired">会话已过期</option>
                             <option value="needs_refresh">需要刷新</option>
                             <option value="no_workspace">缺少工作区</option>
                             <option value="workspace_creation_pending">工作区待创建</option>
@@ -823,7 +823,7 @@
                                 <button id="adminAccountModeManualBtn" type="button" class="admin-action-btn admin-action-btn-primary">手动输入 v2</button>
                                 <button id="adminAccountModeJsonBtn" type="button" class="admin-action-btn">JSON 输入</button>
                                 <button id="adminAccountModeFileBtn" type="button" class="admin-action-btn">文件导入</button>
-                                <button id="adminAccountModeOauthBtn" type="button" class="admin-action-btn">邮箱验证码导入</button>
+                                <button id="adminAccountModeEmailLoginBtn" type="button" class="admin-action-btn">邮箱验证码导入</button>
                             </div>
                             <input id="adminAccountIdInput" type="hidden">
                             <div id="adminAccountManualSection" class="accounts-composer-section space-y-3">
@@ -865,10 +865,10 @@
                                     <button id="adminReplaceAccountsFileBtn" type="button" class="admin-action-btn">从文件替换</button>
                                 </div>
                             </div>
-                            <div id="adminAccountOauthSection" class="accounts-composer-section hidden space-y-3">
-                                <div class="text-sm text-gray-700 dark:text-gray-300">直接用邮箱验证码注册并导入账号，不再依赖 OAuth 回调流。</div>
+                            <div id="adminAccountEmailLoginSection" class="accounts-composer-section hidden space-y-3">
+                                <div class="text-sm text-gray-700 dark:text-gray-300">直接用邮箱验证码注册并导入账号，不再依赖旧的回调导入流。</div>
                                 <div class="flex flex-wrap gap-2">
-                                    <button id="adminOpenOAuthStartBtn" type="button" class="admin-action-btn admin-action-btn-primary">开始邮箱验证码导入</button>
+                                    <button id="adminOpenEmailLoginStartBtn" type="button" class="admin-action-btn admin-action-btn-primary">开始邮箱验证码导入</button>
                                 </div>
                             </div>
                         </div>
@@ -889,9 +889,9 @@
                                 <div class="text-sm font-medium">先看诊断入口和当前线索</div>
                             </div>
                             <div class="admin-module-intro-copy">通常是在总览看到异常，或账号动作失败后再进来。</div>
-                            <div id="oauthStartSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                            <div id="emailLoginStartSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
                             <div class="flex flex-wrap gap-2">
-                                <button id="oauthRefreshDiagnosticsBtn" type="button" class="admin-action-btn admin-action-btn-primary">刷新诊断</button>
+                                <button id="sessionRefreshDiagnosticsBtn" type="button" class="admin-action-btn admin-action-btn-primary">刷新诊断</button>
                                 <button id="workspaceDiagnosticsBtn" type="button" class="admin-action-btn admin-action-btn-primary">工作区诊断</button>
                                 <button id="adminSnapshotBtn" type="button" class="admin-action-btn">快速快照</button>
                                 <button id="adminReportBtn" type="button" class="admin-action-btn">导出完整报告</button>
@@ -900,8 +900,8 @@
                         <div class="runtime-status-card">
                             <div class="runtime-status-title">诊断工具</div>
                             <div class="flex flex-wrap gap-2">
-                                <button id="oauthStartBtn" type="button" class="admin-action-btn">发送邮箱验证码</button>
-                                <button id="oauthRefreshStatusBtn" type="button" class="admin-action-btn">刷新状态</button>
+                                <button id="emailLoginStartBtn" type="button" class="admin-action-btn">发送邮箱验证码</button>
+                                <button id="sessionRefreshStatusBtn" type="button" class="admin-action-btn">刷新状态</button>
                                 <button id="workspaceCreateStatusBtn" type="button" class="admin-action-btn">工作区创建状态</button>
                                 <button id="requestTemplatesBtn" type="button" class="admin-action-btn">请求模板</button>
                                 <button id="copyRequestTemplateBtn" type="button" class="admin-action-btn">复制 JSON 模板</button>
@@ -910,62 +910,51 @@
                         </div>
                     </div>
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                        <div class="notion-oauth-card rounded-2xl border border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 p-4 space-y-3 lg:col-span-2">
-                    <div class="space-y-3">
-                    <div class="rounded-2xl border border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 p-4 space-y-3">
-                        <div>
-                            <div class="text-sm font-medium">Notion 邮箱验证码注册</div>
-                            <div class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">最短路径是：输入邮箱、发送验证码、去邮箱查看验证码、填回这里并完成导入。</div>
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px] text-gray-500 dark:text-gray-400">
-                            <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">1. 输入邮箱地址</div>
-                            <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">2. 点击发送验证码</div>
-                            <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">3. 去邮箱查看验证码</div>
-                            <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">4. 填回这里并完成导入</div>
-                        </div>
-                    </div>
-                    <div class="rounded-2xl border border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 p-4 space-y-3">
-                        <div class="text-[11px] text-gray-500 dark:text-gray-400">这里会显示当前邮箱验证码发送状态与会话有效期。</div>
-                        <a id="oauthStartLink" href="#" target="_blank" rel="noopener noreferrer"
-                            class="hidden break-all text-sm text-accent underline underline-offset-4">占位链接</a>
-                        <textarea id="oauthStartUrlOutput" rows="3" readonly placeholder="验证码发送结果会显示在这里"
-                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
-                    </div>
-                    <textarea id="oauthCallbackBridgeOutput" rows="2" readonly placeholder="验证码会话有效期会显示在这里"
-                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <input id="oauthEmailInput" type="text" placeholder="用户邮箱"
-                            class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                        <textarea id="oauthCallbackUrlInput" rows="3" placeholder="把邮箱收到的验证码填到这里"
-                            class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none resize-y"></textarea>
-                    </div>
-                    <div class="flex flex-wrap gap-2">
-                        <button id="oauthStartBtnPrimary" type="button" class="admin-action-btn admin-action-btn-primary">发送验证码并聚焦到这里</button>
-                        <button id="oauthImportCallbackBtn" type="button" class="admin-action-btn admin-action-btn-primary">提交验证码并导入</button>
-                        <button id="oauthParseCallbackBtn" type="button" class="admin-action-btn">重复提交验证码</button>
-                        <button id="oauthFinalizeBtn" type="button" class="admin-action-btn">仅完成导入</button>
-                    </div>
-                    <textarea id="requestTemplateOutput" rows="8" readonly placeholder="请求模板与诊断载荷会显示在这里"
-                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
-                    </div>
+                        <div class="notion-session-card rounded-2xl border border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 p-4 space-y-3 lg:col-span-2">
+                            <div class="space-y-3">
+                                <div class="rounded-2xl border border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 p-4 space-y-3">
+                                    <div>
+                                        <div class="text-sm font-medium">Notion 邮箱验证码注册</div>
+                                        <div class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">最短路径是：输入邮箱、发送验证码、去邮箱查看验证码、填回这里并完成导入。</div>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px] text-gray-500 dark:text-gray-400">
+                                        <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">1. 输入邮箱地址</div>
+                                        <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">2. 点击发送验证码</div>
+                                        <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">3. 去邮箱查看验证码</div>
+                                        <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">4. 填回这里并完成导入</div>
+                                    </div>
+                                </div>
+                                <div class="rounded-2xl border border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 p-4 space-y-3">
+                                    <div class="text-[11px] text-gray-500 dark:text-gray-400">这里会显示当前邮箱验证码发送状态与会话有效期。</div>
+                                    <a id="emailLoginStartLink" href="#" target="_blank" rel="noopener noreferrer"
+                                        class="hidden break-all text-sm text-accent underline underline-offset-4">占位链接</a>
+                                    <textarea id="emailLoginStartOutput" rows="3" readonly placeholder="验证码发送结果会显示在这里"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
+                                </div>
+                                <textarea id="emailLoginSessionOutput" rows="2" readonly placeholder="验证码会话有效期会显示在这里"
+                                    class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <input id="emailLoginEmailInput" type="text" placeholder="用户邮箱"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <textarea id="emailLoginCodeInput" rows="3" placeholder="把邮箱收到的验证码填到这里"
+                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none resize-y"></textarea>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    <button id="emailLoginStartBtnPrimary" type="button" class="admin-action-btn admin-action-btn-primary">发送验证码并聚焦到这里</button>
+                                    <button id="emailLoginImportBtn" type="button" class="admin-action-btn admin-action-btn-primary">提交验证码并导入</button>
+                                    <button id="emailLoginRetryBtn" type="button" class="admin-action-btn">重复提交验证码</button>
+                                    <button id="emailLoginFinalizeBtn" type="button" class="admin-action-btn">仅完成导入</button>
+                                </div>
+                                <textarea id="requestTemplateOutput" rows="8" readonly placeholder="请求模板与诊断载荷会显示在这里"
+                                    class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
+                            </div>
                         </div>
                     </div>
                     <details class="runtime-details-block">
                         <summary>展开邮箱验证码导入诊断与模板工具</summary>
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
-                            <div id="oauthRefreshDiagnosticsPanel" class="space-y-2 runtime-status-card"></div>
+                            <div id="sessionRefreshDiagnosticsPanel" class="space-y-2 runtime-status-card"></div>
                             <div id="workspaceDiagnosticsPanel" class="space-y-2 runtime-status-card"></div>
-                        </div>
-                        <div class="runtime-status-card mt-3 space-y-3">
-                            <div class="runtime-status-title">诊断工具</div>
-                            <div class="flex flex-wrap gap-2">
-                                <button id="oauthStartBtn" type="button" class="admin-action-btn">发送邮箱验证码</button>
-                                <button id="oauthRefreshStatusBtn" type="button" class="admin-action-btn">刷新状态</button>
-                                <button id="workspaceCreateStatusBtn" type="button" class="admin-action-btn">工作区创建状态</button>
-                                <button id="requestTemplatesBtn" type="button" class="admin-action-btn">请求模板</button>
-                                <button id="copyRequestTemplateBtn" type="button" class="admin-action-btn">复制 JSON 模板</button>
-                                <button id="showGenericTemplatesBtn" type="button" class="admin-action-btn">查看通用模板</button>
-                            </div>
                         </div>
                     </details>
                 </div>

@@ -172,8 +172,6 @@ function init() {
     window.NotionAI.Chat.Storage.saveChats();
     window.NotionAI.UI.Theme.init();
     window.NotionAI.API.Models.loadModels();
-    window.NotionAI.API.Settings.consumeOAuthCallbackParams();
-    window.NotionAI.API.Settings.autoFinalizeOAuthIfPossible();
     window.NotionAI.API.Settings.bindActionHistoryFilters();
     window.NotionAI.API.Settings.bindUsageFilters();
     window.NotionAI.API.Settings.bindConsoleNavigation();
@@ -416,8 +414,8 @@ function bindEventListeners() {
     document.getElementById('adminAccountModeFileBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.setAccountComposerMode('file');
     });
-    document.getElementById('adminAccountModeOauthBtn').addEventListener('click', () => {
-        window.NotionAI.API.Settings.setAccountComposerMode('oauth');
+    document.getElementById('adminAccountModeEmailLoginBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.setAccountComposerMode('email_login');
     });
     document.getElementById('adminAddAccountBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.addAccountFromForm();
@@ -437,11 +435,11 @@ function bindEventListeners() {
     document.getElementById('adminReplaceAccountsFileBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.bulkImportAccountsFromFile(true);
     });
-    document.getElementById('adminOpenOAuthModuleBtn').addEventListener('click', () => {
-        window.NotionAI.API.Settings.openOAuthImporter(false);
+    document.getElementById('adminOpenEmailLoginModuleBtn')?.addEventListener('click', () => {
+        window.NotionAI.API.Settings.openEmailLoginImporter(false);
     });
-    document.getElementById('adminOpenOAuthStartBtn').addEventListener('click', () => {
-        window.NotionAI.API.Settings.startAndFocusOAuthFlow();
+    document.getElementById('adminOpenEmailLoginStartBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.startAndFocusEmailLoginFlow();
     });
     document.getElementById('adminExportAccountsBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.exportAccountsToTextarea();
@@ -507,20 +505,20 @@ function bindEventListeners() {
             window.NotionAI.API.Settings.unlockChatAccess();
         }
     });
-    document.getElementById('oauthStartBtn').addEventListener('click', () => {
-        window.NotionAI.API.Settings.startOAuthFlow();
+    document.getElementById('emailLoginStartBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.startEmailLoginFlow();
     });
-    document.getElementById('oauthStartBtnPrimary')?.addEventListener('click', () => {
-        window.NotionAI.API.Settings.startAndFocusOAuthFlow();
+    document.getElementById('emailLoginStartBtnPrimary')?.addEventListener('click', () => {
+        window.NotionAI.API.Settings.startAndFocusEmailLoginFlow();
     });
-    document.getElementById('oauthRefreshStatusBtn').addEventListener('click', () => {
-        window.NotionAI.API.Settings.loadOAuthRefreshStatus();
+    document.getElementById('sessionRefreshStatusBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.loadSessionRefreshStatus();
     });
     document.getElementById('workspaceCreateStatusBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.loadWorkspaceCreateStatus();
     });
-    document.getElementById('oauthRefreshDiagnosticsBtn').addEventListener('click', () => {
-        window.NotionAI.API.Settings.loadOAuthRefreshDiagnostics();
+    document.getElementById('sessionRefreshDiagnosticsBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.loadSessionRefreshDiagnostics();
     });
     document.getElementById('workspaceDiagnosticsBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.loadWorkspaceDiagnostics();
@@ -540,13 +538,13 @@ function bindEventListeners() {
     document.getElementById('adminSnapshotBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.loadAdminSnapshot();
     });
-    document.getElementById('oauthFinalizeBtn').addEventListener('click', () => {
-        window.NotionAI.API.Settings.finalizeOAuthFromForm();
+    document.getElementById('emailLoginFinalizeBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.finalizeEmailLoginFromForm();
     });
-    document.getElementById('oauthParseCallbackBtn').addEventListener('click', () => {
-        window.NotionAI.API.Settings.parseManualCallbackUrl();
+    document.getElementById('emailLoginRetryBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.finalizeEmailLoginFromForm();
     });
-    document.getElementById('oauthImportCallbackBtn').addEventListener('click', () => {
+    document.getElementById('emailLoginImportBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.parseAndFinalizeCallbackUrl();
     });
 

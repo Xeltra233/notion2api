@@ -3,14 +3,10 @@ import ipaddress
 import secrets
 import socket
 import time
-from urllib.parse import urlencode
 from urllib.parse import urlparse
-from urllib.parse import urlunparse
 
 import requests
 from fastapi import APIRouter, Header, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse
-from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from app.account_pool import AccountPool
@@ -39,10 +35,6 @@ from app.config import (
     get_chat_auth,
     get_chat_session_ttl_seconds,
     get_config_store,
-    get_oauth_client_id,
-    get_oauth_client_secret,
-    get_oauth_redirect_uri,
-    has_oauth_credentials,
     should_auto_select_workspace,
     update_admin_credentials,
     update_chat_password,
@@ -61,11 +53,9 @@ _RUNTIME_SECRET_FIELDS = {
     "siliconflow_api_key",
     "auto_register_mail_api_key",
     "refresh_client_secret",
-    "oauth_client_secret",
 }
 _ACCOUNT_SECRET_FIELDS = {"token_v2"}
-_OAUTH_SECRET_FIELDS = {"access_token", "refresh_token"}
-_OAUTH_CALLBACK_TTL_SECONDS = 10 * 60
+_SESSION_SECRET_FIELDS = {"access_token", "refresh_token"}
 _EMAIL_LOGIN_SESSION_TTL_SECONDS = 15 * 60
 
 
@@ -86,9 +76,9 @@ def _redact_runtime_settings(settings: dict[str, Any]) -> dict[str, Any]:
     return redacted
 
 
-def _redact_oauth_payload(oauth: dict[str, Any]) -> dict[str, Any]:
-    redacted = dict(oauth)
-    for field in _OAUTH_SECRET_FIELDS:
+def _redact_session_payload(session_payload: dict[str, Any]) -> dict[str, Any]:
+    redacted = dict(session_payload)
+    for field in _SESSION_SECRET_FIELDS:
         raw_value = redacted.get(field, "")
         redacted[field] = _mask_secret(raw_value)
         redacted[f"has_{field}"] = bool(str(raw_value or "").strip())
@@ -101,8 +91,10 @@ def _redact_account_payload(account: dict[str, Any]) -> dict[str, Any]:
         raw_value = redacted.get(field, "")
         redacted[field] = _mask_secret(raw_value)
         redacted[f"has_{field}"] = bool(str(raw_value or "").strip())
-    oauth = redacted.get("oauth") if isinstance(redacted.get("oauth"), dict) else {}
-    redacted["oauth"] = _redact_oauth_payload(oauth)
+    session_payload = (
+        redacted.get("session") if isinstance(redacted.get("session"), dict) else {}
+    )
+    redacted["session"] = _redact_session_payload(session_payload)
     health = (
         redacted.get("health") if isinstance(redacted.get("health"), dict) else None
     )
@@ -113,8 +105,10 @@ def _redact_account_payload(account: dict[str, Any]) -> dict[str, Any]:
 
 def _redact_health_payload(health: dict[str, Any]) -> dict[str, Any]:
     redacted = dict(health)
-    oauth = redacted.get("oauth") if isinstance(redacted.get("oauth"), dict) else {}
-    redacted["oauth"] = _redact_oauth_payload(oauth)
+    session_payload = (
+        redacted.get("session") if isinstance(redacted.get("session"), dict) else {}
+    )
+    redacted["session"] = _redact_session_payload(session_payload)
     return redacted
 
 
@@ -512,7 +506,7 @@ def _build_pending_hydration_operator_guidance(
             if last_refresh_action == "manual_reauthorize":
                 return (
                     "Refresh recovery already confirmed this account needs manual reauthorization.",
-                    "Open a new OAuth callback flow for this account, finalize it, then rerun hydration retry.",
+                    "Open a new email-login flow for this account, complete session import, then rerun hydration retry.",
                 )
             if last_refresh_failure in {
                 "unauthorized",
@@ -522,11 +516,11 @@ def _build_pending_hydration_operator_guidance(
             }:
                 return (
                     "Refresh recovery failed, so this account now needs manual reauthorization.",
-                    "Replace the invalid OAuth session through callback finalize, then rerun hydration retry.",
+                    "Replace the invalid session through a fresh email-login import, then rerun hydration retry.",
                 )
         return (
             "Reauthorize this account before retrying hydration.",
-            "Refresh OAuth credentials or rerun callback finalize, then run hydration retry again.",
+            "Refresh session credentials or rerun email-login import, then run hydration retry again.",
         )
     if (
         retry_policy in {"upstream_transient_failure", "upstream_rate_limit"}
@@ -675,7 +669,7 @@ def _build_register_automation_guidance(automation: dict[str, Any]) -> dict[str,
     if operator_focus == "pending_reauth_due":
         message = (
             f"{pending_due_reauthorize or pending_due} due hydration account(s) require reauthorization because authorization review failed. "
-            "Auto-register stays paused until their OAuth or permission state is repaired."
+            "Auto-register stays paused until their session or permission state is repaired."
         )
         next_step = "Reauthorize those accounts first, then rerun hydration retry to confirm they can reach a real workspace."
         severity = "warning"
@@ -858,9 +852,6 @@ class RuntimeSettingsRequest(BaseModel):
     workspace_create_dry_run: bool = True
     workspace_creation_template_space_id: str = Field(default="")
     account_probe_interval_seconds: int = 300
-    oauth_client_id: str = Field(default="")
-    oauth_client_secret: str | None = Field(default=None)
-    oauth_redirect_uri: str = Field(default="")
     refresh_execution_mode: str = Field(default="manual")
     refresh_request_url: str = Field(default="")
     refresh_client_id: str = Field(default="")
@@ -911,76 +902,6 @@ class AccountImportRequest(BaseModel):
 
 class AccountReplaceRequest(BaseModel):
     accounts: list[AccountUpsertRequest] = Field(default_factory=list)
-
-
-class OAuthAccountImportRequest(BaseModel):
-    token_v2: str
-    space_id: str = ""
-    user_id: str
-    space_view_id: str = ""
-    user_name: str = "user"
-    user_email: str = ""
-    plan_type: str = "unknown"
-    access_token: str = ""
-    refresh_token: str = ""
-    expires_at: int | None = None
-    provider: str = "notion-web"
-    scopes: list[str] = Field(default_factory=list)
-    source: str = "oauth"
-    notes: str = ""
-    tags: list[str] = Field(default_factory=list)
-
-
-class OAuthCallbackPayload(BaseModel):
-    token_v2: str
-    user_id: str
-    space_id: str = ""
-    space_view_id: str = ""
-    user_name: str = "user"
-    user_email: str = ""
-    access_token: str = ""
-    refresh_token: str = ""
-    expires_at: int | None = None
-    provider: str = "notion-web"
-    scopes: list[str] = Field(default_factory=list)
-    plan_type: str = "unknown"
-    source: str = "oauth_callback"
-    notes: str = ""
-    tags: list[str] = Field(default_factory=list)
-
-
-class OAuthStartRequest(BaseModel):
-    redirect_uri: str = ""
-    state: str = ""
-    provider: str = "notion-web"
-
-
-class EmailCodeSendRequest(BaseModel):
-    email: str
-
-
-class EmailCodeVerifyRequest(BaseModel):
-    email: str
-    code: str
-
-
-class OAuthFinalizeRequest(BaseModel):
-    token_v2: str
-    user_id: str
-    redirect_uri: str = ""
-    state: str = ""
-    provider: str = "notion-web"
-    space_id: str = ""
-    space_view_id: str = ""
-    user_name: str = "user"
-    user_email: str = ""
-    access_token: str = ""
-    refresh_token: str = ""
-    expires_at: int | None = None
-    scopes: list[str] = Field(default_factory=list)
-    plan_type: str = "unknown"
-    notes: str = ""
-    tags: list[str] = Field(default_factory=list)
 
 
 class EmailCodeStartRequest(BaseModel):
@@ -1050,6 +971,31 @@ def _create_admin_session(request: Request, username: str) -> dict[str, Any]:
     }
     getattr(request.app.state, "admin_sessions", {})[token] = session
     return session
+
+
+def _normalize_account_status(status: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(status)
+    if "oauth_expired" in normalized and "session_expired" not in normalized:
+        normalized["session_expired"] = bool(normalized.get("oauth_expired"))
+    if "oauth_expires_at" in normalized and "session_expires_at" not in normalized:
+        normalized["session_expires_at"] = normalized.get("oauth_expires_at")
+    normalized.pop("oauth_expired", None)
+    normalized.pop("oauth_expires_at", None)
+    return normalized
+
+
+def _normalize_account_payload_dict(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload)
+    session_payload = normalized.get("session")
+    if not isinstance(session_payload, dict) or not session_payload:
+        legacy_oauth = normalized.get("oauth")
+        if isinstance(legacy_oauth, dict):
+            normalized["session"] = dict(legacy_oauth)
+    status_payload = normalized.get("status")
+    if isinstance(status_payload, dict):
+        normalized["status"] = _normalize_account_status(status_payload)
+    normalized.pop("oauth", None)
+    return normalized
 
 
 def _prune_chat_sessions(request: Request) -> None:
@@ -1202,95 +1148,6 @@ def _get_usage_store(request: Request) -> UsageStore:
         usage_store = UsageStore()
         request.app.state.usage_store = usage_store
     return usage_store
-
-
-def _build_saved_oauth_account(
-    payload: OAuthAccountImportRequest | OAuthCallbackPayload,
-) -> dict[str, Any]:
-    return {
-        "token_v2": payload.token_v2,
-        "space_id": payload.space_id,
-        "user_id": payload.user_id,
-        "space_view_id": payload.space_view_id,
-        "user_name": payload.user_name,
-        "user_email": payload.user_email,
-        "plan_type": payload.plan_type,
-        "enabled": True,
-        "source": payload.source,
-        "notes": payload.notes,
-        "tags": payload.tags,
-        "oauth": {
-            "provider": payload.provider,
-            "access_token": payload.access_token,
-            "refresh_token": payload.refresh_token,
-            "expires_at": payload.expires_at,
-            "scopes": payload.scopes,
-        },
-    }
-
-
-def _prune_oauth_callback_sessions(request: Request) -> None:
-    sessions = getattr(request.app.state, "oauth_callback_sessions", {})
-    now_ts = int(time.time())
-    expired_tokens = [
-        token
-        for token, session in sessions.items()
-        if int(session.get("expires_at") or 0) <= now_ts
-    ]
-    for token in expired_tokens:
-        sessions.pop(token, None)
-
-
-def _register_oauth_callback_session(
-    request: Request, *, provider: str, redirect_uri: str, state: str
-) -> dict[str, Any]:
-    _prune_oauth_callback_sessions(request)
-    now_ts = int(time.time())
-    session = {
-        "provider": str(provider or "notion-web").strip() or "notion-web",
-        "redirect_uri": redirect_uri,
-        "state": state,
-        "created_at": now_ts,
-        "expires_at": now_ts + _OAUTH_CALLBACK_TTL_SECONDS,
-        "callback_payload": {},
-        "status": "pending_callback",
-    }
-    getattr(request.app.state, "oauth_callback_sessions", {})[state] = session
-    return session
-
-
-def _get_oauth_callback_session(request: Request, state: str) -> dict[str, Any] | None:
-    _prune_oauth_callback_sessions(request)
-    return getattr(request.app.state, "oauth_callback_sessions", {}).get(state)
-
-
-def _store_oauth_callback_session_payload(
-    request: Request, *, state: str, payload: dict[str, Any]
-) -> dict[str, Any]:
-    sessions = getattr(request.app.state, "oauth_callback_sessions", {})
-    session = _get_oauth_callback_session(request, state)
-    if not session:
-        raise HTTPException(status_code=404, detail="OAuth callback session not found")
-    session["callback_payload"] = payload
-    session["status"] = "callback_received"
-    sessions[state] = session
-    return session
-
-
-def _consume_oauth_callback_session_payload(
-    request: Request, state: str
-) -> dict[str, Any] | None:
-    sessions = getattr(request.app.state, "oauth_callback_sessions", {})
-    session = _get_oauth_callback_session(request, state)
-    if not session:
-        return None
-    payload = (
-        session.get("callback_payload")
-        if isinstance(session.get("callback_payload"), dict)
-        else None
-    )
-    sessions.pop(state, None)
-    return payload
 
 
 def _prune_email_login_sessions(request: Request) -> None:
@@ -1501,7 +1358,7 @@ def _build_email_code_account(
         "source": source,
         "notes": notes,
         "tags": tags,
-        "oauth": {},
+        "session": {},
         "workspace": {},
         "status": {},
     }
@@ -1666,68 +1523,8 @@ def _default_local_redirect_uri(request: Request) -> str:
             .lower()
         )
         scheme = forwarded_proto or request.url.scheme or "http"
-        return _normalize_callback_redirect_uri(f"{scheme}://{host}", fallback)
+        return f"{scheme}://{host}"
     return fallback
-
-
-def _build_callback_redirect_url(
-    target_redirect_uri: str, query_params: dict[str, str]
-) -> str:
-    filtered = {
-        key: value
-        for key, value in query_params.items()
-        if value and key not in {"redirect_uri"}
-    }
-    if not filtered:
-        return target_redirect_uri
-    separator = "&" if "?" in target_redirect_uri else "?"
-    return f"{target_redirect_uri}{separator}{urlencode(filtered)}"
-
-
-def _build_oauth_start_payload(
-    request: Request,
-    *,
-    redirect_uri: str,
-    state: str,
-    provider: str,
-) -> dict[str, Any]:
-    base_redirect_uri = _default_local_redirect_uri(request).rstrip("/")
-    callback_bridge_url = _build_callback_redirect_url(
-        f"{base_redirect_uri}/v1/admin/oauth/callback",
-        {"redirect_uri": redirect_uri, "state": state, "provider": provider},
-    )
-    oauth_client_id = get_oauth_client_id()
-    oauth_client_secret = get_oauth_client_secret()
-    configured_redirect_uri = get_oauth_redirect_uri() or redirect_uri
-    if oauth_client_id and oauth_client_secret:
-        authorization_url = (
-            f"https://api.notion.com/v1/oauth/authorize?"
-            f"client_id={oauth_client_id}&"
-            f"redirect_uri={urlencode({'': configured_redirect_uri}).lstrip('=')}&"
-            f"response_type=code&"
-            f"state={state}"
-        )
-        return {
-            "provider": provider,
-            "redirect_uri": configured_redirect_uri,
-            "state": state,
-            "authorization_url": authorization_url,
-            "callback_bridge_url": callback_bridge_url,
-            "oauth_client_id": oauth_client_id,
-            "status": "oauth_authorization_url_ready",
-            "message": "Notion OAuth 授权链接已生成。请点击链接完成授权，系统将自动处理 callback 并获取 token。",
-            "flow_type": "standard_oauth",
-        }
-    return {
-        "provider": provider,
-        "redirect_uri": redirect_uri,
-        "state": state,
-        "authorization_url": "",
-        "callback_bridge_url": callback_bridge_url,
-        "status": "manual_callback_required",
-        "message": "当前环境未配置真实 Notion OAuth App。请在完成网页登录后，将 localhost callback URL 粘回管理面板完成导入。",
-        "flow_type": "manual_session",
-    }
 
 
 @router.get("/admin/request-templates")
@@ -1803,11 +1600,6 @@ async def admin_report(
             "account_probe_interval_seconds": config.get(
                 "account_probe_interval_seconds", 300
             ),
-            "oauth_client_id": config.get("oauth_client_id", ""),
-            "oauth_client_secret": config.get("oauth_client_secret", ""),
-            "oauth_redirect_uri": config.get("oauth_redirect_uri", ""),
-            "has_oauth_credentials": bool(config.get("oauth_client_id"))
-            and bool(config.get("oauth_client_secret")),
             "refresh_execution_mode": config.get("refresh_execution_mode", "manual"),
             "refresh_request_url": config.get("refresh_request_url", ""),
             "refresh_client_id": config.get("refresh_client_id", ""),
@@ -1973,10 +1765,12 @@ def _build_account_view(
             if isinstance(account.get("workspace"), dict)
             else {}
         )
-        status = (
+        status = _normalize_account_status(
             account.get("status") if isinstance(account.get("status"), dict) else {}
         )
-        oauth = account.get("oauth") if isinstance(account.get("oauth"), dict) else {}
+        session_payload = (
+            account.get("session") if isinstance(account.get("session"), dict) else {}
+        )
         status_has_needs_reauth = "needs_reauth" in status
         status_has_reauthorize_required = "reauthorize_required" in status
 
@@ -2025,15 +1819,20 @@ def _build_account_view(
             plan_category = "paid"
         else:
             plan_category = normalized_plan or normalized_tier or "unknown"
-        oauth_expired = bool(
-            status.get("oauth_expired")
-            if "oauth_expired" in status
-            else oauth.get("expired", False)
+        status_last_refresh_at = int(status.get("last_refresh_at") or 0)
+        health_last_refresh_at = int(health.get("last_refresh_at") or 0)
+        prefer_persisted_refresh_state = (
+            status_last_refresh_at >= health_last_refresh_at
+        )
+        session_expired = bool(
+            status.get("session_expired")
+            if prefer_persisted_refresh_state or "session_expired" in status
+            else session_payload.get("expired", False)
         )
         needs_refresh = bool(
             status.get("needs_refresh")
-            if "needs_refresh" in status
-            else oauth.get("needs_refresh", False)
+            if prefer_persisted_refresh_state or "needs_refresh" in status
+            else session_payload.get("needs_refresh", False)
         )
         raw_pool_state = str(health.get("state") or status.get("state") or "unknown")
         no_workspace = workspace_count == 0
@@ -2047,23 +1846,23 @@ def _build_account_view(
         )
         if workspace_state == "ready" or workspace_count > 0:
             pool_state = "active"
-        elif refresh_probe_ok and not oauth_expired and not needs_refresh:
+        elif refresh_probe_ok and not session_expired and not needs_refresh:
             pool_state = "no_workspace" if no_workspace else "active"
         elif (
-            not oauth_expired
+            not session_expired
             and not needs_refresh
             and str(status.get("last_refresh_action") or "").strip()
         ):
             pool_state = "no_workspace" if no_workspace else "active"
-        elif oauth_expired or needs_refresh:
+        elif session_expired or needs_refresh:
             pool_state = raw_pool_state
         else:
             pool_state = raw_pool_state
 
         if not enabled:
             effective_state = "disabled"
-        elif oauth_expired and workspace_state != "ready" and no_workspace:
-            effective_state = "oauth_expired"
+        elif session_expired and workspace_state != "ready" and no_workspace:
+            effective_state = "session_expired"
         elif needs_refresh and workspace_state != "ready" and no_workspace:
             effective_state = "needs_refresh"
         elif workspace_state in {
@@ -2122,13 +1921,13 @@ def _build_account_view(
                     or [],
                     "subscription_tier": subscription_tier,
                 },
-                "oauth": {
+                "session": {
                     **(
-                        health.get("oauth")
-                        if isinstance(health.get("oauth"), dict)
+                        health.get("session")
+                        if isinstance(health.get("session"), dict)
                         else {}
                     ),
-                    **oauth,
+                    **session_payload,
                 },
                 "status": {
                     **status,
@@ -2138,7 +1937,7 @@ def _build_account_view(
                     "usable": usable,
                     "enabled": enabled,
                     "no_workspace": no_workspace,
-                    "oauth_expired": oauth_expired,
+                    "session_expired": session_expired,
                     "needs_refresh": needs_refresh,
                     "needs_reauth": bool(
                         status.get("needs_reauth", False)
@@ -2161,8 +1960,10 @@ def _build_account_view(
                     "last_success_at": health.get(
                         "last_success_at", status.get("last_success_at", 0)
                     ),
-                    "last_refresh_at": status.get("last_refresh_at")
-                    or health.get("last_refresh_at", 0),
+                    "last_refresh_at": max(
+                        status.get("last_refresh_at", 0),
+                        health.get("last_refresh_at", 0),
+                    ),
                     "last_refresh_error": status.get("last_refresh_error", "")
                     if "last_refresh_error" in status
                     else health.get("last_refresh_error", ""),
@@ -2220,9 +2021,9 @@ def _build_account_view(
                         else health.get("reauthorize_required", False)
                     )
                     or hydration_retry_policy == "reauthorize_or_permission_review",
-                    "oauth_expires_at": oauth.get("expires_at")
-                    or status.get("oauth_expires_at")
-                    or health.get("oauth_expires_at")
+                    "session_expires_at": session_payload.get("expires_at")
+                    or status.get("session_expires_at")
+                    or health.get("session_expires_at")
                     or 0,
                     "last_probe_content_type": status.get(
                         "last_probe_content_type", ""
@@ -2270,7 +2071,7 @@ def _build_account_view_with_history(
 def _build_alerts(accounts: list[dict[str, Any]]) -> dict[str, Any]:
     alert_types = {
         "invalid": [],
-        "oauth_expired": [],
+        "session_expired": [],
         "needs_refresh": [],
         "no_workspace": [],
         "workspace_creation_pending": [],
@@ -2301,10 +2102,10 @@ def _build_alerts(accounts: list[dict[str, Any]]) -> dict[str, Any]:
 
         if effective_state == "invalid" or str(status.get("state") or "") == "invalid":
             alert_types["invalid"].append(alert_payload)
-        if effective_state == "oauth_expired" or bool(
-            status.get("oauth_expired", False)
+        if effective_state == "session_expired" or bool(
+            status.get("session_expired", False)
         ):
-            alert_types["oauth_expired"].append(alert_payload)
+            alert_types["session_expired"].append(alert_payload)
         if effective_state == "needs_refresh" or bool(
             status.get("needs_refresh", False)
         ):
@@ -2485,7 +2286,7 @@ def _summarize_action_payload(payload: dict[str, Any]) -> dict[str, Any]:
     retryable = category in {"rate_limited", "timeout", "server_error", "network_error"}
     if reauthorize_required:
         suggested_action = "reauthorize_account"
-        remediation_message = "OAuth credentials are no longer accepted; run reauthorization before retrying."
+        remediation_message = "Session credentials are no longer accepted; run reauthorization before retrying."
     elif category == "rate_limited":
         suggested_action = "retry_later"
         remediation_message = (
@@ -2899,25 +2700,28 @@ def _write_workspace_action_result_to_account(
             _apply_workspace_success_result(
                 account, workspace, status, recognized_fields
             )
-            oauth = (
-                account.get("oauth") if isinstance(account.get("oauth"), dict) else {}
+            session_payload = (
+                account.get("session")
+                if isinstance(account.get("session"), dict)
+                else {}
             )
-            if bool(str(oauth.get("access_token") or "").strip()) or bool(
-                str(oauth.get("refresh_token") or "").strip()
+            if bool(str(session_payload.get("access_token") or "").strip()) or bool(
+                str(session_payload.get("refresh_token") or "").strip()
             ):
-                oauth["expired"] = False
-                oauth["needs_refresh"] = False
-                oauth["has_access_token"] = bool(
-                    str(oauth.get("access_token") or "").strip()
+                session_payload["expired"] = False
+                session_payload["needs_refresh"] = False
+                session_payload["has_access_token"] = bool(
+                    str(session_payload.get("access_token") or "").strip()
                 )
-                oauth["has_refresh_token"] = bool(
-                    str(oauth.get("refresh_token") or "").strip()
+                session_payload["has_refresh_token"] = bool(
+                    str(session_payload.get("refresh_token") or "").strip()
                 )
-                oauth["has_credentials"] = bool(
-                    oauth.get("has_access_token") or oauth.get("has_refresh_token")
+                session_payload["has_credentials"] = bool(
+                    session_payload.get("has_access_token")
+                    or session_payload.get("has_refresh_token")
                 )
-                account["oauth"] = oauth
-                status["oauth_expired"] = False
+                account["session"] = dict(session_payload)
+                status["session_expired"] = False
                 status["needs_refresh"] = False
                 status["needs_reauth"] = False
                 status["reauthorize_required"] = False
@@ -2959,57 +2763,61 @@ def _write_refresh_action_result_to_account(
         status = (
             account.get("status") if isinstance(account.get("status"), dict) else {}
         )
-        oauth = account.get("oauth") if isinstance(account.get("oauth"), dict) else {}
+        session_payload = (
+            account.get("session") if isinstance(account.get("session"), dict) else {}
+        )
         recognized_fields = (
             result.get("recognized_fields")
             if isinstance(result.get("recognized_fields"), dict)
             else {}
         )
         now_ts = int(time.time())
-        previous_expires_at = _safe_int(oauth.get("expires_at"))
+        previous_expires_at = _safe_int(session_payload.get("expires_at"))
 
         status["last_refresh_at"] = now_ts
         status["last_refresh_action"] = str(result.get("action") or action)
         status["last_refresh_error"] = str(result.get("reason") or "")
 
         if "access_token" in recognized_fields:
-            oauth["access_token"] = recognized_fields.get("access_token")
+            session_payload["access_token"] = recognized_fields.get("access_token")
         if "refresh_token" in recognized_fields:
-            oauth["refresh_token"] = recognized_fields.get("refresh_token")
+            session_payload["refresh_token"] = recognized_fields.get("refresh_token")
         if "expires_in" in recognized_fields:
             expires_in = _safe_int(recognized_fields.get("expires_in"))
-            oauth["expires_in"] = expires_in
+            session_payload["expires_in"] = expires_in
             if expires_in is not None and expires_in >= 0:
-                oauth["expires_at"] = now_ts + expires_in
-        oauth_expires_at = _safe_int(oauth.get("expires_at"))
-        if oauth_expires_at is None:
-            oauth_expires_at = previous_expires_at
+                session_payload["expires_at"] = now_ts + expires_in
+        session_expires_at = _safe_int(session_payload.get("expires_at"))
+        if session_expires_at is None:
+            session_expires_at = previous_expires_at
         if "scope" in recognized_fields:
-            oauth["scope"] = recognized_fields.get("scope")
+            session_payload["scope"] = recognized_fields.get("scope")
         if "token_type" in recognized_fields:
-            oauth["token_type"] = recognized_fields.get("token_type")
+            session_payload["token_type"] = recognized_fields.get("token_type")
 
-        has_access_token = bool(str(oauth.get("access_token") or "").strip())
-        has_refresh_token = bool(str(oauth.get("refresh_token") or "").strip())
+        has_access_token = bool(str(session_payload.get("access_token") or "").strip())
+        has_refresh_token = bool(
+            str(session_payload.get("refresh_token") or "").strip()
+        )
 
         if bool(result.get("ok", False)) and has_access_token:
-            oauth["expired"] = False
-            oauth["needs_refresh"] = bool(
-                oauth_expires_at is not None and oauth_expires_at - now_ts <= 600
+            session_payload["expired"] = False
+            session_payload["needs_refresh"] = bool(
+                session_expires_at is not None and session_expires_at - now_ts <= 600
             )
-            oauth["has_access_token"] = True
-            oauth["has_refresh_token"] = has_refresh_token
-            oauth["has_credentials"] = True
-            oauth["last_probe_error"] = ""
-            oauth["last_probe_error_description"] = ""
-            status["oauth_expired"] = False
-            status["needs_refresh"] = bool(oauth.get("needs_refresh", False))
+            session_payload["has_access_token"] = True
+            session_payload["has_refresh_token"] = has_refresh_token
+            session_payload["has_credentials"] = True
+            session_payload["last_probe_error"] = ""
+            session_payload["last_probe_error_description"] = ""
+            status["session_expired"] = False
+            status["needs_refresh"] = bool(session_payload.get("needs_refresh", False))
             status["needs_reauth"] = False
             status["reauthorize_required"] = False
             status["last_refresh_error"] = ""
             status["last_refresh_failure_category"] = "success"
         else:
-            oauth["needs_refresh"] = bool(has_refresh_token)
+            session_payload["needs_refresh"] = bool(has_refresh_token)
             status["needs_refresh"] = bool(has_refresh_token)
             outcome_label, pool_state, needs_reauth = _classify_formal_action_outcome(
                 "refresh", result, recognized_fields
@@ -3021,9 +2829,9 @@ def _write_refresh_action_result_to_account(
             status["needs_reauth"] = needs_reauth
             status["reauthorize_required"] = needs_reauth
             if not needs_reauth:
-                status["oauth_expired"] = bool(has_refresh_token)
+                status["session_expired"] = bool(has_refresh_token)
 
-        account["oauth"] = oauth
+        account["session"] = dict(session_payload)
         account["status"] = status
         updated = True
         break
@@ -3076,7 +2884,9 @@ def _write_probe_result_to_account(
                 "last_probe_at": int(time.time()),
             }
         )
-        oauth = account.get("oauth") if isinstance(account.get("oauth"), dict) else {}
+        session_payload = (
+            account.get("session") if isinstance(account.get("session"), dict) else {}
+        )
         workspace = (
             account.get("workspace")
             if isinstance(account.get("workspace"), dict)
@@ -3089,7 +2899,7 @@ def _write_probe_result_to_account(
                 else {}
             )
             now_ts = int(time.time())
-            previous_expires_at = _safe_int(oauth.get("expires_at"))
+            previous_expires_at = _safe_int(session_payload.get("expires_at"))
             refresh_info.update(
                 {
                     "status_code": result.get("status_code"),
@@ -3105,44 +2915,59 @@ def _write_probe_result_to_account(
             status["last_refresh_at"] = now_ts
             status["last_refresh_action"] = str(result.get("action") or action)
             if "access_token" in recognized_fields:
-                oauth["probe_access_token"] = recognized_fields.get("access_token")
-                oauth["access_token"] = recognized_fields.get("access_token")
+                session_payload["probe_access_token"] = recognized_fields.get(
+                    "access_token"
+                )
+                session_payload["access_token"] = recognized_fields.get("access_token")
             if "refresh_token" in recognized_fields:
-                oauth["probe_refresh_token"] = recognized_fields.get("refresh_token")
-                oauth["refresh_token"] = recognized_fields.get("refresh_token")
+                session_payload["probe_refresh_token"] = recognized_fields.get(
+                    "refresh_token"
+                )
+                session_payload["refresh_token"] = recognized_fields.get(
+                    "refresh_token"
+                )
             if "expires_in" in recognized_fields:
                 expires_in = _safe_int(recognized_fields.get("expires_in"))
-                oauth["probe_expires_in"] = recognized_fields.get("expires_in")
-                oauth["expires_in"] = expires_in
+                session_payload["probe_expires_in"] = recognized_fields.get(
+                    "expires_in"
+                )
+                session_payload["expires_in"] = expires_in
                 if expires_in is not None and expires_in >= 0:
-                    oauth["expires_at"] = now_ts + expires_in
-            oauth_expires_at = _safe_int(oauth.get("expires_at"))
-            if oauth_expires_at is None:
-                oauth_expires_at = previous_expires_at
+                    session_payload["expires_at"] = now_ts + expires_in
+            session_expires_at = _safe_int(session_payload.get("expires_at"))
+            if session_expires_at is None:
+                session_expires_at = previous_expires_at
             if recognized_fields.get("error"):
-                oauth["last_probe_error"] = recognized_fields.get("error")
+                session_payload["last_probe_error"] = recognized_fields.get("error")
             if recognized_fields.get("error_description"):
-                oauth["last_probe_error_description"] = recognized_fields.get(
+                session_payload["last_probe_error_description"] = recognized_fields.get(
                     "error_description"
                 )
             if recognized_fields.get("scope"):
-                oauth["scope"] = recognized_fields.get("scope")
+                session_payload["scope"] = recognized_fields.get("scope")
             if recognized_fields.get("token_type"):
-                oauth["token_type"] = recognized_fields.get("token_type")
-            has_access_token = bool(str(oauth.get("access_token") or "").strip())
-            has_refresh_token = bool(str(oauth.get("refresh_token") or "").strip())
+                session_payload["token_type"] = recognized_fields.get("token_type")
+            has_access_token = bool(
+                str(session_payload.get("access_token") or "").strip()
+            )
+            has_refresh_token = bool(
+                str(session_payload.get("refresh_token") or "").strip()
+            )
             if bool(result.get("ok", False)) and has_access_token:
-                oauth["expired"] = False
-                oauth["needs_refresh"] = bool(
-                    oauth_expires_at is not None and oauth_expires_at - now_ts <= 600
+                session_payload["expired"] = False
+                session_payload["needs_refresh"] = bool(
+                    session_expires_at is not None
+                    and session_expires_at - now_ts <= 600
                 )
-                oauth["has_access_token"] = True
-                oauth["has_refresh_token"] = has_refresh_token
-                oauth["has_credentials"] = True
-                oauth["last_probe_error"] = ""
-                oauth["last_probe_error_description"] = ""
-                status["oauth_expired"] = False
-                status["needs_refresh"] = bool(oauth.get("needs_refresh", False))
+                session_payload["has_access_token"] = True
+                session_payload["has_refresh_token"] = has_refresh_token
+                session_payload["has_credentials"] = True
+                session_payload["last_probe_error"] = ""
+                session_payload["last_probe_error_description"] = ""
+                status["session_expired"] = False
+                status["needs_refresh"] = bool(
+                    session_payload.get("needs_refresh", False)
+                )
                 status["needs_reauth"] = False
                 status["reauthorize_required"] = False
                 status["last_refresh_error"] = ""
@@ -3156,7 +2981,7 @@ def _write_probe_result_to_account(
                     or ""
                 )
                 status["last_refresh_error"] = error_message
-                oauth["needs_refresh"] = True
+                session_payload["needs_refresh"] = True
                 status["needs_refresh"] = True
                 if str(recognized_fields.get("error") or "").strip().lower() in {
                     "invalid_grant",
@@ -3166,7 +2991,7 @@ def _write_probe_result_to_account(
                 }:
                     status["needs_reauth"] = True
                     status["reauthorize_required"] = True
-            account["oauth"] = oauth
+            account["session"] = dict(session_payload)
         if action == "workspace_probe":
             workspace_info = (
                 status.get("last_workspace_probe")
@@ -3269,19 +3094,23 @@ def _build_refresh_diagnostics(accounts: list[dict[str, Any]]) -> dict[str, Any]
     }
 
     for account in accounts:
-        oauth = account.get("oauth") if isinstance(account.get("oauth"), dict) else {}
+        session_payload = (
+            account.get("session") if isinstance(account.get("session"), dict) else {}
+        )
         status = (
             account.get("status") if isinstance(account.get("status"), dict) else {}
         )
         has_refresh_token = bool(
-            oauth.get("has_refresh_token")
-            or str(oauth.get("refresh_token") or "").strip()
+            session_payload.get("has_refresh_token")
+            or str(session_payload.get("refresh_token") or "").strip()
         )
         expired = bool(
-            oauth.get("expired", False) or status.get("oauth_expired", False)
+            session_payload.get("expired", False)
+            or status.get("session_expired", False)
         )
         needs_refresh = bool(
-            oauth.get("needs_refresh", False) or status.get("needs_refresh", False)
+            session_payload.get("needs_refresh", False)
+            or status.get("needs_refresh", False)
         )
         reauthorize_required = bool(
             status.get("reauthorize_required", False)
@@ -3620,11 +3449,6 @@ async def get_admin_config(
             ),
             "auto_register_mail_api_key": config.get("auto_register_mail_api_key", ""),
             "auto_register_domain": config.get("auto_register_domain", ""),
-            "oauth_client_id": config.get("oauth_client_id", ""),
-            "oauth_client_secret": config.get("oauth_client_secret", ""),
-            "oauth_redirect_uri": config.get("oauth_redirect_uri", ""),
-            "has_oauth_credentials": bool(config.get("oauth_client_id"))
-            and bool(config.get("oauth_client_secret")),
             "refresh_execution_mode": config.get("refresh_execution_mode", "manual"),
             "refresh_request_url": config.get("refresh_request_url", ""),
             "refresh_client_id": config.get("refresh_client_id", ""),
@@ -3778,8 +3602,6 @@ async def update_runtime_settings(
         "auto_register_mail_provider": payload.auto_register_mail_provider,
         "auto_register_mail_base_url": payload.auto_register_mail_base_url,
         "auto_register_domain": payload.auto_register_domain,
-        "oauth_client_id": payload.oauth_client_id,
-        "oauth_redirect_uri": payload.oauth_redirect_uri,
         "refresh_execution_mode": payload.refresh_execution_mode,
         "refresh_request_url": refresh_request_url,
         "refresh_client_id": payload.refresh_client_id,
@@ -3798,8 +3620,6 @@ async def update_runtime_settings(
         updates["auto_register_mail_api_key"] = payload.auto_register_mail_api_key
     if payload.refresh_client_secret is not None:
         updates["refresh_client_secret"] = payload.refresh_client_secret
-    if payload.oauth_client_secret is not None:
-        updates["oauth_client_secret"] = payload.oauth_client_secret
     config.update(updates)
     saved = store.save_config(config)
     if payload.chat_password is not None:
@@ -3850,7 +3670,9 @@ async def upsert_account(
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
     _ensure_admin(request, x_admin_session)
-    saved = get_config_store().upsert_account(payload.model_dump(exclude_none=True))
+    saved = get_config_store().upsert_account(
+        _normalize_account_payload_dict(payload.model_dump(exclude_none=True))
+    )
     _rebuild_pool(request)
     return {"ok": True, "account": _redact_account_payload(saved)}
 
@@ -3901,7 +3723,11 @@ async def import_accounts(
     store = get_config_store()
     saved_accounts = []
     for item in payload.accounts:
-        saved_accounts.append(store.upsert_account(item.model_dump(exclude_none=True)))
+        saved_accounts.append(
+            store.upsert_account(
+                _normalize_account_payload_dict(item.model_dump(exclude_none=True))
+            )
+        )
     _rebuild_pool(request)
     return {
         "ok": True,
@@ -3919,7 +3745,10 @@ async def replace_accounts(
     _ensure_admin(request, x_admin_session)
     store = get_config_store()
     saved = store.set_accounts(
-        [item.model_dump(exclude_none=True) for item in payload.accounts]
+        [
+            _normalize_account_payload_dict(item.model_dump(exclude_none=True))
+            for item in payload.accounts
+        ]
     )
     _rebuild_pool(request)
     return {
@@ -3961,313 +3790,6 @@ async def export_accounts(
     }
 
 
-@router.post("/admin/accounts/oauth")
-async def import_oauth_account(
-    request: Request,
-    payload: OAuthAccountImportRequest,
-    x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
-):
-    _ensure_admin(request, x_admin_session)
-    saved = get_config_store().upsert_account(_build_saved_oauth_account(payload))
-    _rebuild_pool(request)
-    return {"ok": True, "account": _redact_account_payload(saved)}
-
-
-@router.post("/admin/oauth/callback")
-async def oauth_callback_import(
-    request: Request,
-    payload: OAuthCallbackPayload,
-    x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
-):
-    _ensure_admin(request, x_admin_session)
-    saved = get_config_store().upsert_account(_build_saved_oauth_account(payload))
-    _rebuild_pool(request)
-    return {
-        "ok": True,
-        "account": _redact_account_payload(saved),
-        "source": "oauth_callback",
-    }
-
-
-@router.get("/admin/oauth/callback")
-async def oauth_callback_redirect(request: Request):
-    fallback_redirect_uri = _default_local_redirect_uri(request)
-    redirect_uri = _normalize_callback_redirect_uri(
-        request.query_params.get("redirect_uri") or "",
-        fallback_redirect_uri,
-    )
-    state = str(request.query_params.get("state") or "").strip()
-    code = str(request.query_params.get("code") or "").strip()
-    oauth_client_id = get_oauth_client_id()
-    oauth_client_secret = get_oauth_client_secret()
-    configured_redirect_uri = get_oauth_redirect_uri() or redirect_uri
-    if code and oauth_client_id and oauth_client_secret:
-        token_result = _exchange_oauth_code_for_token(
-            code=code,
-            redirect_uri=configured_redirect_uri,
-            client_id=oauth_client_id,
-            client_secret=oauth_client_secret,
-        )
-        if token_result.get("ok") and token_result.get("access_token"):
-            user_info = _fetch_notion_user_info(token_result.get("access_token"))
-            callback_payload = {
-                "token_v2": "",
-                "user_id": str(user_info.get("user_id") or "").strip(),
-                "space_id": str(user_info.get("space_id") or "").strip(),
-                "user_email": str(user_info.get("user_email") or "").strip(),
-                "access_token": str(token_result.get("access_token") or "").strip(),
-                "refresh_token": str(token_result.get("refresh_token") or "").strip(),
-                "expires_at": str(token_result.get("expires_at") or "").strip(),
-                "state": state,
-                "provider": "notion-oauth",
-                "source": "oauth_code_exchange",
-            }
-            session = _get_oauth_callback_session(request, state)
-            if session:
-                _store_oauth_callback_session_payload(
-                    request, state=state, payload=callback_payload
-                )
-            saved = get_config_store().upsert_account(
-                _build_saved_oauth_account(
-                    OAuthCallbackPayload(
-                        token_v2=callback_payload.get("token_v2", ""),
-                        user_id=callback_payload.get("user_id", ""),
-                        space_id=callback_payload.get("space_id", ""),
-                        space_view_id=callback_payload.get("space_view_id", ""),
-                        user_name=callback_payload.get("user_name", ""),
-                        user_email=callback_payload.get("user_email", ""),
-                        access_token=callback_payload.get("access_token", ""),
-                        refresh_token=callback_payload.get("refresh_token", ""),
-                        expires_at=int(callback_payload.get("expires_at") or 0) or None,
-                        provider=callback_payload.get("provider", "notion-oauth"),
-                        scopes=callback_payload.get("scopes", []),
-                        plan_type=callback_payload.get("plan_type", "unknown"),
-                        source="oauth_code_exchange",
-                        notes="Auto-imported via OAuth code exchange",
-                        tags=["oauth-auto"],
-                    )
-                )
-            )
-            _rebuild_pool(request)
-            html = f"""
-<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>OAuth 登录成功</title>
-    <style>
-      body {{ font-family: Arial, sans-serif; background: #f6f3ef; color: #1f2937; margin: 0; padding: 32px; }}
-      .card {{ max-width: 720px; margin: 0 auto; background: white; border-radius: 20px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }}
-      h1 {{ font-size: 24px; margin: 0 0 12px; color: #10b981; }}
-      p {{ line-height: 1.7; margin: 10px 0; }}
-      code {{ background: #f3f4f6; padding: 2px 6px; border-radius: 6px; }}
-      .success {{ color: #10b981; font-weight: bold; }}
-    </style>
-  </head>
-  <body>
-    <div class="card">
-      <h1>OAuth 登录成功</h1>
-      <p class="success">账号已自动导入并激活。</p>
-      <p>用户: <code>{callback_payload.get("user_email") or callback_payload.get("user_id")}</code></p>
-      <p>请返回管理面板查看账号详情。</p>
-    </div>
-  </body>
-</html>
-""".strip()
-            return HTMLResponse(content=html)
-        html = f"""
-<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>OAuth 交换失败</title>
-    <style>
-      body {{ font-family: Arial, sans-serif; background: #f6f3ef; color: #1f2937; margin: 0; padding: 32px; }}
-      .card {{ max-width: 720px; margin: 0 auto; background: white; border-radius: 20px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }}
-      h1 {{ font-size: 24px; margin: 0 0 12px; color: #ef4444; }}
-      p {{ line-height: 1.7; margin: 10px 0; }}
-      code {{ background: #f3f4f6; padding: 2px 6px; border-radius: 6px; }}
-    </style>
-  </head>
-  <body>
-    <div class="card">
-      <h1>OAuth Token 交换失败</h1>
-      <p>错误: <code>{token_result.get("error") or "未知错误"}</code></p>
-      <p>请检查 OAuth 配置或返回管理面板重试。</p>
-    </div>
-  </body>
-</html>
-""".strip()
-        return HTMLResponse(content=html)
-    if state:
-        callback_payload = {
-            "token_v2": str(request.query_params.get("token_v2") or "").strip(),
-            "user_id": str(request.query_params.get("user_id") or "").strip(),
-            "space_id": str(request.query_params.get("space_id") or "").strip(),
-            "user_email": str(
-                request.query_params.get("user_email")
-                or request.query_params.get("email")
-                or ""
-            ).strip(),
-            "access_token": str(request.query_params.get("access_token") or "").strip(),
-            "refresh_token": str(
-                request.query_params.get("refresh_token") or ""
-            ).strip(),
-            "expires_at": str(request.query_params.get("expires_at") or "").strip(),
-            "state": state,
-            "provider": str(
-                request.query_params.get("provider") or "notion-web"
-            ).strip()
-            or "notion-web",
-            "source": "oauth_callback_redirect",
-        }
-        session = _get_oauth_callback_session(request, state)
-        if session:
-            _store_oauth_callback_session_payload(
-                request, state=state, payload=callback_payload
-            )
-            html = f"""
-<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Callback Received</title>
-    <style>
-      body {{ font-family: Arial, sans-serif; background: #f6f3ef; color: #1f2937; margin: 0; padding: 32px; }}
-      .card {{ max-width: 720px; margin: 0 auto; background: white; border-radius: 20px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }}
-      h1 {{ font-size: 24px; margin: 0 0 12px; }}
-      p {{ line-height: 1.7; margin: 10px 0; }}
-      code {{ background: #f3f4f6; padding: 2px 6px; border-radius: 6px; }}
-    </style>
-  </head>
-  <body>
-    <div class="card">
-      <h1>Notion callback 已接收</h1>
-      <p>当前回调参数已经写入服务端临时会话。</p>
-      <p>请返回管理面板，继续点击 <code>导入 callback 并完成</code>。</p>
-      <p>如果你原本希望回到本地工具，可以手动使用该地址继续处理：<code>{redirect_uri}</code></p>
-    </div>
-  </body>
-</html>
-""".strip()
-            return HTMLResponse(content=html)
-    redirect_url = _build_callback_redirect_url(
-        redirect_uri,
-        {key: value for key, value in request.query_params.items()},
-    )
-    return RedirectResponse(url=redirect_url, status_code=307)
-
-
-def _exchange_oauth_code_for_token(
-    code: str,
-    redirect_uri: str,
-    client_id: str,
-    client_secret: str,
-) -> dict[str, Any]:
-    try:
-        response = requests.post(
-            "https://api.notion.com/v1/oauth/token",
-            json={
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": redirect_uri,
-            },
-            auth=(client_id, client_secret),
-            headers={"Content-Type": "application/json"},
-            timeout=30,
-        )
-        if response.ok:
-            data = response.json()
-            return {
-                "ok": True,
-                "access_token": str(data.get("access_token") or "").strip(),
-                "refresh_token": str(data.get("refresh_token") or "").strip(),
-                "expires_in": int(data.get("expires_in") or 0),
-                "expires_at": int(time.time()) + int(data.get("expires_in") or 3600),
-                "token_type": str(data.get("token_type") or "bearer").strip(),
-                "workspace_id": str(data.get("workspace_id") or "").strip(),
-                "workspace_name": str(data.get("workspace_name") or "").strip(),
-            }
-        return {
-            "ok": False,
-            "error": str(response.text[:500] or "Unknown error"),
-            "status_code": response.status_code,
-        }
-    except requests.RequestException as exc:
-        return {
-            "ok": False,
-            "error": str(exc)[:500],
-            "status_code": 0,
-        }
-
-
-def _fetch_notion_user_info(access_token: str) -> dict[str, Any]:
-    if not access_token:
-        return {}
-    try:
-        response = requests.post(
-            "https://api.notion.com/v1/loadUserContent",
-            json={},
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json",
-                "Notion-Version": "2022-06-28",
-            },
-            timeout=30,
-        )
-        if response.ok:
-            data = response.json()
-            record_map = data.get("recordMap") or {}
-            user_ids = list((record_map.get("notion_user") or {}).keys())
-            space_ids = list((record_map.get("space") or {}).keys())
-            user_id = user_ids[0] if user_ids else ""
-            space_id = space_ids[0] if space_ids else ""
-            user_email = ""
-            user_name = ""
-            if user_id:
-                user_val = (record_map.get("notion_user") or {}).get(user_id) or {}
-                user_val = user_val.get("value") or {}
-                user_email = str(user_val.get("email") or "").strip()
-                user_name = str(
-                    user_val.get("given_name") or user_val.get("name") or ""
-                ).strip()
-            return {
-                "user_id": user_id,
-                "space_id": space_id,
-                "user_email": user_email,
-                "user_name": user_name,
-            }
-    except requests.RequestException:
-        pass
-    return {}
-
-
-@router.post("/admin/oauth/start")
-async def start_oauth(
-    request: Request,
-    payload: OAuthStartRequest,
-    x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
-):
-    _ensure_admin(request, x_admin_session)
-    redirect_uri = payload.redirect_uri.strip() or _default_local_redirect_uri(request)
-    state = payload.state.strip() or secrets.token_urlsafe(16)
-    _register_oauth_callback_session(
-        request,
-        provider=payload.provider,
-        redirect_uri=redirect_uri,
-        state=state,
-    )
-    return {
-        "ok": True,
-        **_build_oauth_start_payload(
-            request, redirect_uri=redirect_uri, state=state, provider=payload.provider
-        ),
-    }
-
-
 @router.post("/admin/email-login/start")
 async def start_email_login(
     request: Request,
@@ -4304,8 +3826,7 @@ async def start_email_login(
     }
 
 
-@router.get("/admin/oauth/refresh-status")
-async def oauth_refresh_status(
+async def _build_session_refresh_status_response(
     request: Request,
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
@@ -4319,8 +3840,16 @@ async def oauth_refresh_status(
         "refresh_execution_mode": str(
             get_config_store().get_config().get("refresh_execution_mode") or "manual"
         ),
-        "message": "A real Notion OAuth refresh exchange is not implemented yet. Accounts with refresh tokens are tracked and flagged, but reauthorization is still required or the upstream refresh call must be reverse engineered.",
+        "message": "A real Notion session refresh exchange is not implemented yet. Accounts with refresh tokens are tracked and flagged, but reauthorization is still required or the upstream refresh call must be reverse engineered.",
     }
+
+
+@router.get("/admin/session/refresh-status")
+async def session_refresh_status(
+    request: Request,
+    x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
+):
+    return await _build_session_refresh_status_response(request, x_admin_session)
 
 
 @router.get("/admin/workspaces/create-status")
@@ -4382,85 +3911,6 @@ async def workspace_create_status(
             "template_space_id": template_space_id or None,
         },
         "message": message,
-    }
-
-
-@router.post("/admin/oauth/finalize")
-async def finalize_oauth(
-    request: Request,
-    payload: OAuthFinalizeRequest,
-    x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
-):
-    _ensure_admin(request, x_admin_session)
-    callback_payload = _consume_oauth_callback_session_payload(request, payload.state)
-    effective_payload = payload
-    if callback_payload:
-        effective_payload = OAuthFinalizeRequest(
-            token_v2=str(callback_payload.get("token_v2") or payload.token_v2 or ""),
-            user_id=str(callback_payload.get("user_id") or payload.user_id or ""),
-            redirect_uri=payload.redirect_uri,
-            state=payload.state,
-            provider=str(
-                callback_payload.get("provider") or payload.provider or "notion-web"
-            ),
-            space_id=str(callback_payload.get("space_id") or payload.space_id or ""),
-            user_email=str(
-                callback_payload.get("user_email") or payload.user_email or ""
-            ),
-            access_token=str(
-                callback_payload.get("access_token") or payload.access_token or ""
-            ),
-            refresh_token=str(
-                callback_payload.get("refresh_token") or payload.refresh_token or ""
-            ),
-            expires_at=int(
-                str(callback_payload.get("expires_at") or payload.expires_at or 0) or 0
-            )
-            or None,
-            space_view_id=payload.space_view_id,
-            user_name=payload.user_name,
-            scopes=payload.scopes,
-            plan_type=payload.plan_type,
-            notes=payload.notes,
-            tags=payload.tags,
-        )
-    if (
-        not str(effective_payload.token_v2 or "").strip()
-        or not str(effective_payload.user_id or "").strip()
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="OAuth callback data is incomplete. Paste a valid localhost callback URL or use the fallback fields.",
-        )
-    saved = get_config_store().upsert_account(
-        _build_saved_oauth_account(
-            OAuthCallbackPayload(
-                token_v2=effective_payload.token_v2,
-                user_id=effective_payload.user_id,
-                space_id=effective_payload.space_id,
-                space_view_id=effective_payload.space_view_id,
-                user_name=effective_payload.user_name,
-                user_email=effective_payload.user_email,
-                access_token=effective_payload.access_token,
-                refresh_token=effective_payload.refresh_token,
-                expires_at=effective_payload.expires_at,
-                provider=effective_payload.provider,
-                scopes=effective_payload.scopes,
-                plan_type=effective_payload.plan_type,
-                source="oauth_finalize",
-                notes=effective_payload.notes,
-                tags=effective_payload.tags,
-            )
-        )
-    )
-    _rebuild_pool(request)
-    return {
-        "ok": True,
-        "account": _redact_account_payload(saved),
-        "redirect_uri": effective_payload.redirect_uri.strip()
-        or _default_local_redirect_uri(request),
-        "state": effective_payload.state,
-        "source": "oauth_finalize",
     }
 
 
@@ -5223,10 +4673,10 @@ def _list_accounts_payload(
             for item in accounts
             if item.get("status", {}).get("effective_state") == "cooling"
         ),
-        "oauth_expired": sum(
+        "session_expired": sum(
             1
             for item in accounts
-            if item.get("status", {}).get("effective_state") == "oauth_expired"
+            if item.get("status", {}).get("effective_state") == "session_expired"
         ),
         "needs_refresh": sum(
             1
@@ -5443,8 +4893,7 @@ async def get_usage_events(
     }
 
 
-@router.get("/admin/oauth/refresh-diagnostics")
-async def oauth_refresh_diagnostics(
+async def _build_session_refresh_diagnostics_response(
     request: Request,
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
@@ -5466,6 +4915,14 @@ async def oauth_refresh_diagnostics(
         "contains_secrets": False,
         **diagnostics,
     }
+
+
+@router.get("/admin/session/refresh-diagnostics")
+async def session_refresh_diagnostics(
+    request: Request,
+    x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
+):
+    return await _build_session_refresh_diagnostics_response(request, x_admin_session)
 
 
 @router.get("/admin/workspaces/diagnostics")

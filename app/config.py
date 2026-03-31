@@ -91,9 +91,12 @@ def _normalize_accounts(accounts: Any) -> list[dict[str, Any]]:
             )
         except (TypeError, ValueError):
             normalized["updated_at"] = int(time.time())
-        normalized["oauth"] = (
-            normalized.get("oauth") if isinstance(normalized.get("oauth"), dict) else {}
+        session_payload = (
+            normalized.get("session")
+            if isinstance(normalized.get("session"), dict)
+            else {}
         )
+        normalized["session"] = dict(session_payload)
         normalized["workspace"] = (
             normalized.get("workspace")
             if isinstance(normalized.get("workspace"), dict)
@@ -309,6 +312,21 @@ def _normalize_action_history(raw: Any) -> list[dict[str, Any]]:
         summary = (
             payload.get("summary") if isinstance(payload.get("summary"), dict) else None
         )
+        result = (
+            payload.get("result") if isinstance(payload.get("result"), dict) else None
+        )
+
+        if result is not None:
+            if isinstance(result.get("oauth_status"), dict) and not isinstance(
+                result.get("session_status"), dict
+            ):
+                result["session_status"] = deepcopy(result.get("oauth_status"))
+            result.pop("oauth_status", None)
+            if isinstance(result.get("reason"), str):
+                result["reason"] = result["reason"].replace(
+                    "OAuth credentials are no longer accepted",
+                    "Session credentials are no longer accepted",
+                )
         if summary is not None:
             if not str(summary.get("action") or "").strip() and action:
                 summary["action"] = action
@@ -322,6 +340,11 @@ def _normalize_action_history(raw: Any) -> list[dict[str, Any]]:
                 "user_email"
             ):
                 summary["user_email"] = payload.get("user_email")
+            if isinstance(summary.get("remediation_message"), str):
+                summary["remediation_message"] = summary["remediation_message"].replace(
+                    "OAuth credentials are no longer accepted",
+                    "Session credentials are no longer accepted",
+                )
         normalized_logs.append(normalized_item)
     return normalized_logs
 

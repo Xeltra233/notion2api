@@ -23,6 +23,7 @@ from app.model_registry import get_notion_model
 from app.register.mail_client import build_runtime_proxy_dict
 from app.stream_parser import parse_stream
 
+
 def _build_live_template_client_context(api: "NotionOpusAPI") -> dict[str, Any]:
     return {
         "platform": "web",
@@ -259,9 +260,9 @@ class NotionOpusAPI:
         self.plan_type = (
             str(account_config.get("plan_type") or "unknown").strip() or "unknown"
         )
-        self.oauth = (
-            account_config.get("oauth")
-            if isinstance(account_config.get("oauth"), dict)
+        self.session = (
+            account_config.get("session")
+            if isinstance(account_config.get("session"), dict)
             else {}
         )
         self.workspace = (
@@ -427,7 +428,7 @@ class NotionOpusAPI:
             client_secret = str(
                 runtime_config.get("refresh_client_secret") or ""
             ).strip()
-            refresh_token = str(self.oauth.get("refresh_token") or "").strip()
+            refresh_token = str(self.session.get("refresh_token") or "").strip()
             if (
                 refresh_mode == "live_template"
                 and refresh_url
@@ -1174,13 +1175,13 @@ class NotionOpusAPI:
             "subscription_tier": subscription_tier,
             "workspace_count": len(spaces),
             "workspaces": spaces,
-            "oauth": copy.deepcopy(self.oauth),
+            "session": copy.deepcopy(self.session),
             "workspace": copy.deepcopy(self.workspace),
             "status": copy.deepcopy(self.status),
         }
 
-    def get_oauth_status(self) -> dict[str, Any]:
-        expires_at_raw = self.oauth.get("expires_at")
+    def get_session_status(self) -> dict[str, Any]:
+        expires_at_raw = self.session.get("expires_at")
         try:
             expires_at = int(expires_at_raw) if expires_at_raw is not None else 0
         except (TypeError, ValueError):
@@ -1191,29 +1192,31 @@ class NotionOpusAPI:
         expires_in = max(0, expires_at - now) if expires_at else None
         needs_refresh = bool(expires_at and expires_at - now <= 600)
         has_credentials = bool(self.token_v2.strip()) or bool(
-            str(self.oauth.get("access_token") or "").strip()
+            str(self.session.get("access_token") or "").strip()
         )
         return {
-            "provider": str(self.oauth.get("provider") or ""),
-            "has_access_token": bool(str(self.oauth.get("access_token") or "").strip()),
+            "provider": str(self.session.get("provider") or ""),
+            "has_access_token": bool(
+                str(self.session.get("access_token") or "").strip()
+            ),
             "has_refresh_token": bool(
-                str(self.oauth.get("refresh_token") or "").strip()
+                str(self.session.get("refresh_token") or "").strip()
             ),
             "expires_at": expires_at or None,
             "expires_in": expires_in,
             "expired": expired,
             "needs_refresh": needs_refresh,
             "has_credentials": has_credentials,
-            "scopes": self.oauth.get("scopes")
-            if isinstance(self.oauth.get("scopes"), list)
+            "scopes": self.session.get("scopes")
+            if isinstance(self.session.get("scopes"), list)
             else [],
         }
 
     def try_refresh_session(self) -> dict[str, Any]:
-        refresh_token = str(self.oauth.get("refresh_token") or "").strip()
-        access_token = str(self.oauth.get("access_token") or "").strip()
-        oauth_status = self.get_oauth_status()
-        expires_in = oauth_status.get("expires_in")
+        refresh_token = str(self.session.get("refresh_token") or "").strip()
+        access_token = str(self.session.get("access_token") or "").strip()
+        session_status = self.get_session_status()
+        expires_in = session_status.get("expires_in")
         runtime_config = get_runtime_config()
         refresh_mode = (
             str(runtime_config.get("refresh_execution_mode") or "manual")
@@ -1251,9 +1254,9 @@ class NotionOpusAPI:
                         ],
                         "grant_type": "refresh_token",
                         "refresh_token": "***redacted***",
-                        "provider": str(self.oauth.get("provider") or "notion-web"),
+                        "provider": str(self.session.get("provider") or "notion-web"),
                     },
-                    "oauth_status": oauth_status,
+                    "session_status": session_status,
                 }
             refresh_url = str(runtime_config.get("refresh_request_url") or "").strip()
             client_id = str(runtime_config.get("refresh_client_id") or "").strip()
@@ -1277,7 +1280,7 @@ class NotionOpusAPI:
                     "event_name": "refresh_exchange_live_template",
                     "refresh_reason": "session_renewal",
                     "token_metadata": {
-                        "provider": str(self.oauth.get("provider") or "notion-web"),
+                        "provider": str(self.session.get("provider") or "notion-web"),
                         "has_access_token": bool(access_token),
                         "has_refresh_token": True,
                     },
@@ -1299,7 +1302,9 @@ class NotionOpusAPI:
                         "event_name": "refresh_exchange_live_template",
                         "refresh_reason": "session_renewal",
                         "token_metadata": {
-                            "provider": str(self.oauth.get("provider") or "notion-web"),
+                            "provider": str(
+                                self.session.get("provider") or "notion-web"
+                            ),
                             "has_access_token": bool(access_token),
                             "has_refresh_token": True,
                         },
@@ -1365,7 +1370,7 @@ class NotionOpusAPI:
                             "invalid_client",
                         },
                         "expires_in": recognized.get("expires_in", expires_in),
-                        "oauth_status": oauth_status,
+                        "session_status": session_status,
                         "status_code": response.status_code,
                         "failure_category": _classify_probe_failure_category(
                             response.status_code
@@ -1383,7 +1388,7 @@ class NotionOpusAPI:
                         "has_access_token": bool(access_token),
                         "reauthorize_required": False,
                         "expires_in": expires_in,
-                        "oauth_status": oauth_status,
+                        "session_status": session_status,
                         "failure_category": "network_error",
                         "request_template": request_template,
                         "action": "refresh_exchange_failed",
@@ -1391,24 +1396,24 @@ class NotionOpusAPI:
             return {
                 "ok": False,
                 "refreshed": False,
-                "reason": "Refresh token exists, but Notion OAuth refresh is not implemented yet. Reauthorize or wire the real refresh exchange.",
+                "reason": "Refresh token exists, but Notion session refresh is not implemented yet. Reauthorize the session or wire the real refresh exchange.",
                 "has_refresh_token": True,
                 "has_access_token": bool(access_token),
                 "reauthorize_required": False,
                 "action": "implement_refresh_exchange",
                 "expires_in": expires_in,
-                "oauth_status": oauth_status,
+                "session_status": session_status,
             }
         return {
             "ok": False,
             "refreshed": False,
-            "reason": "No refresh token available; manual re-authorization required.",
+            "reason": "No refresh token available; manual session reauthorization required.",
             "has_refresh_token": False,
             "has_access_token": bool(access_token),
             "reauthorize_required": True,
             "action": "manual_reauthorize",
             "expires_in": expires_in,
-            "oauth_status": oauth_status,
+            "session_status": session_status,
         }
 
     def probe_account(self) -> dict[str, Any]:

@@ -1,6 +1,6 @@
 # Notion2API
 
-> 一个基于 Notion 的 OpenAI 兼容 API 服务，现在已经同时包含后台运维控制台、账号池、运行时配置、usage 查询、OAuth / register 工具链、workspace 运维，以及多模态聊天能力。
+> 一个基于 Notion 的 OpenAI 兼容 API 服务，现在已经同时包含后台运维控制台、账号池、运行时配置、usage 查询、邮箱验证码 / register 工具链、workspace 运维，以及多模态聊天能力。
 
 🌐 [English](./README.md) | 中文
 
@@ -18,7 +18,7 @@ Notion2API 已经不只是一个简单的 `/v1/chat/completions` 代理壳。
 - 基于 `admin session` 的后台鉴权
 - 运行时配置编辑与代理诊断
 - usage 汇总与明细查询
-- OAuth callback / register 自动化工具链
+- 邮箱验证码导入 / register 自动化工具链
 - workspace 同步 / 探测 / 创建能力
 - 一批无人工验证脚本
 
@@ -86,7 +86,7 @@ API 同时支持纯文本消息，以及 OpenAI 风格的多模态 `content` 数
 - 默认按 safe / 脱敏方式渲染数据
 - 运行状态卡片与账号健康视图
 - usage 筛选与事件列表
-- OAuth callback 导入解析
+- 邮箱验证码导入与回填解析
 
 ### 5. 运行时配置与诊断
 
@@ -116,13 +116,13 @@ API 同时支持纯文本消息，以及 OpenAI 风格的多模态 `content` 数
 
 这样后台就不只是“看账号状态”，也能回答真实的运营问题。
 
-### 7. OAuth、register 与 callback 工具链
+### 7. 邮箱验证码、register 与 session 工具链
 
-项目现在已经包含更完整的 OAuth 风格账号导入与 register 自动化能力：
+项目现在已经包含更完整的邮箱验证码导入与 register 自动化能力：
 
-- OAuth start payload 生成
-- 面向 localhost 的 callback bridge 支持
-- 后台里的 callback 解析 / finalize 流程
+- 邮箱验证码发送与导入引导
+- 面向 localhost 的导入辅助桥接支持
+- 后台里的验证码解析 / finalize 流程
 - refresh-status 与 refresh-diagnostics 视图
 - auto-register 状态可视化
 - hydration retry 与 register 门禁逻辑
@@ -219,7 +219,7 @@ API 同时支持纯文本消息，以及 OpenAI 风格的多模态 `content` 数
 
 ### 1. 准备最小启动配置
 
-如果你的部署路径是先把后台起起来，再通过 OAuth 或注册机导入账号，那么默认只需要关心后台密码和端口。
+如果你的部署路径是先把后台起起来，再通过邮箱验证码或注册机导入账号，那么默认只需要关心后台密码和端口。
 
 最小启动示例：
 
@@ -236,7 +236,7 @@ PORT=8000
 - 用户名：`admin`
 - 密码：你设置的 `ADMIN_PASSWORD`
 
-账号池不再是默认启动前置项。你可以在服务启动后，再通过后台里的 OAuth / register / import 流程补充账号。
+账号池不再是默认启动前置项。你可以在服务启动后，再通过后台里的邮箱验证码 / register / import 流程补充账号。
 
 ### 最小启动配置说明
 
@@ -316,13 +316,11 @@ uvicorn app.server:app --host 0.0.0.0 --port 8000
 - `GET /v1/admin/config`
 - `PUT /v1/admin/config/settings`
 - `GET /v1/admin/config/proxy-health`
-- `GET /v1/admin/oauth/refresh-status`
-- `GET /v1/admin/oauth/refresh-diagnostics`
+- `GET /v1/admin/session/refresh-status`
+- `GET /v1/admin/session/refresh-diagnostics`
 - `GET /v1/admin/workspaces/create-status`
 - `GET /v1/admin/workspaces/diagnostics`
 - `GET /v1/admin/request-templates`
-- `GET /v1/admin/oauth/callback`
-- `POST /v1/admin/oauth/callback`
 
 ### 后台 Usage
 
@@ -349,7 +347,7 @@ uvicorn app.server:app --host 0.0.0.0 --port 8000
 
 - 当前浏览器会话内恢复后台登录状态
 - 后台登录状态恢复与凭证更新入口
-- OAuth callback 导入解析
+- 邮箱验证码导入与回填解析
 - 默认按 safe / 脱敏方式渲染后台数据
 - usage 筛选与事件列表展示
 - workspace 与 runtime 相关动作面板
