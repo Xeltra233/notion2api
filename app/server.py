@@ -285,6 +285,8 @@ async def api_key_auth(request: Request, call_next):
         ) and request.method != "OPTIONS":
             if request_path.startswith("/v1/admin"):
                 return await call_next(request)
+            if request_path.startswith("/v1/register"):
+                return await call_next(request)
             if request_path in public_api_paths:
                 return await call_next(request)
             if request_path.startswith("/v1/media/"):
