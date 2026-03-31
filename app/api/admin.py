@@ -1280,7 +1280,13 @@ def _default_local_redirect_uri(request: Request) -> str:
     fallback = "http://localhost:8000"
     host = (request.headers.get("host") or "").strip()
     if host:
-        scheme = request.url.scheme or "http"
+        forwarded_proto = (
+            str(request.headers.get("x-forwarded-proto") or "")
+            .split(",")[0]
+            .strip()
+            .lower()
+        )
+        scheme = forwarded_proto or request.url.scheme or "http"
         return _normalize_callback_redirect_uri(f"{scheme}://{host}", fallback)
     return fallback
 
