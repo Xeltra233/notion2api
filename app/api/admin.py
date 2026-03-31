@@ -1161,10 +1161,23 @@ def _prune_email_login_sessions(request: Request) -> None:
         if int(session.get("expires_at") or 0) <= now_ts
     ]
     for token in expired_tokens:
+        stale = sessions.get(token)
+        register_service = (
+            stale.get("register_service") if isinstance(stale, dict) else None
+        )
+        if register_service:
+            try:
+                register_service.stop()
+            except Exception:
+                pass
         sessions.pop(token, None)
 
 
-def _register_email_login_session(request: Request, email: str) -> dict[str, Any]:
+def _register_email_login_session(
+    request: Request,
+    email: str,
+    register_service: NotionRegisterService,
+) -> dict[str, Any]:
     _prune_email_login_sessions(request)
     normalized_email = str(email or "").strip().lower()
     now_ts = int(time.time())
@@ -1173,6 +1186,7 @@ def _register_email_login_session(request: Request, email: str) -> dict[str, Any
         "created_at": now_ts,
         "expires_at": now_ts + _EMAIL_LOGIN_SESSION_TTL_SECONDS,
         "status": "code_sent",
+        "register_service": register_service,
     }
     getattr(request.app.state, "email_login_sessions", {})[normalized_email] = session
     return session
