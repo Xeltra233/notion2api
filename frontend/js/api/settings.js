@@ -399,6 +399,7 @@ window.NotionAI.API.Settings = {
         const summary = document.getElementById('oauthStartSummary');
         const output = document.getElementById('oauthStartUrlOutput');
         const bridge = document.getElementById('oauthCallbackBridgeOutput');
+        const link = document.getElementById('oauthStartLink');
         if (!summary) {
             return;
         }
@@ -409,6 +410,10 @@ window.NotionAI.API.Settings = {
             }
             if (bridge) {
                 bridge.value = '';
+            }
+            if (link) {
+                link.href = '#';
+                link.classList.add('hidden');
             }
             return;
         }
@@ -422,6 +427,10 @@ window.NotionAI.API.Settings = {
         if (bridge) {
             bridge.value = payload.callback_bridge_url || '';
         }
+        if (link) {
+            link.href = payload.authorization_url;
+            link.classList.remove('hidden');
+        }
     },
 
     async startOAuthFlow() {
@@ -432,10 +441,7 @@ window.NotionAI.API.Settings = {
                 provider: '网页会话',
             });
             this.renderOAuthStartSummary(result);
-            if (result.authorization_url) {
-                window.open(result.authorization_url, '_blank', 'noopener,noreferrer');
-            }
-            this.setAdminNotice('OAuth 登录链接已生成。请在新窗口完成登录，再把 localhost callback URL 粘回来完成导入。');
+            this.setAdminNotice('OAuth 登录链接已生成。请点击下面的登录链接完成授权，再把 localhost callback URL 粘回来完成导入。');
         } catch (error) {
             this.setAdminNotice(error.message || '准备 OAuth 启动参数失败。');
         }
