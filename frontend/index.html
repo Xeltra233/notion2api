@@ -951,9 +951,9 @@
                         <button id="oauthParseCallbackBtn" type="button" class="admin-action-btn">只解析 callback</button>
                         <button id="oauthFinalizeBtn" type="button" class="admin-action-btn">仅完成导入</button>
                     </div>
-                    <details class="runtime-details-block">
+                    <details id="oauthFallbackFieldsDetails" class="runtime-details-block">
                         <summary>展开手动兜底字段</summary>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                        <div id="oauthFallbackFieldsPanel" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
                             <input id="oauthTokenInput" type="text" placeholder="token_v2 令牌（仅在自动解析失败时手动填写）"
                                 class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
                             <input id="oauthUserIdInput" type="text" placeholder="user_id（仅在自动解析失败时手动填写）"

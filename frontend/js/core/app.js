@@ -546,6 +546,9 @@ function bindEventListeners() {
     document.getElementById('oauthImportCallbackBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.parseAndFinalizeCallbackUrl();
     });
+    document.getElementById('oauthFallbackFieldsDetails')?.addEventListener('toggle', () => {
+        window.NotionAI.API.Settings.applyOAuthFallbackVisibility();
+    });
 
     // Rename modal
     document.getElementById('cancelRenameBtn').addEventListener('click', () => {

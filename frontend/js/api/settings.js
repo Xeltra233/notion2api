@@ -817,6 +817,14 @@ window.NotionAI.API.Settings = {
         }
     },
 
+    applyOAuthFallbackVisibility() {
+        const details = document.getElementById('oauthFallbackFieldsDetails');
+        const panel = document.getElementById('oauthFallbackFieldsPanel');
+        if (panel) {
+            panel.classList.toggle('hidden', !details?.open);
+        }
+    },
+
     toggleRuntimeProxyAdvanced() {
         this._runtimeProxyAdvancedVisible = !this._runtimeProxyAdvancedVisible;
         this.applyRuntimeProxyAdvancedVisibility();
