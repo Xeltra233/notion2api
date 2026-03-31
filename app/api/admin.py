@@ -9,6 +9,7 @@ from urllib.parse import urlunparse
 
 import requests
 from fastapi import APIRouter, Header, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
@@ -3608,6 +3609,32 @@ async def oauth_callback_redirect(request: Request):
             _store_oauth_callback_session_payload(
                 request, state=state, payload=callback_payload
             )
+            html = f"""
+<!doctype html>
+<html lang=\"zh-CN\">
+  <head>
+    <meta charset=\"utf-8\" />
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+    <title>Callback Received</title>
+    <style>
+      body {{ font-family: Arial, sans-serif; background: #f6f3ef; color: #1f2937; margin: 0; padding: 32px; }}
+      .card {{ max-width: 720px; margin: 0 auto; background: white; border-radius: 20px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }}
+      h1 {{ font-size: 24px; margin: 0 0 12px; }}
+      p {{ line-height: 1.7; margin: 10px 0; }}
+      code {{ background: #f3f4f6; padding: 2px 6px; border-radius: 6px; }}
+    </style>
+  </head>
+  <body>
+    <div class=\"card\">
+      <h1>Notion callback 已接收</h1>
+      <p>当前回调参数已经写入服务端临时会话。</p>
+      <p>请返回管理面板，继续点击 <code>导入 callback 并完成</code>。</p>
+      <p>如果你原本希望回到本地工具，可以手动使用该地址继续处理：<code>{redirect_uri}</code></p>
+    </div>
+  </body>
+</html>
+""".strip()
+            return HTMLResponse(content=html)
     redirect_url = _build_callback_redirect_url(
         redirect_uri,
         {key: value for key, value in request.query_params.items()},
