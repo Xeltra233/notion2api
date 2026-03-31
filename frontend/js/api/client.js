@@ -8,6 +8,23 @@ window.NotionAI = window.NotionAI || {};
 window.NotionAI.API = window.NotionAI.API || {};
 
 window.NotionAI.API.Client = {
+    buildAuthHeaders(extraHeaders = {}) {
+        const apiKey = String(window.NotionAI.Core.State.get('apiKey') || '').trim();
+        const baseUrl = String(window.NotionAI.Core.State.get('baseUrl') || '').trim();
+        const currentOrigin = String(window.location.origin || '').trim();
+        const targetOrigin = (() => {
+            try {
+                return new URL(baseUrl || currentOrigin, currentOrigin).origin;
+            } catch (error) {
+                return currentOrigin;
+            }
+        })();
+        const shouldAttachApiKey = Boolean(apiKey) && targetOrigin !== currentOrigin;
+        return {
+            ...(shouldAttachApiKey ? { 'Authorization': `Bearer ${apiKey}` } : {}),
+            ...extraHeaders,
+        };
+    },
     /**
      * Makes a POST request to the API
      * @param {string} endpoint - API endpoint path
@@ -17,7 +34,6 @@ window.NotionAI.API.Client = {
      */
     async post(endpoint, data, options = {}) {
         const baseUrl = window.NotionAI.Core.State.get('baseUrl');
-        const apiKey = window.NotionAI.Core.State.get('apiKey');
         const adminSessionToken = window.NotionAI.Core.State.get('adminSessionToken');
         const chatSessionToken = window.NotionAI.Core.State.get('chatSessionToken');
         const { headers: extraHeaders = {}, ...restOptions } = options || {};
@@ -27,11 +43,10 @@ window.NotionAI.API.Client = {
             ...restOptions,
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`,
                 'X-Client-Type': window.NotionAI.Core.Constants.CLIENT_TYPE,
                 ...(adminSessionToken ? { 'X-Admin-Session': adminSessionToken } : {}),
                 ...(chatSessionToken ? { 'X-Chat-Session': chatSessionToken } : {}),
-                ...extraHeaders
+                ...this.buildAuthHeaders(extraHeaders)
             },
             body: JSON.stringify(data)
         });
@@ -46,17 +61,16 @@ window.NotionAI.API.Client = {
      */
     async delete(endpoint) {
         const baseUrl = window.NotionAI.Core.State.get('baseUrl');
-        const apiKey = window.NotionAI.Core.State.get('apiKey');
         const adminSessionToken = window.NotionAI.Core.State.get('adminSessionToken');
         const chatSessionToken = window.NotionAI.Core.State.get('chatSessionToken');
 
         const response = await fetch(`${baseUrl}${endpoint}`, {
             method: 'DELETE',
             headers: {
-                'Authorization': `Bearer ${apiKey}`,
                 'X-Client-Type': window.NotionAI.Core.Constants.CLIENT_TYPE,
                 ...(adminSessionToken ? { 'X-Admin-Session': adminSessionToken } : {}),
-                ...(chatSessionToken ? { 'X-Chat-Session': chatSessionToken } : {})
+                ...(chatSessionToken ? { 'X-Chat-Session': chatSessionToken } : {}),
+                ...this.buildAuthHeaders()
             }
         });
 
@@ -65,7 +79,6 @@ window.NotionAI.API.Client = {
 
     async get(endpoint, options = {}) {
         const baseUrl = window.NotionAI.Core.State.get('baseUrl');
-        const apiKey = window.NotionAI.Core.State.get('apiKey');
         const adminSessionToken = window.NotionAI.Core.State.get('adminSessionToken');
         const chatSessionToken = window.NotionAI.Core.State.get('chatSessionToken');
         const { headers: extraHeaders = {}, ...restOptions } = options || {};
@@ -74,11 +87,10 @@ window.NotionAI.API.Client = {
             method: 'GET',
             ...restOptions,
             headers: {
-                'Authorization': `Bearer ${apiKey}`,
                 'X-Client-Type': window.NotionAI.Core.Constants.CLIENT_TYPE,
                 ...(adminSessionToken ? { 'X-Admin-Session': adminSessionToken } : {}),
                 ...(chatSessionToken ? { 'X-Chat-Session': chatSessionToken } : {}),
-                ...extraHeaders
+                ...this.buildAuthHeaders(extraHeaders)
             }
         });
 
@@ -87,7 +99,6 @@ window.NotionAI.API.Client = {
 
     async patch(endpoint, data, options = {}) {
         const baseUrl = window.NotionAI.Core.State.get('baseUrl');
-        const apiKey = window.NotionAI.Core.State.get('apiKey');
         const adminSessionToken = window.NotionAI.Core.State.get('adminSessionToken');
         const chatSessionToken = window.NotionAI.Core.State.get('chatSessionToken');
         const { headers: extraHeaders = {}, ...restOptions } = options || {};
@@ -97,11 +108,10 @@ window.NotionAI.API.Client = {
             ...restOptions,
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`,
                 'X-Client-Type': window.NotionAI.Core.Constants.CLIENT_TYPE,
                 ...(adminSessionToken ? { 'X-Admin-Session': adminSessionToken } : {}),
                 ...(chatSessionToken ? { 'X-Chat-Session': chatSessionToken } : {}),
-                ...extraHeaders
+                ...this.buildAuthHeaders(extraHeaders)
             },
             body: JSON.stringify(data)
         });
@@ -111,7 +121,6 @@ window.NotionAI.API.Client = {
 
     async put(endpoint, data, options = {}) {
         const baseUrl = window.NotionAI.Core.State.get('baseUrl');
-        const apiKey = window.NotionAI.Core.State.get('apiKey');
         const adminSessionToken = window.NotionAI.Core.State.get('adminSessionToken');
         const chatSessionToken = window.NotionAI.Core.State.get('chatSessionToken');
         const { headers: extraHeaders = {}, ...restOptions } = options || {};
@@ -121,11 +130,10 @@ window.NotionAI.API.Client = {
             ...restOptions,
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`,
                 'X-Client-Type': window.NotionAI.Core.Constants.CLIENT_TYPE,
                 ...(adminSessionToken ? { 'X-Admin-Session': adminSessionToken } : {}),
                 ...(chatSessionToken ? { 'X-Chat-Session': chatSessionToken } : {}),
-                ...extraHeaders
+                ...this.buildAuthHeaders(extraHeaders)
             },
             body: JSON.stringify(data)
         });

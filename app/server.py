@@ -268,6 +268,23 @@ def _is_safe_public_media_path(path: str) -> bool:
     return bool(re.fullmatch(r"[A-Za-z0-9._-]+", media_id))
 
 
+def _is_same_origin_browser_request(request: Request) -> bool:
+    config = get_config_store().get_config()
+    if not bool(config.get("browser_trust_same_origin", True)):
+        return False
+    client_type = str(request.headers.get("X-Client-Type", "") or "").strip().lower()
+    if client_type != "web":
+        return False
+    origin = str(request.headers.get("Origin", "") or "").strip().rstrip("/")
+    referer = str(request.headers.get("Referer", "") or "").strip()
+    target_origin = str(request.base_url).strip().rstrip("/")
+    if origin and origin == target_origin:
+        return True
+    if referer and referer.startswith(f"{target_origin}/"):
+        return True
+    return False
+
+
 # 简易 API Key 鉴权中间件
 @app.middleware("http")
 async def api_key_auth(request: Request, call_next):
@@ -288,6 +305,8 @@ async def api_key_auth(request: Request, call_next):
             if request_path.startswith("/v1/register"):
                 return await call_next(request)
             if request_path in public_api_paths:
+                return await call_next(request)
+            if _is_same_origin_browser_request(request):
                 return await call_next(request)
             if request_path.startswith("/v1/media/"):
                 if _is_safe_public_media_path(request_path):

@@ -38,15 +38,16 @@ window.NotionAI.Chat.Streaming = {
 
         try {
             const chatSessionToken = window.NotionAI.Core.State.get('chatSessionToken');
+            const authHeaders = window.NotionAI.API.Client.buildAuthHeaders();
             const response = await fetch(
                 `${window.NotionAI.Core.State.get('baseUrl')}/v1/chat/completions`,
                 {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${window.NotionAI.Core.State.get('apiKey')}`,
                         'X-Client-Type': window.NotionAI.Core.Constants.CLIENT_TYPE,
-                        ...(chatSessionToken ? { 'X-Chat-Session': chatSessionToken } : {})
+                        ...(chatSessionToken ? { 'X-Chat-Session': chatSessionToken } : {}),
+                        ...authHeaders
                     },
                     body: JSON.stringify({
                         model: model,

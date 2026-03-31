@@ -362,6 +362,7 @@ def _default_config() -> dict[str, Any]:
     return {
         "app_mode": "standard",
         "api_key": "",
+        "browser_trust_same_origin": True,
         "allowed_origins": DEFAULT_ALLOWED_ORIGINS.copy(),
         "db_path": DEFAULT_DB_PATH,
         "admin_auth": _normalize_admin_auth(None),
@@ -428,6 +429,9 @@ class RuntimeConfigStore:
             config["app_mode"] = "standard"
 
         config["api_key"] = str(raw.get("api_key") or "")
+        config["browser_trust_same_origin"] = bool(
+            raw.get("browser_trust_same_origin", True)
+        )
         config["allowed_origins"] = _normalize_origins(raw.get("allowed_origins"))
         config["db_path"] = (
             str(raw.get("db_path") or DEFAULT_DB_PATH).strip() or DEFAULT_DB_PATH
