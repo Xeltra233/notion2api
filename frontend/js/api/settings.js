@@ -403,7 +403,7 @@ window.NotionAI.API.Settings = {
         if (!summary) {
             return;
         }
-        if (!payload || !payload.authorization_url) {
+        if (!payload || (!payload.authorization_url && !payload.callback_bridge_url)) {
             summary.innerHTML = '';
             if (output) {
                 output.value = '';

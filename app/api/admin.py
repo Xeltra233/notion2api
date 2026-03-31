@@ -1306,8 +1306,9 @@ def _build_oauth_start_payload(
     state: str,
     provider: str,
 ) -> dict[str, Any]:
+    base_redirect_uri = _default_local_redirect_uri(request).rstrip("/")
     callback_bridge_url = _build_callback_redirect_url(
-        f"{_default_local_redirect_uri(request)}/v1/admin/oauth/callback",
+        f"{base_redirect_uri}/v1/admin/oauth/callback",
         {"redirect_uri": redirect_uri, "state": state, "provider": provider},
     )
     return {
