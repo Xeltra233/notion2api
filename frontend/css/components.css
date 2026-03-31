@@ -149,12 +149,12 @@ html.dark .model-beta-badge {
 .admin-account-row {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 10px;
+    gap: 6px;
+    padding: 8px;
     border: 1px solid rgba(0, 0, 0, 0.07);
-    border-radius: 14px;
+    border-radius: 12px;
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(250, 246, 241, 0.84));
-    box-shadow: 0 6px 16px rgba(68, 49, 37, 0.04);
+    box-shadow: 0 4px 12px rgba(68, 49, 37, 0.035);
 }
 
 .admin-account-main {
@@ -219,6 +219,26 @@ html.dark .model-beta-badge {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
+}
+
+.admin-account-detail-block {
+    border-top: 1px dashed rgba(0, 0, 0, 0.08);
+    padding-top: 6px;
+}
+
+.admin-account-detail-block summary {
+    cursor: pointer;
+    font-size: 11px;
+    color: #6b7280;
+    list-style: none;
+}
+
+.admin-account-detail-block summary::-webkit-details-marker {
+    display: none;
+}
+
+.admin-account-summary-line {
+    line-height: 1.45;
 }
 
 .admin-account-editor {

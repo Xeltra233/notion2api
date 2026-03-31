@@ -1464,54 +1464,73 @@ window.NotionAI.API.Settings = {
             if (!badgeItems.length) {
                 badgeItems.push({ state: status.effective_state || 'unknown', label: status.effective_state || '未知' });
             }
+            const detailId = `admin-account-detail-${safeAccountId}`;
             return `
                 <div class="admin-account-row" data-account-id="${safeAccountId}">
                     <div class="admin-account-main">
                         ${viewBanner}
-                        <div class="text-base font-medium text-gray-800 dark:text-gray-100">${label}</div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400">${planType} · ${safePlanCategory} · ${subscriptionTier}</div>
+                        <div class="text-sm font-medium text-gray-800 dark:text-gray-100">${label}</div>
+                        <div class="text-[11px] text-gray-500 dark:text-gray-400">${planType} · ${safePlanCategory} · ${subscriptionTier}</div>
                         <div class="flex flex-wrap gap-2">
                             ${badgeItems.map((badge) => `<span class="admin-badge" data-state="${this.escapeHtmlAttribute(badge.state)}">${this.escapeHtml(badge.label)}</span>`).join('')}
                             ${safeTags.map((tag) => `<span class="admin-mini-pill">${tag}</span>`).join('')}
                         </div>
-                        ${notes ? `<div class="text-xs text-gray-500 dark:text-gray-400">${notes}</div>` : ''}
-                    </div>
-                    <div class="admin-kv text-xs text-gray-600 dark:text-gray-300">
-                        <div class="admin-account-metric"><span class="admin-account-metric-label">可用状态</span><span class="admin-account-metric-value">${status.usable ? '可用' : '需关注'}</span></div>
-                        <div class="admin-account-metric"><span class="admin-account-metric-label">工作区</span><span class="admin-account-metric-value">${this.escapeHtml(status.workspace_state || workspace.state || '缺失')}</span></div>
-                        <div class="admin-account-metric"><span class="admin-account-metric-label">工作区数量</span><span class="admin-account-metric-value">${workspace.workspace_count || 0}</span></div>
-                        <div class="admin-account-metric"><span class="admin-account-metric-label">OAuth</span><span class="admin-account-metric-value">${oauth.expired ? '已过期' : '有效'}</span></div>
-                        <div class="admin-account-metric"><span class="admin-account-metric-label">需要刷新</span><span class="admin-account-metric-value">${oauth.needs_refresh ? '是' : '否'}</span></div>
-                        <div class="admin-account-metric"><span class="admin-account-metric-label">最近刷新</span><span class="admin-account-metric-value">${this.escapeHtml(this.formatTimestamp(status.last_refresh_at))}</span></div>
-                        <div class="admin-account-metric"><span class="admin-account-metric-label">最近成功</span><span class="admin-account-metric-value">${this.escapeHtml(this.formatTimestamp(status.last_success_at))}</span></div>
-                        <div class="admin-account-metric"><span class="admin-account-metric-label">最近探测</span><span class="admin-account-metric-value">${this.escapeHtml(status.last_probe_action || '无')}</span></div>
+                        <div class="admin-account-summary-line text-[11px] text-gray-500 dark:text-gray-400">工作区 ${this.escapeHtml(status.workspace_state || workspace.state || '缺失')} · OAuth ${oauth.expired ? '已过期' : '有效'} · 刷新 ${oauth.needs_refresh ? '需要' : '正常'}</div>
                     </div>
                     <div class="admin-account-actions">
-                        <button type="button" class="admin-action-btn admin-edit-btn">编辑</button>
-                        <button type="button" class="admin-action-btn admin-template-btn">模板</button>
-                        <button type="button" class="admin-action-btn admin-refresh-probe-btn">刷新探测</button>
-                        <button type="button" class="admin-action-btn admin-workspace-probe-btn">工作区探测</button>
                         <button type="button" class="admin-action-btn admin-probe-btn">探测</button>
                         <button type="button" class="admin-action-btn admin-refresh-btn">刷新</button>
-                        <button type="button" class="admin-action-btn admin-sync-btn">同步工作区</button>
-                        <button type="button" class="admin-action-btn admin-hydration-retry-btn">补全重试</button>
-                        <button type="button" class="admin-action-btn admin-create-ws-btn">创建工作区</button>
                         <button type="button" class="admin-action-btn admin-toggle-btn" data-enabled="${account.enabled !== false ? 'true' : 'false'}">${toggleLabel}</button>
                         <button type="button" class="admin-action-btn admin-delete-btn">删除</button>
+                        <button type="button" class="admin-action-btn admin-account-expand-btn" aria-expanded="false" aria-controls="${detailId}">展开</button>
                     </div>
-                    <div class="admin-account-editor text-xs text-gray-600 dark:text-gray-300">
-                        <input type="text" class="admin-tag-input w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none" value="${safeTagValue}" placeholder="标签，多个用逗号分隔">
-                        <div class="admin-account-actions">
-                            <button type="button" class="admin-action-btn admin-tags-btn">保存标签</button>
+                    <details id="${detailId}" class="admin-account-detail-block">
+                        <summary>更多账号信息</summary>
+                        <div class="admin-kv text-xs text-gray-600 dark:text-gray-300 mt-2">
+                            <div class="admin-account-metric"><span class="admin-account-metric-label">可用状态</span><span class="admin-account-metric-value">${status.usable ? '可用' : '需关注'}</span></div>
+                            <div class="admin-account-metric"><span class="admin-account-metric-label">工作区</span><span class="admin-account-metric-value">${this.escapeHtml(status.workspace_state || workspace.state || '缺失')}</span></div>
+                            <div class="admin-account-metric"><span class="admin-account-metric-label">工作区数量</span><span class="admin-account-metric-value">${workspace.workspace_count || 0}</span></div>
+                            <div class="admin-account-metric"><span class="admin-account-metric-label">OAuth</span><span class="admin-account-metric-value">${oauth.expired ? '已过期' : '有效'}</span></div>
+                            <div class="admin-account-metric"><span class="admin-account-metric-label">最近刷新</span><span class="admin-account-metric-value">${this.escapeHtml(this.formatTimestamp(status.last_refresh_at))}</span></div>
+                            <div class="admin-account-metric"><span class="admin-account-metric-label">最近成功</span><span class="admin-account-metric-value">${this.escapeHtml(this.formatTimestamp(status.last_success_at))}</span></div>
                         </div>
-                        <textarea class="admin-note-input w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none" rows="3" placeholder="备注">${notes}</textarea>
-                        <div class="admin-account-actions">
-                            <button type="button" class="admin-action-btn admin-note-btn">保存备注</button>
+                        <div class="admin-account-actions mt-2">
+                            <button type="button" class="admin-action-btn admin-edit-btn">编辑</button>
+                            <button type="button" class="admin-action-btn admin-template-btn">模板</button>
+                            <button type="button" class="admin-action-btn admin-refresh-probe-btn">刷新探测</button>
+                            <button type="button" class="admin-action-btn admin-workspace-probe-btn">工作区探测</button>
+                            <button type="button" class="admin-action-btn admin-sync-btn">同步工作区</button>
+                            <button type="button" class="admin-action-btn admin-hydration-retry-btn">补全重试</button>
+                            <button type="button" class="admin-action-btn admin-create-ws-btn">创建工作区</button>
                         </div>
-                    </div>
+                        <div class="admin-account-editor text-xs text-gray-600 dark:text-gray-300 mt-2">
+                            <input type="text" class="admin-tag-input w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none" value="${safeTagValue}" placeholder="标签，多个用逗号分隔">
+                            <div class="admin-account-actions">
+                                <button type="button" class="admin-action-btn admin-tags-btn">保存标签</button>
+                            </div>
+                            <textarea class="admin-note-input w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none" rows="3" placeholder="备注">${notes}</textarea>
+                            <div class="admin-account-actions">
+                                <button type="button" class="admin-action-btn admin-note-btn">保存备注</button>
+                            </div>
+                        </div>
+                    </details>
                 </div>
             `;
         }).join('');
+
+        panel.querySelectorAll('.admin-account-expand-btn').forEach((button) => {
+            button.addEventListener('click', (event) => {
+                const btn = event.currentTarget;
+                const detailId = btn.getAttribute('aria-controls');
+                const details = detailId ? document.getElementById(detailId) : null;
+                if (!details) {
+                    return;
+                }
+                details.open = !details.open;
+                btn.setAttribute('aria-expanded', details.open ? 'true' : 'false');
+                btn.textContent = details.open ? '收起' : '展开';
+            });
+        });
 
         panel.querySelectorAll('.admin-toggle-btn').forEach((button) => {
             button.addEventListener('click', async (event) => {
