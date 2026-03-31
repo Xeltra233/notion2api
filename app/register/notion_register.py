@@ -28,6 +28,7 @@ NOTION_API_SEND_EMAIL_CODE = "https://www.notion.so/api/v3/sendSignUpEmailCode"
 NOTION_API_VERIFY_EMAIL_CODE = "https://www.notion.so/api/v3/verifySignUpEmailCode"
 NOTION_API_LOAD_USER_CONTENT = "https://www.notion.so/api/v3/loadUserContent"
 NOTION_API_GET_SELF = "https://www.notion.so/api/v3/getUserAnalyticsSettings"
+DEFAULT_REGISTER_DISPLAY_NAME = "zhatianbang66fasdgewfas"
 
 CHROMIUM_PATHS = [
     "/usr/bin/chromium",
@@ -405,7 +406,7 @@ class NotionRegisterService:
             if not name_input:
                 name_input = page.ele("css:input[placeholder*='name']", timeout=5)
             if name_input:
-                full_name = random.choice(REGISTER_NAMES)
+                full_name = DEFAULT_REGISTER_DISPLAY_NAME
                 name_input.input(full_name, clear=True)
                 time.sleep(random.uniform(0.5, 1))
                 submit_btn = self._find_button(
@@ -675,6 +676,27 @@ class NotionRegisterService:
         return self._find_value_recursive(state, {"token_v2", "tokenV2", "token"})
 
     def _extract_user_id(self, page) -> str:
+        cookie_candidates = ["notion_user_id", "user_id", "userId"]
+        for cookie_name in cookie_candidates:
+            cookie_value = self._extract_cookie_value(page, cookie_name)
+            if cookie_value:
+                return cookie_value
+        try:
+            cookies = page.cookies()
+            for cookie in cookies:
+                if cookie.get("name") == "p_sync_session":
+                    raw_value = str(cookie.get("value") or "")
+                    try:
+                        parsed = json.loads(unquote(raw_value))
+                        user_ids = (
+                            parsed.get("userIds") if isinstance(parsed, dict) else None
+                        )
+                        if isinstance(user_ids, list) and user_ids:
+                            return str(user_ids[0] or "")
+                    except Exception:
+                        pass
+        except Exception:
+            pass
         try:
             html = page.html or ""
             import re
@@ -814,10 +836,21 @@ class NotionRegisterService:
 
     def _complete_post_signup_flow(self, page) -> None:
         action_keywords = [
-            ["Continue", "继续", "Next", "下一步", "Get started", "开始使用"],
             ["For myself", "个人使用", "Use for myself"],
             ["Skip", "跳过", "Not now", "稍后"],
-            ["Open Notion", "Launch Notion", "进入 Notion", "Go to workspace"],
+            ["Continue", "继续", "Next", "下一步", "Get started", "开始使用"],
+            ["Open Notion", "Launch Notion", "进入 Notion"],
+        ]
+        avoid_keywords = [
+            "workspace",
+            "team",
+            "organization",
+            "company",
+            "join",
+            "加入工作空间",
+            "加入团队",
+            "加入组织",
+            "go to workspace",
         ]
         for _ in range(8):
             time.sleep(random.uniform(1.0, 2.0))
@@ -833,6 +866,9 @@ class NotionRegisterService:
                 btn = self._find_button(page, keywords)
                 if btn:
                     try:
+                        btn_text = (btn.text or "").strip().lower()
+                        if any(item in btn_text for item in avoid_keywords):
+                            continue
                         self._log("info", f"点击注册后续按钮: {'/'.join(keywords[:2])}")
                         btn.click()
                         clicked = True

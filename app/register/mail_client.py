@@ -114,6 +114,13 @@ class TempMailClient(ABC):
         self.password = ""
         self.email_id = ""
 
+    def _build_bearer_headers(self, api_key: str = "") -> dict[str, str]:
+        headers = {"Content-Type": "application/json"}
+        token = str(api_key or "").strip()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        return headers
+
     def _log(self, level: str, message: str) -> None:
         if self.log_callback:
             self.log_callback(level, message)
@@ -142,6 +149,9 @@ class TempMailClient(ABC):
 
     def extract_code(self, text: str) -> Optional[str]:
         patterns = [
+            r"temporary notion login code[^A-Za-z0-9]*([A-Za-z0-9]{6,8})",
+            r"notion login code[^A-Za-z0-9]*([A-Za-z0-9]{6,8})",
+            r"signup code[^A-Za-z0-9]*([A-Za-z0-9]{4,8})",
             r"(?<![0-9])(\d{6})(?![0-9])",
             r"(?<![0-9])(\d{5})(?![0-9])",
             r"(?<![0-9])(\d{4})(?![0-9])",
@@ -156,6 +166,11 @@ class TempMailClient(ABC):
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
                 return match.group(1)
+        generic_alnum = re.search(
+            r"(?<![A-Za-z0-9])([A-Za-z0-9]{6,8})(?![A-Za-z0-9])", text
+        )
+        if generic_alnum:
+            return generic_alnum.group(1)
         return None
 
 
@@ -283,13 +298,17 @@ class DuckMailClient(TempMailClient):
         self.api_key = api_key
         self.verify_ssl = verify_ssl
 
+    def _headers(self) -> dict[str, str]:
+        headers = self._build_bearer_headers(self.api_key)
+        if self.api_key:
+            headers["X-API-Key"] = self.api_key
+        return headers
+
     def register_account(self, domain: Optional[str] = None) -> bool:
         try:
             self._log("info", "正在注册 DuckMail 临时邮箱...")
             url = f"{self.base_url}/api/auth/register"
-            headers = {"Content-Type": "application/json"}
-            if self.api_key:
-                headers["X-API-Key"] = self.api_key
+            headers = self._headers()
             payload = {}
             if domain:
                 payload["domain"] = domain
@@ -327,9 +346,7 @@ class DuckMailClient(TempMailClient):
         while time.time() - start_time < timeout:
             try:
                 url = f"{self.base_url}/api/mail/inbox"
-                headers = {"Content-Type": "application/json"}
-                if self.api_key:
-                    headers["X-API-Key"] = self.api_key
+                headers = self._headers()
                 params = {"email": self.email}
                 resp = requests.get(
                     url,
@@ -393,13 +410,17 @@ class GPTMailClient(TempMailClient):
         self.verify_ssl = verify_ssl
         self.domain = domain or ""
 
+    def _headers(self) -> dict[str, str]:
+        headers = self._build_bearer_headers(self.api_key)
+        if self.api_key:
+            headers["X-API-Key"] = self.api_key
+        return headers
+
     def register_account(self, domain: Optional[str] = None) -> bool:
         try:
             self._log("info", "正在注册 GPTMail 临时邮箱...")
             url = f"{self.base_url}/api/auth/register"
-            headers = {"Content-Type": "application/json"}
-            if self.api_key:
-                headers["X-API-Key"] = self.api_key
+            headers = self._headers()
             payload = {}
             if domain or self.domain:
                 payload["domain"] = domain or self.domain
@@ -437,9 +458,7 @@ class GPTMailClient(TempMailClient):
         while time.time() - start_time < timeout:
             try:
                 url = f"{self.base_url}/api/mail/inbox"
-                headers = {"Content-Type": "application/json"}
-                if self.api_key:
-                    headers["X-API-Key"] = self.api_key
+                headers = self._headers()
                 params = {"email": self.email}
                 resp = requests.get(
                     url,
@@ -503,15 +522,23 @@ class FreemailClient(TempMailClient):
         self.verify_ssl = verify_ssl
         self.domain = domain or ""
 
+    def _headers(self) -> dict[str, str]:
+        return self._build_bearer_headers(self.api_key)
+
+    def _auth_params(self) -> dict[str, str]:
+        # Keep backward compatibility for deployments that still expect admin_token in query params.
+        return {"admin_token": self.api_key} if self.api_key else {}
+
     def register_account(self, domain: Optional[str] = None) -> bool:
         try:
             self._log("info", "正在注册 Freemail 临时邮箱...")
-            params = {"admin_token": self.api_key}
+            params = self._auth_params()
             if domain or self.domain:
                 params["domain"] = domain or self.domain
             resp = requests.post(
                 f"{self.base_url}/api/generate",
                 params=params,
+                headers=self._headers(),
                 proxies=self._get_proxies(),
                 timeout=30,
                 verify=self.verify_ssl,
@@ -543,7 +570,8 @@ class FreemailClient(TempMailClient):
             try:
                 resp = requests.get(
                     f"{self.base_url}/api/emails",
-                    params={"mailbox": self.email, "admin_token": self.api_key},
+                    params={"mailbox": self.email, **self._auth_params()},
+                    headers=self._headers(),
                     proxies=self._get_proxies(),
                     timeout=30,
                     verify=self.verify_ssl,
@@ -594,6 +622,15 @@ class FreemailClient(TempMailClient):
                             msg.get("verification_code") or ""
                         ).strip()
                         full_text = f"{subject} {preview} {body}"
+                        lowered_subject = subject.lower()
+                        if "notion" in lowered_subject and (
+                            "temporary" in lowered_subject
+                            or "login code" in lowered_subject
+                        ):
+                            preferred = self.extract_code(f"{subject} {preview}")
+                            if preferred:
+                                self._log("info", f"找到验证码: {preferred}")
+                                return preferred
                         code = self.extract_code(full_text)
                         if not code and verification_code:
                             code = verification_code
@@ -605,7 +642,8 @@ class FreemailClient(TempMailClient):
                             continue
                         detail_resp = requests.get(
                             f"{self.base_url}/api/email/{message_id}",
-                            params={"admin_token": self.api_key},
+                            params=self._auth_params(),
+                            headers=self._headers(),
                             proxies=self._get_proxies(),
                             timeout=30,
                             verify=self.verify_ssl,
