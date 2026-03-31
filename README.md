@@ -100,7 +100,7 @@ API 同时支持纯文本消息，以及 OpenAI 风格的多模态 `content` 数
 - auto-register 状态与队列可见性
 - workspace create dry-run 状态暴露
 
-更多后台访问与 Runtime 保存说明：[`ADMIN_RUNTIME_NOTES.md#admin-access-runtime-notes`](ADMIN_RUNTIME_NOTES.md#admin-access-runtime-notes)
+更多后台访问与 Runtime 保存说明：[`ADMIN_QUICK_START.md#admin-quick-start`](ADMIN_QUICK_START.md#admin-quick-start)
 
 ### 6. Usage 查询能力
 
