@@ -908,16 +908,12 @@
                         </div>
                     </div>
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                        <div id="oauthRefreshDiagnosticsPanel" class="space-y-2 runtime-status-card"></div>
-                        <div id="workspaceDiagnosticsPanel" class="space-y-2 runtime-status-card"></div>
-                    </div>
-                    <details class="runtime-details-block">
-                        <summary>展开 OAuth 导入和模板载荷</summary>
+                        <div class="notion-oauth-card rounded-2xl border border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 p-4 space-y-3 lg:col-span-2">
                     <div class="space-y-3">
                     <div class="rounded-2xl border border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 p-4 space-y-3">
                         <div>
-                            <div class="text-sm font-medium">更短的 OAuth 导入路径</div>
-                            <div class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">点一次生成登录链接，在浏览器里完成 OAuth 后，把回调 URL 粘回来，再点一次完成导入。</div>
+                            <div class="text-sm font-medium">Notion OAuth 登录</div>
+                            <div class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">只保留一条最短路径：生成链接、点击登录、粘贴 callback、完成导入。</div>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px] text-gray-500 dark:text-gray-400">
                             <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">1. 点击“生成 OAuth 登录链接”</div>
@@ -963,6 +959,25 @@
                     <textarea id="requestTemplateOutput" rows="8" readonly placeholder="请求模板与诊断载荷会显示在这里"
                         class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
                     </div>
+                        </div>
+                    </div>
+                    <details class="runtime-details-block">
+                        <summary>展开 OAuth 诊断与模板工具</summary>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
+                            <div id="oauthRefreshDiagnosticsPanel" class="space-y-2 runtime-status-card"></div>
+                            <div id="workspaceDiagnosticsPanel" class="space-y-2 runtime-status-card"></div>
+                        </div>
+                        <div class="runtime-status-card mt-3 space-y-3">
+                            <div class="runtime-status-title">诊断工具</div>
+                            <div class="flex flex-wrap gap-2">
+                                <button id="oauthStartBtn" type="button" class="admin-action-btn">准备 OAuth 启动参数</button>
+                                <button id="oauthRefreshStatusBtn" type="button" class="admin-action-btn">刷新状态</button>
+                                <button id="workspaceCreateStatusBtn" type="button" class="admin-action-btn">工作区创建状态</button>
+                                <button id="requestTemplatesBtn" type="button" class="admin-action-btn">请求模板</button>
+                                <button id="copyRequestTemplateBtn" type="button" class="admin-action-btn">复制 JSON 模板</button>
+                                <button id="showGenericTemplatesBtn" type="button" class="admin-action-btn">查看通用模板</button>
+                            </div>
+                        </div>
                     </details>
                 </div>
                 </div>
