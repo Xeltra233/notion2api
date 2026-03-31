@@ -93,7 +93,6 @@ async def lifespan(app: FastAPI):
     app.state.admin_auth = get_admin_auth()
     app.state.admin_sessions = {}
     app.state.chat_sessions = {}
-    app.state.oauth_callback_sessions = {}
     app.state.admin_session_ttl_seconds = get_admin_session_ttl_seconds()
     app.state.chat_session_ttl_seconds = get_chat_session_ttl_seconds()
     app.state.admin_request_context = type("RequestContext", (), {"app": app})()
@@ -275,7 +274,6 @@ async def api_key_auth(request: Request, call_next):
     api_key = get_api_key()
     if api_key:
         public_api_paths = {
-            "/v1/admin/oauth/callback",
             "/v1/chat/access",
             "/v1/chat/login",
         }

@@ -138,7 +138,7 @@ class AccountPool:
                         "user_name": client.user_name,
                         "user_email": client.user_email,
                         "plan_type": client.plan_type,
-                        "oauth": client.oauth,
+                        "session": client.session,
                         "workspace": client.workspace,
                         "status": client.status,
                     }
@@ -241,7 +241,7 @@ class AccountPool:
         with self._lock:
             rows: List[Dict[str, Any]] = []
             for idx, client in enumerate(self.clients):
-                oauth_status = client.get_oauth_status()
+                session_status = client.get_session_status()
                 has_workspace = self.workspace_count[idx] > 0
                 persisted_workspace_state = str(
                     client.status.get("workspace_state")
@@ -252,9 +252,9 @@ class AccountPool:
                     state = "invalid"
                 elif self.cooldown_until[idx] > now:
                     state = "cooling"
-                elif oauth_status.get("expired"):
-                    state = "oauth_expired"
-                elif oauth_status.get("needs_refresh"):
+                elif session_status.get("expired"):
+                    state = "session_expired"
+                elif session_status.get("needs_refresh"):
                     state = "needs_refresh"
                 elif persisted_workspace_state == "workspace_creation_pending":
                     state = "workspace_creation_pending"
@@ -301,9 +301,9 @@ class AccountPool:
                         "subscription_tier": self.subscription_tiers[idx],
                         "workspace_count": self.workspace_count[idx],
                         "workspaces": self.workspaces[idx],
-                        "oauth": oauth_status,
+                        "session": session_status,
                         "usable": state == "active",
-                        "needs_reauth": state in {"oauth_expired", "invalid"},
+                        "needs_reauth": state in {"session_expired", "invalid"},
                     }
                 )
             return rows
@@ -394,7 +394,7 @@ class AccountPool:
             ),
             "workspace_count": self.workspace_count[idx],
             "workspaces": list(self.workspaces[idx]),
-            "oauth": client.oauth,
+            "session": client.session,
             "workspace": client.workspace,
             "status": client.status,
         }
@@ -585,7 +585,7 @@ class AccountPool:
                 or (
                     "active"
                     if result.get("ok")
-                    and not client.get_oauth_status().get("expired", False)
+                    and not client.get_session_status().get("expired", False)
                     else "cooling"
                 )
             ),
@@ -793,7 +793,7 @@ class AccountPool:
         for account in accounts:
             if account.get("user_id") != client.user_id:
                 continue
-            oauth_status = client.get_oauth_status()
+            session_status = client.get_session_status()
             existing_status = (
                 account.get("status") if isinstance(account.get("status"), dict) else {}
             )
@@ -836,19 +836,19 @@ class AccountPool:
                 "keepalive_failures": self.keepalive_failures[idx],
                 "last_error": self.last_error[idx],
                 "last_status_code": self.last_status_code[idx],
-                "oauth_expired": oauth_status.get("expired", False),
-                "oauth_expires_at": oauth_status.get("expires_at"),
-                "needs_refresh": oauth_status.get("needs_refresh", False),
+                "session_expired": session_status.get("expired", False),
+                "session_expires_at": session_status.get("expires_at"),
+                "needs_refresh": session_status.get("needs_refresh", False),
                 "usable": bool(
                     account.get("enabled", True)
-                    and not oauth_status.get("expired", False)
-                    and not oauth_status.get("needs_refresh", False)
+                    and not session_status.get("expired", False)
+                    and not session_status.get("needs_refresh", False)
                     and profile.get("workspace_count", 0) > 0
                     and (state or "active") == "active"
                 ),
                 "no_workspace": profile.get("workspace_count", 0) <= 0,
                 "needs_reauth": bool(
-                    oauth_status.get("expired", False)
+                    session_status.get("expired", False)
                     or (state or "") == "invalid"
                     or self.reauthorize_required[idx]
                 ),
@@ -886,7 +886,15 @@ class AccountPool:
                     account["status"]["last_workspace_failure_category"] = str(
                         existing_status.get("last_workspace_failure_category") or ""
                     ).strip()
-            account["oauth"] = {**account.get("oauth", {}), **oauth_status}
+            merged_session = {
+                **(
+                    account.get("session")
+                    if isinstance(account.get("session"), dict)
+                    else {}
+                ),
+                **session_status,
+            }
+            account["session"] = dict(merged_session)
             account["updated_at"] = int(time.time())
             updated = True
             break

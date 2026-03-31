@@ -75,17 +75,18 @@ def main() -> None:
         accounts = store.get_accounts()
         target = next(item for item in accounts if item["id"] == ACCOUNT_ID)
         target.setdefault("status", {})
-        target.setdefault("oauth", {})
+        target.setdefault("session", {})
+        target.setdefault("session", {})
         target["status"].update(
             {
-                "oauth_expired": True,
+                "session_expired": True,
                 "needs_refresh": True,
                 "needs_reauth": True,
                 "reauthorize_required": True,
                 "last_refresh_error": "stale",
             }
         )
-        target["oauth"].update(
+        target["session"].update(
             {
                 "access_token": "old-access",
                 "refresh_token": "old-refresh",
@@ -113,7 +114,8 @@ def main() -> None:
         output = {
             "refresh_probe": refresh_response.json(),
             "account_status": account["status"],
-            "account_oauth": account["oauth"],
+            "session_expired": account["status"].get("session_expired"),
+            "account_session": account.get("session") or {},
             "recent_probe": snapshot_response.json()["recent_probes"][-1],
         }
         print(json.dumps(output, ensure_ascii=False))

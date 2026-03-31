@@ -178,7 +178,7 @@ html.dark .model-beta-badge {
 .admin-badge[data-state="active"] { background: rgba(34, 197, 94, 0.14); color: #166534; }
 .admin-badge[data-state="cooling"] { background: rgba(245, 158, 11, 0.16); color: #92400e; }
 .admin-badge[data-state="invalid"],
-.admin-badge[data-state="oauth_expired"] { background: rgba(239, 68, 68, 0.14); color: #991b1b; }
+.admin-badge[data-state="session_expired"] { background: rgba(239, 68, 68, 0.14); color: #991b1b; }
 .admin-badge[data-state="needs_refresh"],
 .admin-badge[data-state="workspace_creation_pending"] { background: rgba(59, 130, 246, 0.14); color: #1d4ed8; }
 .admin-badge[data-state="probe_failures"] { background: rgba(220, 38, 38, 0.18); color: #991b1b; }

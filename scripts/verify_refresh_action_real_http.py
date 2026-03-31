@@ -74,17 +74,18 @@ def main() -> None:
         accounts = store.get_accounts()
         target = next(item for item in accounts if item["id"] == ACCOUNT_ID)
         target.setdefault("status", {})
-        target.setdefault("oauth", {})
+        target.setdefault("session", {})
+        target.setdefault("session", {})
         target["status"].update(
             {
-                "oauth_expired": True,
+                "session_expired": True,
                 "needs_refresh": True,
                 "needs_reauth": True,
                 "reauthorize_required": True,
                 "last_refresh_error": "expired before real http action",
             }
         )
-        target["oauth"].update(
+        target["session"].update(
             {
                 "access_token": "old-real-http-access",
                 "refresh_token": "old-real-http-refresh",
@@ -112,7 +113,8 @@ def main() -> None:
         output = {
             "refresh_action": refresh_response.json(),
             "account_status": account["status"],
-            "account_oauth": account["oauth"],
+            "session_expired": account["status"].get("session_expired"),
+            "account_session": account.get("session") or {},
             "workspace_expand_error": account["status"].get(
                 "workspace_expand_error", ""
             ),

@@ -99,8 +99,12 @@ window.NotionAI.API.Admin = {
         return this.trigger(endpoint, { account_id: accountId });
     },
 
-    async finalizeOAuth(payload) {
-        return this.trigger('/v1/admin/oauth/finalize', payload);
+    async startEmailLogin(payload) {
+        return this.trigger('/v1/admin/email-login/start', payload);
+    },
+
+    async finalizeEmailLogin(payload) {
+        return this.trigger('/v1/admin/email-login/finalize', payload);
     },
 
     async runAccountAction(accountId, action) {
@@ -192,19 +196,11 @@ window.NotionAI.API.Admin = {
         return data;
     },
 
-    async startOAuth(payload) {
-        return this.trigger('/v1/admin/oauth/start', payload);
-    },
-
-    async finalizeOAuth(payload) {
-        return this.trigger('/v1/admin/oauth/finalize', payload);
-    },
-
-    async getOAuthRefreshStatus() {
-        const response = await window.NotionAI.API.Client.get('/v1/admin/oauth/refresh-status');
+    async getSessionRefreshStatus() {
+        const response = await window.NotionAI.API.Client.get('/v1/admin/session/refresh-status');
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            throw new Error(data.detail || '加载 OAuth 刷新状态失败');
+            throw new Error(data.detail || '加载会话刷新状态失败');
         }
         return data;
     },
@@ -218,11 +214,11 @@ window.NotionAI.API.Admin = {
         return data;
     },
 
-    async getOAuthRefreshDiagnostics() {
-        const response = await window.NotionAI.API.Client.get('/v1/admin/oauth/refresh-diagnostics');
+    async getSessionRefreshDiagnostics() {
+        const response = await window.NotionAI.API.Client.get('/v1/admin/session/refresh-diagnostics');
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            throw new Error(data.detail || '加载 OAuth 刷新诊断失败');
+            throw new Error(data.detail || '加载会话刷新诊断失败');
         }
         return data;
     },
