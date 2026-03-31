@@ -255,40 +255,23 @@ window.NotionAI.API.Settings = {
 
     renderEmailLoginSummary(payload = {}) {
         const summary = document.getElementById('emailLoginStartSummary');
-        const output = document.getElementById('emailLoginStartOutput');
-        const bridge = document.getElementById('emailLoginSessionOutput');
-        const link = document.getElementById('emailLoginStartLink');
+        const codeStep = document.getElementById('emailLoginCodeStep');
+        const importBtn = document.getElementById('emailLoginImportBtn');
         if (!summary) {
             return;
         }
         if (!payload || !payload.email) {
             summary.innerHTML = '';
-            if (output) {
-                output.value = '';
-            }
-            if (bridge) {
-                bridge.value = '';
-            }
-            if (link) {
-                link.href = '#';
-                link.classList.add('hidden');
-            }
+            codeStep?.classList.add('hidden');
+            importBtn?.classList.add('hidden');
             return;
         }
         summary.innerHTML = `
             <span class="admin-mini-pill"><strong>邮箱</strong><span>${this.escapeHtml(payload.email || '')}</span></span>
-            <span class="admin-mini-pill"><strong>状态</strong><span>${this.escapeHtml(payload.status || 'code_sent')}</span></span>
+            <span class="admin-mini-pill"><strong>状态</strong><span>验证码已发送</span></span>
         `;
-        if (output) {
-            output.value = payload.message || '验证码已发送，请填写邮箱验证码。';
-        }
-        if (bridge) {
-            bridge.value = payload.expires_at ? `会话有效期至：${this.formatTimestamp(payload.expires_at)}` : '';
-        }
-        if (link) {
-            link.href = '#';
-            link.classList.add('hidden');
-        }
+        codeStep?.classList.remove('hidden');
+        importBtn?.classList.remove('hidden');
     },
 
     async startEmailLoginFlow() {
@@ -303,6 +286,7 @@ window.NotionAI.API.Settings = {
             });
             this.renderEmailLoginSummary(result);
             this.setAdminNotice(result.message || '验证码已发送，请输入邮箱验证码完成导入。');
+            document.getElementById('emailLoginCodeInput')?.focus();
         } catch (error) {
             this.setAdminNotice(error.message || '发送邮箱验证码失败。');
         }

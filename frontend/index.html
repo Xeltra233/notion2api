@@ -924,26 +924,18 @@
                                         <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">4. 填回这里并完成导入</div>
                                     </div>
                                 </div>
-                                <div class="rounded-2xl border border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 p-4 space-y-3">
-                                    <div class="text-[11px] text-gray-500 dark:text-gray-400">这里会显示当前邮箱验证码发送状态与会话有效期。</div>
-                                    <a id="emailLoginStartLink" href="#" target="_blank" rel="noopener noreferrer"
-                                        class="hidden break-all text-sm text-accent underline underline-offset-4">占位链接</a>
-                                    <textarea id="emailLoginStartOutput" rows="3" readonly placeholder="验证码发送结果会显示在这里"
-                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
-                                </div>
-                                <textarea id="emailLoginSessionOutput" rows="2" readonly placeholder="验证码会话有效期会显示在这里"
-                                    class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <input id="emailLoginEmailInput" type="text" placeholder="用户邮箱"
+                                <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-3 items-start">
+                                    <input id="emailLoginEmailInput" type="text" placeholder="邮箱"
                                         class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                    <textarea id="emailLoginCodeInput" rows="3" placeholder="把邮箱收到的验证码填到这里"
-                                        class="w-full sm:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none resize-y"></textarea>
+                                    <button id="emailLoginContinueBtn" type="button" class="admin-action-btn admin-action-btn-primary">继续</button>
+                                </div>
+                                <div id="emailLoginCodeStep" class="hidden space-y-3">
+                                    <div id="emailLoginCodeSentNotice" class="text-sm text-emerald-600 dark:text-emerald-400">验证码已发送</div>
+                                    <textarea id="emailLoginCodeInput" rows="3" placeholder="输入邮箱收到的验证码"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none resize-y"></textarea>
                                 </div>
                                 <div class="flex flex-wrap gap-2">
-                                    <button id="emailLoginStartBtnPrimary" type="button" class="admin-action-btn admin-action-btn-primary">发送验证码并聚焦到这里</button>
-                                    <button id="emailLoginImportBtn" type="button" class="admin-action-btn admin-action-btn-primary">提交验证码并导入</button>
-                                    <button id="emailLoginRetryBtn" type="button" class="admin-action-btn">重复提交验证码</button>
-                                    <button id="emailLoginFinalizeBtn" type="button" class="admin-action-btn">仅完成导入</button>
+                                    <button id="emailLoginImportBtn" type="button" class="admin-action-btn admin-action-btn-primary hidden">继续</button>
                                 </div>
                                 <textarea id="requestTemplateOutput" rows="8" readonly placeholder="请求模板与诊断载荷会显示在这里"
                                     class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>

@@ -508,8 +508,14 @@ function bindEventListeners() {
     document.getElementById('emailLoginStartBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.startEmailLoginFlow();
     });
-    document.getElementById('emailLoginStartBtnPrimary')?.addEventListener('click', () => {
-        window.NotionAI.API.Settings.startAndFocusEmailLoginFlow();
+    document.getElementById('emailLoginContinueBtn')?.addEventListener('click', () => {
+        window.NotionAI.API.Settings.startEmailLoginFlow();
+    });
+    document.getElementById('emailLoginEmailInput')?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            window.NotionAI.API.Settings.startEmailLoginFlow();
+        }
     });
     document.getElementById('sessionRefreshStatusBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.loadSessionRefreshStatus();
@@ -537,12 +543,6 @@ function bindEventListeners() {
     });
     document.getElementById('adminSnapshotBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.loadAdminSnapshot();
-    });
-    document.getElementById('emailLoginFinalizeBtn').addEventListener('click', () => {
-        window.NotionAI.API.Settings.finalizeEmailLoginFromForm();
-    });
-    document.getElementById('emailLoginRetryBtn').addEventListener('click', () => {
-        window.NotionAI.API.Settings.finalizeEmailLoginFromForm();
     });
     document.getElementById('emailLoginImportBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.parseAndFinalizeCallbackUrl();
