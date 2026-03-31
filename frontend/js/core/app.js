@@ -446,6 +446,9 @@ function bindEventListeners() {
     document.getElementById('adminExportAccountsBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.exportAccountsToTextarea();
     });
+    document.getElementById('adminExportAccountsBtnSecondary')?.addEventListener('click', () => {
+        window.NotionAI.API.Settings.exportAccountsToTextarea();
+    });
     document.getElementById('adminPrevPageBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.changeAdminPage(-1);
     });
