@@ -684,14 +684,6 @@ window.NotionAI.API.Settings = {
     },
 
     openEmailLoginImporter(startImmediately = false) {
-        if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
-            window.NotionAI.Core.App.setActiveModule('diagnostics');
-        }
-        const diagnosticsSection = document.getElementById('settings-section-diagnostics');
-        if (diagnosticsSection) {
-            const sessionCard = diagnosticsSection.querySelector('.notion-session-card');
-            sessionCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
         this.setAdminNotice('已切到邮箱验证码导入区。');
         if (startImmediately) {
             this.startEmailLoginFlow();
@@ -2668,14 +2660,6 @@ window.NotionAI.API.Settings = {
     },
 
     async startAndFocusEmailLoginFlow() {
-        if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
-            window.NotionAI.Core.App.setActiveModule('diagnostics');
-        }
-        const diagnosticsSection = document.getElementById('settings-section-diagnostics');
-        if (diagnosticsSection) {
-            const sessionCard = diagnosticsSection.querySelector('.notion-session-card');
-            sessionCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
         await this.startEmailLoginFlow();
     },
 
