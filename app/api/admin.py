@@ -19,11 +19,13 @@ from app.api.register import (
 )
 from app.register.mail_client import build_runtime_proxy_dict
 from app.register.notion_register import (
+    DRISSION_AVAILABLE,
     NOTION_API_GET_SELF,
     NOTION_API_LOAD_USER_CONTENT,
     NOTION_API_SEND_EMAIL_CODE,
     NOTION_API_SIGNUP,
     NOTION_API_VERIFY_EMAIL_CODE,
+    NotionRegisterService,
 )
 from app.usage import UsageStore
 from app.config import (
@@ -1189,6 +1191,98 @@ def _consume_email_login_session(request: Request, email: str) -> dict[str, Any]
     if session:
         sessions.pop(normalized_email, None)
     return session
+
+
+def _build_email_login_register_service() -> NotionRegisterService:
+    config = get_config_store().get_config()
+    proxy = str(config.get("upstream_proxy") or "").strip()
+    return NotionRegisterService(
+        proxy=proxy,
+        headless=bool(config.get("auto_register_headless", False)),
+        timeout=180,
+    )
+
+
+def _submit_email_for_browser_login(
+    register_service: NotionRegisterService, email: str
+) -> None:
+    if not DRISSION_AVAILABLE:
+        raise HTTPException(
+            status_code=500,
+            detail="当前实例未安装浏览器自动化依赖 DrissionPage，无法发送验证码。",
+        )
+    page = register_service._create_browser_page()
+    register_service._page = page
+    try:
+        page.get("https://www.notion.so/signup", timeout=register_service.timeout)
+        time.sleep(2)
+        email_input = page.ele("css:input[type='email']", timeout=10)
+        if not email_input:
+            email_input = page.ele("css:input[name='email']", timeout=5)
+        if not email_input:
+            raise HTTPException(status_code=502, detail="未找到 Notion 邮箱输入框。")
+        email_input.input(email, clear=True)
+        time.sleep(0.5)
+        continue_btn = register_service._find_button(
+            page, ["Continue", "继续", "Sign up", "注册"]
+        )
+        if continue_btn:
+            continue_btn.click()
+        else:
+            email_input.input("\n")
+        time.sleep(2)
+    except HTTPException:
+        register_service.stop()
+        raise
+    except Exception as exc:
+        register_service.stop()
+        raise HTTPException(
+            status_code=502, detail=f"发送验证码失败: {str(exc)[:300]}"
+        ) from exc
+
+
+def _finalize_browser_email_login(
+    email: str,
+    code: str,
+    session_payload: dict[str, Any],
+    payload: "EmailCodeFinalizeRequest",
+) -> dict[str, Any]:
+    register_service = session_payload.get("register_service")
+    if not register_service:
+        raise HTTPException(
+            status_code=400, detail="该邮箱没有有效的浏览器验证码会话，请重新开始。"
+        )
+    page = getattr(register_service, "_page", None)
+    if page is None:
+        raise HTTPException(
+            status_code=400, detail="浏览器验证码会话已失效，请重新开始。"
+        )
+    if not register_service._submit_verification_code(page, code):
+        raise HTTPException(status_code=400, detail="未找到验证码输入框，请重新开始。")
+    time.sleep(3)
+    if register_service._retry_verification_step(page, code):
+        time.sleep(3)
+    register_service._complete_post_signup_flow(page)
+
+    token_v2 = register_service._extract_token_v2(page)
+    user_id = register_service._extract_user_id(page)
+    if not token_v2 or not user_id:
+        register_service._write_debug_artifacts(page, email, "admin_email_login_failed")
+        raise HTTPException(
+            status_code=400, detail="验证码提交成功，但未能提取账号凭据。"
+        )
+    account = _build_email_code_account(
+        token_v2=token_v2,
+        user_id=user_id,
+        email=email,
+        first_name=str(payload.first_name or "Notion").strip() or "Notion",
+        last_name=str(payload.last_name or "User").strip() or "User",
+        plan_type=payload.plan_type,
+        notes=payload.notes,
+        tags=payload.tags,
+        source="email_code_browser",
+    )
+    return register_service.finalize_account_record(account)
 
 
 def _build_notion_session() -> requests.Session:
@@ -3800,29 +3894,16 @@ async def start_email_login(
     email = str(payload.email or "").strip().lower()
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="请输入有效邮箱地址")
-    session = _build_notion_session()
-    try:
-        response = session.post(
-            NOTION_API_SEND_EMAIL_CODE,
-            json={"email": email},
-            timeout=30,
-        )
-    except requests.RequestException as exc:
-        raise HTTPException(
-            status_code=502, detail=f"发送验证码失败: {str(exc)[:300]}"
-        ) from exc
-    if response.status_code not in (200, 201):
-        raise HTTPException(
-            status_code=400,
-            detail=f"发送验证码失败: {str(response.text or '')[:300] or f'HTTP {response.status_code}'}",
-        )
-    email_session = _register_email_login_session(request, email)
+    register_service = _build_email_login_register_service()
+    _submit_email_for_browser_login(register_service, email)
+    email_session = _register_email_login_session(request, email, register_service)
     return {
         "ok": True,
         "email": email,
         "status": "code_sent",
         "expires_at": int(email_session.get("expires_at") or 0),
-        "message": "验证码已发送，请输入邮箱收到的验证码完成导入。",
+        "message": "验证码已发送，请输入邮箱收到的验证码继续。",
+        "mode": "browser_session",
     }
 
 
@@ -3929,15 +4010,26 @@ async def finalize_email_login(
             status_code=400,
             detail="该邮箱没有有效的验证码会话，请先发送验证码。",
         )
-    created_account = _create_account_from_email_code(payload)
+    email_session = _get_email_login_session(request, email)
+    created_account = _finalize_browser_email_login(
+        email, str(payload.code or "").strip(), email_session or {}, payload
+    )
     saved = get_config_store().upsert_account(created_account)
-    _consume_email_login_session(request, email)
+    consumed = _consume_email_login_session(request, email)
+    register_service = (
+        consumed.get("register_service") if isinstance(consumed, dict) else None
+    )
+    if register_service:
+        try:
+            register_service.stop()
+        except Exception:
+            pass
     _rebuild_pool(request)
     return {
         "ok": True,
         "account": _redact_account_payload(saved),
-        "source": "email_code_finalize",
-        "message": "邮箱验证码注册成功，账号已导入账号池。",
+        "source": "email_code_browser_finalize",
+        "message": "邮箱验证码登录成功，账号已导入账号池。",
     }
 
 

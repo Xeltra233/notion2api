@@ -268,7 +268,7 @@ window.NotionAI.API.Settings = {
         }
         summary.innerHTML = `
             <span class="admin-mini-pill"><strong>邮箱</strong><span>${this.escapeHtml(payload.email || '')}</span></span>
-            <span class="admin-mini-pill"><strong>状态</strong><span>验证码已发送</span></span>
+            <span class="admin-mini-pill"><strong>状态</strong><span>${this.escapeHtml(payload.mode === 'browser_session' ? '浏览器会话已启动' : '验证码已发送')}</span></span>
         `;
         codeStep?.classList.remove('hidden');
         importBtn?.classList.remove('hidden');
@@ -285,10 +285,10 @@ window.NotionAI.API.Settings = {
                 email,
             });
             this.renderEmailLoginSummary(result);
-            this.setAdminNotice(result.message || '验证码已发送，请输入邮箱验证码完成导入。');
+            this.setAdminNotice(result.message || '验证码已发送，请输入邮箱验证码继续。');
             document.getElementById('emailLoginCodeInput')?.focus();
         } catch (error) {
-            this.setAdminNotice(error.message || '发送邮箱验证码失败。');
+            this.setAdminNotice(error.message || '发送验证码失败。');
         }
     },
 
