@@ -562,13 +562,32 @@ class NotionRegisterService:
     def _page_still_on_verification_step(self, page) -> bool:
         visible_text = self._get_visible_text(page)
         if not visible_text:
-            return False
+            try:
+                return bool(page.ele("css:input[inputmode='numeric']", timeout=1))
+            except Exception:
+                return False
         markers = [
             "验证码",
             "我们已将验证码发送到你的收件箱",
             "重新发送",
+            "verification code",
+            "enter code",
+            "6-digit code",
         ]
-        return all(marker in visible_text for marker in markers)
+        lowered = visible_text.lower()
+        if any(marker.lower() in lowered for marker in markers):
+            return True
+        try:
+            selectors = [
+                "css:input[inputmode='numeric']",
+                "css:input[autocomplete='one-time-code']",
+                "css:input[name*='code']",
+                "css:input[id*='code']",
+                "css:input[aria-label*='code']",
+            ]
+            return any(page.ele(selector, timeout=1) for selector in selectors)
+        except Exception:
+            return False
 
     def _retry_verification_step(self, page, code: str) -> bool:
         if not self._page_still_on_verification_step(page):
@@ -580,8 +599,12 @@ class NotionRegisterService:
         code = str(code or "").strip()
         if not code:
             return False
+        segmented_inputs = []
         try:
-            segmented_inputs = page.eles("css:input[inputmode='numeric']", timeout=3)
+            segmented_inputs = page.eles(
+                "css:input[inputmode='numeric'],input[autocomplete='one-time-code'],input[name*='code'],input[id*='code']",
+                timeout=3,
+            )
         except Exception:
             segmented_inputs = []
         segmented_inputs = [item for item in segmented_inputs if item]
@@ -601,9 +624,23 @@ class NotionRegisterService:
                 verify_btn.click()
             return True
 
-        code_input = page.ele("css:input[type='text']", timeout=10)
-        if not code_input:
-            code_input = page.ele("css:input[inputmode='numeric']", timeout=5)
+        code_input = None
+        selectors = [
+            "css:input[autocomplete='one-time-code']",
+            "css:input[name*='code']",
+            "css:input[id*='code']",
+            "css:input[aria-label*='code']",
+            "css:input[inputmode='numeric']",
+            "css:input[type='tel']",
+            "css:input[type='text']",
+        ]
+        for selector in selectors:
+            try:
+                code_input = page.ele(selector, timeout=2)
+            except Exception:
+                code_input = None
+            if code_input:
+                break
         if not code_input:
             return False
         code_input.input(code, clear=True)
