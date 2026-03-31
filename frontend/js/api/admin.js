@@ -196,6 +196,10 @@ window.NotionAI.API.Admin = {
         return this.trigger('/v1/admin/oauth/start', payload);
     },
 
+    async finalizeOAuth(payload) {
+        return this.trigger('/v1/admin/oauth/finalize', payload);
+    },
+
     async getOAuthRefreshStatus() {
         const response = await window.NotionAI.API.Client.get('/v1/admin/oauth/refresh-status');
         const data = await response.json().catch(() => ({}));

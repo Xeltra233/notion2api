@@ -52,6 +52,7 @@ _RUNTIME_SECRET_FIELDS = {
 }
 _ACCOUNT_SECRET_FIELDS = {"token_v2"}
 _OAUTH_SECRET_FIELDS = {"access_token", "refresh_token"}
+_OAUTH_CALLBACK_TTL_SECONDS = 10 * 60
 
 
 def _mask_secret(value: Any) -> str:
@@ -88,7 +89,9 @@ def _redact_account_payload(account: dict[str, Any]) -> dict[str, Any]:
         redacted[f"has_{field}"] = bool(str(raw_value or "").strip())
     oauth = redacted.get("oauth") if isinstance(redacted.get("oauth"), dict) else {}
     redacted["oauth"] = _redact_oauth_payload(oauth)
-    health = redacted.get("health") if isinstance(redacted.get("health"), dict) else None
+    health = (
+        redacted.get("health") if isinstance(redacted.get("health"), dict) else None
+    )
     if health is not None:
         redacted["health"] = _redact_health_payload(health)
     return redacted
@@ -995,7 +998,9 @@ def _create_admin_session(request: Request, username: str) -> dict[str, Any]:
     _prune_admin_sessions(request)
     token = secrets.token_urlsafe(32)
     now_ts = int(time.time())
-    ttl_seconds = int(getattr(request.app.state, "admin_session_ttl_seconds", 43200) or 43200)
+    ttl_seconds = int(
+        getattr(request.app.state, "admin_session_ttl_seconds", 43200) or 43200
+    )
     session = {
         "token": token,
         "username": str(username or "").strip(),
@@ -1022,7 +1027,14 @@ def _create_chat_session(request: Request) -> dict[str, Any]:
     _prune_chat_sessions(request)
     token = secrets.token_urlsafe(32)
     now_ts = int(time.time())
-    ttl_seconds = int(getattr(request.app.state, "chat_session_ttl_seconds", get_chat_session_ttl_seconds()) or get_chat_session_ttl_seconds())
+    ttl_seconds = int(
+        getattr(
+            request.app.state,
+            "chat_session_ttl_seconds",
+            get_chat_session_ttl_seconds(),
+        )
+        or get_chat_session_ttl_seconds()
+    )
     session = {
         "token": token,
         "created_at": now_ts,
@@ -1040,9 +1052,13 @@ def _build_admin_auth_status(request: Request) -> dict[str, Any]:
         and str(admin_auth.get("password_salt") or "").strip()
     )
     initialized_from_default = bool(admin_auth.get("initialized_from_default", True))
-    auth_source = "bootstrap_admin_password" if initialized_from_default else "persisted"
+    auth_source = (
+        "bootstrap_admin_password" if initialized_from_default else "persisted"
+    )
     auth_source_label = (
-        "bootstrap from ADMIN_PASSWORD" if initialized_from_default else "persisted runtime config"
+        "bootstrap from ADMIN_PASSWORD"
+        if initialized_from_default
+        else "persisted runtime config"
     )
     return {
         "username": str(admin_auth.get("username") or ""),
@@ -1056,7 +1072,10 @@ def _build_admin_auth_status(request: Request) -> dict[str, Any]:
 
 
 def _current_admin_session(
-    request: Request, session_token: str | None, *, allow_password_change_required: bool = False
+    request: Request,
+    session_token: str | None,
+    *,
+    allow_password_change_required: bool = False,
 ) -> dict[str, Any]:
     token = str(session_token or "").strip()
     if not token:
@@ -1100,7 +1119,9 @@ def _build_chat_auth_status(request: Request) -> dict[str, Any]:
     }
 
 
-def _current_chat_session(request: Request, session_token: str | None) -> dict[str, Any]:
+def _current_chat_session(
+    request: Request, session_token: str | None
+) -> dict[str, Any]:
     token = str(session_token or "").strip()
     if not token:
         raise HTTPException(status_code=401, detail="Chat session required")
@@ -1167,6 +1188,70 @@ def _build_saved_oauth_account(
     }
 
 
+def _prune_oauth_callback_sessions(request: Request) -> None:
+    sessions = getattr(request.app.state, "oauth_callback_sessions", {})
+    now_ts = int(time.time())
+    expired_tokens = [
+        token
+        for token, session in sessions.items()
+        if int(session.get("expires_at") or 0) <= now_ts
+    ]
+    for token in expired_tokens:
+        sessions.pop(token, None)
+
+
+def _register_oauth_callback_session(
+    request: Request, *, provider: str, redirect_uri: str, state: str
+) -> dict[str, Any]:
+    _prune_oauth_callback_sessions(request)
+    now_ts = int(time.time())
+    session = {
+        "provider": str(provider or "notion-web").strip() or "notion-web",
+        "redirect_uri": redirect_uri,
+        "state": state,
+        "created_at": now_ts,
+        "expires_at": now_ts + _OAUTH_CALLBACK_TTL_SECONDS,
+        "callback_payload": {},
+        "status": "pending_callback",
+    }
+    getattr(request.app.state, "oauth_callback_sessions", {})[state] = session
+    return session
+
+
+def _get_oauth_callback_session(request: Request, state: str) -> dict[str, Any] | None:
+    _prune_oauth_callback_sessions(request)
+    return getattr(request.app.state, "oauth_callback_sessions", {}).get(state)
+
+
+def _store_oauth_callback_session_payload(
+    request: Request, *, state: str, payload: dict[str, Any]
+) -> dict[str, Any]:
+    sessions = getattr(request.app.state, "oauth_callback_sessions", {})
+    session = _get_oauth_callback_session(request, state)
+    if not session:
+        raise HTTPException(status_code=404, detail="OAuth callback session not found")
+    session["callback_payload"] = payload
+    session["status"] = "callback_received"
+    sessions[state] = session
+    return session
+
+
+def _consume_oauth_callback_session_payload(
+    request: Request, state: str
+) -> dict[str, Any] | None:
+    sessions = getattr(request.app.state, "oauth_callback_sessions", {})
+    session = _get_oauth_callback_session(request, state)
+    if not session:
+        return None
+    payload = (
+        session.get("callback_payload")
+        if isinstance(session.get("callback_payload"), dict)
+        else None
+    )
+    sessions.pop(state, None)
+    return payload
+
+
 def _normalize_callback_redirect_uri(value: str, fallback: str) -> str:
     candidate = str(value or "").strip()
     if not candidate:
@@ -1185,7 +1270,9 @@ def _normalize_callback_redirect_uri(value: str, fallback: str) -> str:
     if ip and (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved):
         return fallback
     safe_path = parsed.path or "/"
-    safe_query = parsed.query if parsed.query and "redirect_uri=" not in parsed.query else ""
+    safe_query = (
+        parsed.query if parsed.query and "redirect_uri=" not in parsed.query else ""
+    )
     return urlunparse((scheme, parsed.netloc, safe_path, "", safe_query, ""))
 
 
@@ -1196,20 +1283,6 @@ def _default_local_redirect_uri(request: Request) -> str:
         scheme = request.url.scheme or "http"
         return _normalize_callback_redirect_uri(f"{scheme}://{host}", fallback)
     return fallback
-
-
-def _build_oauth_placeholder_url(redirect_uri: str, state: str, provider: str) -> str:
-    safe_state = state or secrets.token_urlsafe(16)
-    query = urlencode(
-        {
-            "client_id": "local-placeholder",
-            "redirect_uri": redirect_uri,
-            "response_type": "code",
-            "state": safe_state,
-            "provider": provider,
-        }
-    )
-    return f"https://www.notion.so/oauth/authorize?{query}"
 
 
 def _build_callback_redirect_url(
@@ -1233,7 +1306,6 @@ def _build_oauth_start_payload(
     state: str,
     provider: str,
 ) -> dict[str, Any]:
-    auth_url = _build_oauth_placeholder_url(redirect_uri, state, provider)
     callback_bridge_url = _build_callback_redirect_url(
         f"{_default_local_redirect_uri(request)}/v1/admin/oauth/callback",
         {"redirect_uri": redirect_uri, "state": state, "provider": provider},
@@ -1242,10 +1314,10 @@ def _build_oauth_start_payload(
         "provider": provider,
         "redirect_uri": redirect_uri,
         "state": state,
-        "authorization_url": auth_url,
+        "authorization_url": "",
         "callback_bridge_url": callback_bridge_url,
-        "status": "placeholder_authorization_url",
-        "message": "OAuth start now returns a localhost-friendly placeholder authorization URL and a callback bridge URL. You can point the upstream callback to the bridge and it will redirect the params back to your local panel URL.",
+        "status": "manual_callback_required",
+        "message": "当前环境未配置真实 Notion OAuth App。请在完成网页登录后，将 localhost callback URL 粘回管理面板完成导入。",
     }
 
 
@@ -1978,7 +2050,11 @@ def _summarize_action_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if not category and not bool(payload.get("ok", False)):
         if status_code in {401, 403}:
             category = "unauthorized" if status_code == 401 else "forbidden"
-        elif state == "invalid" or "unauthorized" in reason_lower or "token is invalid" in reason_lower:
+        elif (
+            state == "invalid"
+            or "unauthorized" in reason_lower
+            or "token is invalid" in reason_lower
+        ):
             category = "unauthorized"
         elif status_code == 404:
             category = "not_found"
@@ -1986,7 +2062,9 @@ def _summarize_action_payload(payload: dict[str, Any]) -> dict[str, Any]:
             category = "server_error"
         elif status_code == 429 or "429" in reason_lower:
             category = "rate_limited"
-    reauthorize_required = bool(payload.get("reauthorize_required", False)) or category in {
+    reauthorize_required = bool(
+        payload.get("reauthorize_required", False)
+    ) or category in {
         "unauthorized",
         "forbidden",
     }
@@ -2996,7 +3074,9 @@ async def admin_change_password(
     payload: AdminChangePasswordRequest,
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
-    session = _ensure_admin(request, x_admin_session, allow_password_change_required=True)
+    session = _ensure_admin(
+        request, x_admin_session, allow_password_change_required=True
+    )
     auth_status = _build_admin_auth_status(request)
     current_password = str(payload.current_password or "")
     if not verify_admin_credentials(auth_status["username"], current_password):
@@ -3007,13 +3087,18 @@ async def admin_change_password(
     raw_new_password = payload.new_password
     new_password = str(raw_new_password or "")
     if raw_new_password is not None and new_password and len(new_password) < 8:
-        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+        raise HTTPException(
+            status_code=400, detail="New password must be at least 8 characters"
+        )
     current_admin_auth = get_admin_auth()
     updated_auth = update_admin_credentials(
         username=new_username,
         password=new_password or str(current_password or ""),
         must_change_password=False,
-        initialized_from_default=bool(current_admin_auth.get("initialized_from_default", False) and not new_password),
+        initialized_from_default=bool(
+            current_admin_auth.get("initialized_from_default", False)
+            and not new_password
+        ),
     )
     request.app.state.admin_auth = updated_auth
     getattr(request.app.state, "admin_sessions", {}).clear()
@@ -3033,7 +3118,12 @@ async def admin_change_password(
 async def chat_login(request: Request, payload: ChatLoginRequest):
     chat_status = _build_chat_auth_status(request)
     if not chat_status["enabled"]:
-        return {"ok": True, "session_token": "", "session_expires_at": 0, "enabled": False}
+        return {
+            "ok": True,
+            "session_token": "",
+            "session_expires_at": 0,
+            "enabled": False,
+        }
     password = str(payload.password or "")
     if not verify_chat_password(password):
         raise HTTPException(status_code=401, detail="Invalid chat password")
@@ -3051,7 +3141,9 @@ async def get_chat_access(request: Request):
     chat_status = _build_chat_auth_status(request)
     return {
         "ok": True,
-        "chat_enabled": bool(get_config_store().get_config().get("chat_enabled", False)),
+        "chat_enabled": bool(
+            get_config_store().get_config().get("chat_enabled", False)
+        ),
         "password_enabled": chat_status["enabled"],
         "configured": chat_status["configured"],
     }
@@ -3118,15 +3210,21 @@ async def get_admin_config(
             "refresh_request_url": config.get("refresh_request_url", ""),
             "refresh_client_id": config.get("refresh_client_id", ""),
             "refresh_client_secret": config.get("refresh_client_secret", ""),
-            "workspace_execution_mode": config.get("workspace_execution_mode", "manual"),
+            "workspace_execution_mode": config.get(
+                "workspace_execution_mode", "manual"
+            ),
             "workspace_request_url": config.get("workspace_request_url", ""),
             "allow_real_probe_requests": config.get("allow_real_probe_requests", False),
             "chat_enabled": config.get("chat_enabled", False),
             "media_public_base_url": config.get("media_public_base_url", ""),
             "media_storage_path": config.get("media_storage_path", ""),
             "chat_password_enabled": bool(chat_auth.get("enabled", False)),
-            "chat_password": "********" if str(chat_auth.get("password_hash") or "").strip() else "",
-            "has_chat_password": bool(str(chat_auth.get("password_hash") or "").strip()),
+            "chat_password": "********"
+            if str(chat_auth.get("password_hash") or "").strip()
+            else "",
+            "has_chat_password": bool(
+                str(chat_auth.get("password_hash") or "").strip()
+            ),
         }
     )
     return {
@@ -3163,7 +3261,12 @@ async def get_proxy_health(
     _ensure_admin(request, x_admin_session)
     config = get_config_store().get_config()
     payload = get_proxy_health_payload(config)
-    return {"ok": True, "response_mode": "status_summary", "contains_secrets": False, **payload}
+    return {
+        "ok": True,
+        "response_mode": "status_summary",
+        "contains_secrets": False,
+        **payload,
+    }
 
 
 @router.post("/admin/register/auto-trigger")
@@ -3278,15 +3381,35 @@ async def update_runtime_settings(
     saved = store.save_config(config)
     if payload.chat_password is not None:
         chat_password_value = str(payload.chat_password or "").strip()
-        has_existing_chat_password = bool(str(get_chat_auth().get("password_hash") or "").strip())
+        has_existing_chat_password = bool(
+            str(get_chat_auth().get("password_hash") or "").strip()
+        )
         if chat_password_value and chat_password_value != "********":
-            update_chat_password(password=chat_password_value, enabled=payload.chat_password_enabled)
+            update_chat_password(
+                password=chat_password_value, enabled=payload.chat_password_enabled
+            )
         elif not chat_password_value:
             update_chat_password(password="", enabled=False)
         elif chat_password_value == "********" and has_existing_chat_password:
-            store.update_config({"chat_auth": {**get_chat_auth(), "enabled": bool(payload.chat_password_enabled)}})
-    elif bool(payload.chat_password_enabled) != bool(get_chat_auth().get("enabled", False)):
-        store.update_config({"chat_auth": {**get_chat_auth(), "enabled": bool(payload.chat_password_enabled)}})
+            store.update_config(
+                {
+                    "chat_auth": {
+                        **get_chat_auth(),
+                        "enabled": bool(payload.chat_password_enabled),
+                    }
+                }
+            )
+    elif bool(payload.chat_password_enabled) != bool(
+        get_chat_auth().get("enabled", False)
+    ):
+        store.update_config(
+            {
+                "chat_auth": {
+                    **get_chat_auth(),
+                    "enabled": bool(payload.chat_password_enabled),
+                }
+            }
+        )
     saved = store.get_config()
     _rebuild_pool(request)
     return {
@@ -3450,6 +3573,34 @@ async def oauth_callback_redirect(request: Request):
         request.query_params.get("redirect_uri") or "",
         fallback_redirect_uri,
     )
+    state = str(request.query_params.get("state") or "").strip()
+    if state:
+        callback_payload = {
+            "token_v2": str(request.query_params.get("token_v2") or "").strip(),
+            "user_id": str(request.query_params.get("user_id") or "").strip(),
+            "space_id": str(request.query_params.get("space_id") or "").strip(),
+            "user_email": str(
+                request.query_params.get("user_email")
+                or request.query_params.get("email")
+                or ""
+            ).strip(),
+            "access_token": str(request.query_params.get("access_token") or "").strip(),
+            "refresh_token": str(
+                request.query_params.get("refresh_token") or ""
+            ).strip(),
+            "expires_at": str(request.query_params.get("expires_at") or "").strip(),
+            "state": state,
+            "provider": str(
+                request.query_params.get("provider") or "notion-web"
+            ).strip()
+            or "notion-web",
+            "source": "oauth_callback_redirect",
+        }
+        session = _get_oauth_callback_session(request, state)
+        if session:
+            _store_oauth_callback_session_payload(
+                request, state=state, payload=callback_payload
+            )
     redirect_url = _build_callback_redirect_url(
         redirect_uri,
         {key: value for key, value in request.query_params.items()},
@@ -3466,6 +3617,12 @@ async def start_oauth(
     _ensure_admin(request, x_admin_session)
     redirect_uri = payload.redirect_uri.strip() or _default_local_redirect_uri(request)
     state = payload.state.strip() or secrets.token_urlsafe(16)
+    _register_oauth_callback_session(
+        request,
+        provider=payload.provider,
+        redirect_uri=redirect_uri,
+        state=state,
+    )
     return {
         "ok": True,
         **_build_oauth_start_payload(
@@ -3562,24 +3719,64 @@ async def finalize_oauth(
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
     _ensure_admin(request, x_admin_session)
+    callback_payload = _consume_oauth_callback_session_payload(request, payload.state)
+    effective_payload = payload
+    if callback_payload:
+        effective_payload = OAuthFinalizeRequest(
+            token_v2=str(callback_payload.get("token_v2") or payload.token_v2 or ""),
+            user_id=str(callback_payload.get("user_id") or payload.user_id or ""),
+            redirect_uri=payload.redirect_uri,
+            state=payload.state,
+            provider=str(
+                callback_payload.get("provider") or payload.provider or "notion-web"
+            ),
+            space_id=str(callback_payload.get("space_id") or payload.space_id or ""),
+            user_email=str(
+                callback_payload.get("user_email") or payload.user_email or ""
+            ),
+            access_token=str(
+                callback_payload.get("access_token") or payload.access_token or ""
+            ),
+            refresh_token=str(
+                callback_payload.get("refresh_token") or payload.refresh_token or ""
+            ),
+            expires_at=int(
+                str(callback_payload.get("expires_at") or payload.expires_at or 0) or 0
+            )
+            or None,
+            space_view_id=payload.space_view_id,
+            user_name=payload.user_name,
+            scopes=payload.scopes,
+            plan_type=payload.plan_type,
+            notes=payload.notes,
+            tags=payload.tags,
+        )
+    if (
+        not str(effective_payload.token_v2 or "").strip()
+        or not str(effective_payload.user_id or "").strip()
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="OAuth callback data is incomplete. Paste a valid localhost callback URL or use the fallback fields.",
+        )
     saved = get_config_store().upsert_account(
         _build_saved_oauth_account(
             OAuthCallbackPayload(
-                token_v2=payload.token_v2,
-                user_id=payload.user_id,
-                space_id=payload.space_id,
-                space_view_id=payload.space_view_id,
-                user_name=payload.user_name,
-                user_email=payload.user_email,
-                access_token=payload.access_token,
-                refresh_token=payload.refresh_token,
-                expires_at=payload.expires_at,
-                provider=payload.provider,
-                scopes=payload.scopes,
-                plan_type=payload.plan_type,
+                token_v2=effective_payload.token_v2,
+                user_id=effective_payload.user_id,
+                space_id=effective_payload.space_id,
+                space_view_id=effective_payload.space_view_id,
+                user_name=effective_payload.user_name,
+                user_email=effective_payload.user_email,
+                access_token=effective_payload.access_token,
+                refresh_token=effective_payload.refresh_token,
+                expires_at=effective_payload.expires_at,
+                provider=effective_payload.provider,
+                scopes=effective_payload.scopes,
+                plan_type=effective_payload.plan_type,
                 source="oauth_finalize",
-                notes=payload.notes,
-                tags=payload.tags,
+                notes=effective_payload.notes,
+                tags=effective_payload.tags,
             )
         )
     )
@@ -3587,9 +3784,9 @@ async def finalize_oauth(
     return {
         "ok": True,
         "account": _redact_account_payload(saved),
-        "redirect_uri": payload.redirect_uri.strip()
+        "redirect_uri": effective_payload.redirect_uri.strip()
         or _default_local_redirect_uri(request),
-        "state": payload.state,
+        "state": effective_payload.state,
         "source": "oauth_finalize",
     }
 
@@ -3621,11 +3818,19 @@ async def probe_single_account(
         {
             "account_id": account_id,
             "user_id": next(
-                (item.user_id for item in pool.clients if item.account_id == account_id),
+                (
+                    item.user_id
+                    for item in pool.clients
+                    if item.account_id == account_id
+                ),
                 "",
             ),
             "user_email": next(
-                (item.user_email for item in pool.clients if item.account_id == account_id),
+                (
+                    item.user_email
+                    for item in pool.clients
+                    if item.account_id == account_id
+                ),
                 "",
             ),
             "summary": _summarize_action_payload(result),
@@ -3752,7 +3957,11 @@ async def sync_single_account_workspaces(
                 "ok": False,
                 "account_id": account_id,
                 "user_id": next(
-                    (item.user_id for item in pool.clients if item.account_id == account_id),
+                    (
+                        item.user_id
+                        for item in pool.clients
+                        if item.account_id == account_id
+                    ),
                     "",
                 ),
                 "user_email": next(
@@ -3808,11 +4017,19 @@ async def sync_single_account_workspaces(
         {
             "account_id": account_id,
             "user_id": next(
-                (item.user_id for item in pool.clients if item.account_id == account_id),
+                (
+                    item.user_id
+                    for item in pool.clients
+                    if item.account_id == account_id
+                ),
                 "",
             ),
             "user_email": next(
-                (item.user_email for item in pool.clients if item.account_id == account_id),
+                (
+                    item.user_email
+                    for item in pool.clients
+                    if item.account_id == account_id
+                ),
                 "",
             ),
             "summary": _summarize_action_payload(result),
@@ -3847,11 +4064,19 @@ async def retry_single_account_register_hydration(
         {
             "account_id": account_id,
             "user_id": next(
-                (item.user_id for item in pool.clients if item.account_id == account_id),
+                (
+                    item.user_id
+                    for item in pool.clients
+                    if item.account_id == account_id
+                ),
                 "",
             ),
             "user_email": next(
-                (item.user_email for item in pool.clients if item.account_id == account_id),
+                (
+                    item.user_email
+                    for item in pool.clients
+                    if item.account_id == account_id
+                ),
                 "",
             ),
             "summary": _summarize_action_payload(result),
@@ -3920,7 +4145,11 @@ async def create_single_account_workspace(
                 "ok": False,
                 "account_id": account_id,
                 "user_id": next(
-                    (item.user_id for item in pool.clients if item.account_id == account_id),
+                    (
+                        item.user_id
+                        for item in pool.clients
+                        if item.account_id == account_id
+                    ),
                     "",
                 ),
                 "user_email": next(
@@ -4175,7 +4404,12 @@ async def account_workspace_status(
                 "subscription_tier": workspace.get("subscription_tier", ""),
             }
         )
-    return {"ok": True, "response_mode": "safe_summary", "contains_secrets": False, "workspaces": rows}
+    return {
+        "ok": True,
+        "response_mode": "safe_summary",
+        "contains_secrets": False,
+        "workspaces": rows,
+    }
 
 
 def _list_accounts_payload(
@@ -4402,7 +4636,12 @@ async def get_admin_alerts(
         else [],
     )
     alerts = _build_alerts(accounts)
-    return {"ok": True, "response_mode": "safe_summary", "contains_secrets": False, **alerts}
+    return {
+        "ok": True,
+        "response_mode": "safe_summary",
+        "contains_secrets": False,
+        **alerts,
+    }
 
 
 @router.get("/admin/operations")
@@ -4521,7 +4760,12 @@ async def oauth_refresh_diagnostics(
         else [],
     )
     diagnostics = _build_refresh_diagnostics(accounts)
-    return {"ok": True, "response_mode": "safe_summary", "contains_secrets": False, **diagnostics}
+    return {
+        "ok": True,
+        "response_mode": "safe_summary",
+        "contains_secrets": False,
+        **diagnostics,
+    }
 
 
 @router.get("/admin/workspaces/diagnostics")
@@ -4541,7 +4785,12 @@ async def workspace_diagnostics(
         else [],
     )
     diagnostics = _build_workspace_diagnostics(accounts)
-    return {"ok": True, "response_mode": "safe_summary", "contains_secrets": False, **diagnostics}
+    return {
+        "ok": True,
+        "response_mode": "safe_summary",
+        "contains_secrets": False,
+        **diagnostics,
+    }
 
 
 @router.post("/admin/accounts/disable")
