@@ -867,8 +867,19 @@
                             </div>
                             <div id="adminAccountEmailLoginSection" class="accounts-composer-section hidden space-y-3">
                                 <div class="text-sm text-gray-700 dark:text-gray-300">直接用邮箱验证码注册并导入账号，不再依赖旧的回调导入流。</div>
-                                <div class="flex flex-wrap gap-2">
-                                    <button id="adminOpenEmailLoginStartBtn" type="button" class="admin-action-btn admin-action-btn-primary">开始邮箱验证码导入</button>
+                                <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-3 items-start">
+                                    <input id="emailLoginEmailInput" type="text" placeholder="邮箱"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                                    <button id="emailLoginContinueBtn" type="button" class="admin-action-btn admin-action-btn-primary">继续</button>
+                                </div>
+                                <div id="emailLoginStartSummary" class="flex flex-wrap gap-2 text-[11px]"></div>
+                                <div id="emailLoginCodeStep" class="hidden space-y-3">
+                                    <div id="emailLoginCodeSentNotice" class="text-sm text-emerald-600 dark:text-emerald-400">验证码已发送</div>
+                                    <textarea id="emailLoginCodeInput" rows="3" placeholder="输入邮箱收到的验证码"
+                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none resize-y"></textarea>
+                                    <div class="flex flex-wrap gap-2">
+                                        <button id="emailLoginImportBtn" type="button" class="admin-action-btn admin-action-btn-primary hidden">继续</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -910,37 +921,8 @@
                         </div>
                     </div>
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                        <div class="notion-session-card rounded-2xl border border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 p-4 space-y-3 lg:col-span-2">
-                            <div class="space-y-3">
-                                <div class="rounded-2xl border border-black/8 dark:border-white/10 bg-white/72 dark:bg-white/5 p-4 space-y-3">
-                                    <div>
-                                        <div class="text-sm font-medium">Notion 邮箱验证码注册</div>
-                                        <div class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">最短路径是：输入邮箱、发送验证码、去邮箱查看验证码、填回这里并完成导入。</div>
-                                    </div>
-                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px] text-gray-500 dark:text-gray-400">
-                                        <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">1. 输入邮箱地址</div>
-                                        <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">2. 点击发送验证码</div>
-                                        <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">3. 去邮箱查看验证码</div>
-                                        <div class="rounded-xl border border-black/8 dark:border-white/10 px-3 py-2">4. 填回这里并完成导入</div>
-                                    </div>
-                                </div>
-                                <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-3 items-start">
-                                    <input id="emailLoginEmailInput" type="text" placeholder="邮箱"
-                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
-                                    <button id="emailLoginContinueBtn" type="button" class="admin-action-btn admin-action-btn-primary">继续</button>
-                                </div>
-                                <div id="emailLoginCodeStep" class="hidden space-y-3">
-                                    <div id="emailLoginCodeSentNotice" class="text-sm text-emerald-600 dark:text-emerald-400">验证码已发送</div>
-                                    <textarea id="emailLoginCodeInput" rows="3" placeholder="输入邮箱收到的验证码"
-                                        class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm outline-none resize-y"></textarea>
-                                </div>
-                                <div class="flex flex-wrap gap-2">
-                                    <button id="emailLoginImportBtn" type="button" class="admin-action-btn admin-action-btn-primary hidden">继续</button>
-                                </div>
-                                <textarea id="requestTemplateOutput" rows="8" readonly placeholder="请求模板与诊断载荷会显示在这里"
-                                    class="w-full bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
-                            </div>
-                        </div>
+                        <textarea id="requestTemplateOutput" rows="8" readonly placeholder="请求模板与诊断载荷会显示在这里"
+                            class="w-full lg:col-span-2 bg-gray-50 dark:bg-[#1f1f1f] border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs outline-none resize-y"></textarea>
                     </div>
                     <details class="runtime-details-block">
                         <summary>展开邮箱验证码导入诊断与模板工具</summary>

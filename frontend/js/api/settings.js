@@ -684,6 +684,7 @@ window.NotionAI.API.Settings = {
     },
 
     openEmailLoginImporter(startImmediately = false) {
+        this.setAccountComposerMode('email_login', true);
         this.setAdminNotice('已切到邮箱验证码导入区。');
         if (startImmediately) {
             this.startEmailLoginFlow();
@@ -2660,6 +2661,8 @@ window.NotionAI.API.Settings = {
     },
 
     async startAndFocusEmailLoginFlow() {
+        this.setAccountComposerMode('email_login', true);
+        document.getElementById('emailLoginEmailInput')?.focus();
         await this.startEmailLoginFlow();
     },
 
