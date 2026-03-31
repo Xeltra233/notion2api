@@ -142,25 +142,25 @@ html.dark .model-beta-badge {
 
 .admin-accounts-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
 }
 
 .admin-account-row {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 14px;
+    gap: 8px;
+    padding: 10px;
     border: 1px solid rgba(0, 0, 0, 0.07);
-    border-radius: 18px;
+    border-radius: 14px;
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(250, 246, 241, 0.84));
-    box-shadow: 0 10px 24px rgba(68, 49, 37, 0.05);
+    box-shadow: 0 6px 16px rgba(68, 49, 37, 0.04);
 }
 
 .admin-account-main {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 5px;
 }
 
 .admin-badge {
@@ -168,8 +168,8 @@ html.dark .model-beta-badge {
     align-items: center;
     justify-content: center;
     border-radius: 999px;
-    padding: 2px 8px;
-    font-size: 11px;
+    padding: 1px 6px;
+    font-size: 10px;
     font-weight: 600;
     background: rgba(0, 0, 0, 0.06);
     color: #374151;
@@ -186,31 +186,31 @@ html.dark .model-beta-badge {
 .admin-kv {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
+    gap: 6px;
 }
 
 .admin-kv strong {
-    font-size: 12px;
+    font-size: 11px;
     color: #111827;
 }
 
 .admin-account-metric {
     display: flex;
     flex-direction: column;
-    gap: 3px;
-    padding: 8px 10px;
-    border-radius: 12px;
+    gap: 2px;
+    padding: 6px 8px;
+    border-radius: 10px;
     background: rgba(255, 255, 255, 0.72);
     border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .admin-account-metric-label {
-    font-size: 11px;
+    font-size: 10px;
     color: #6b7280;
 }
 
 .admin-account-metric-value {
-    font-size: 12px;
+    font-size: 11px;
     color: #111827;
     font-weight: 600;
 }
@@ -218,14 +218,14 @@ html.dark .model-beta-badge {
 .admin-account-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 4px;
 }
 
 .admin-account-editor {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding-top: 4px;
+    gap: 6px;
+    padding-top: 2px;
 }
 
 .accounts-toolbar-card {
