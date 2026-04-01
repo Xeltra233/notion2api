@@ -299,10 +299,7 @@ class DuckMailClient(TempMailClient):
         self.verify_ssl = verify_ssl
 
     def _headers(self) -> dict[str, str]:
-        headers = self._build_bearer_headers(self.api_key)
-        if self.api_key:
-            headers["X-API-Key"] = self.api_key
-        return headers
+        return self._build_bearer_headers(self.api_key)
 
     def register_account(self, domain: Optional[str] = None) -> bool:
         try:
@@ -411,10 +408,7 @@ class GPTMailClient(TempMailClient):
         self.domain = domain or ""
 
     def _headers(self) -> dict[str, str]:
-        headers = self._build_bearer_headers(self.api_key)
-        if self.api_key:
-            headers["X-API-Key"] = self.api_key
-        return headers
+        return self._build_bearer_headers(self.api_key)
 
     def register_account(self, domain: Optional[str] = None) -> bool:
         try:
@@ -526,7 +520,6 @@ class FreemailClient(TempMailClient):
         return self._build_bearer_headers(self.api_key)
 
     def _auth_params(self) -> dict[str, str]:
-        # Keep backward compatibility for deployments that still expect admin_token in query params.
         return {"admin_token": self.api_key} if self.api_key else {}
 
     def register_account(self, domain: Optional[str] = None) -> bool:
