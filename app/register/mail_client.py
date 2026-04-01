@@ -528,6 +528,14 @@ class FreemailClient(TempMailClient):
             params = self._auth_params()
             if domain or self.domain:
                 params["domain"] = domain or self.domain
+            self._log(
+                "info",
+                "Freemail 请求参数检查: "
+                f"base_url={self.base_url}, "
+                f"domain={params.get('domain') or ''}, "
+                f"api_key_present={bool(self.api_key)}, "
+                f"auth_param_keys={','.join(sorted(params.keys())) if params else 'none'}",
+            )
             resp = requests.post(
                 f"{self.base_url}/api/generate",
                 params=params,
