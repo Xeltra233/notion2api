@@ -2891,23 +2891,6 @@ window.NotionAI.API.Settings = {
         if (!gate || !content || !title || !copy || !notice || !passwordInput || !unlockBtn) {
             return null;
         }
-        const apiKey = String(window.NotionAI.Core.State.get('apiKey') || '').trim();
-        if (!apiKey) {
-            window.NotionAI.Core.State.set('chatEnabled', false);
-            window.NotionAI.Core.State.set('chatPasswordEnabled', false);
-            gate.classList.remove('hidden');
-            content.classList.add('hidden');
-            content.classList.remove('flex');
-            unlockBtn.disabled = true;
-            passwordInput.disabled = true;
-            title.textContent = '请先填写 API Key';
-            copy.textContent = '登录后台或进入 Chat 前，先在访问区域填写服务地址和 API Key。';
-            notice.textContent = '当前未配置 API Key，暂不请求聊天访问状态。';
-            if (typeof window.NotionAI.Core.App?.syncShellFromState === 'function') {
-                window.NotionAI.Core.App.syncShellFromState();
-            }
-            return null;
-        }
         try {
             const data = await window.NotionAI.API.Admin.getChatAccess();
             this._lastChatAccessState = data;

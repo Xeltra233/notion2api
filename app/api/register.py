@@ -595,6 +595,7 @@ def _post_register_follow_up(request: Request, account_user_id: str) -> None:
         from app.api.admin import (
             _append_action_history_log,
             _summarize_action_payload,
+            _write_refresh_action_result_to_account,
             _write_workspace_action_result_to_account,
         )
 
@@ -610,6 +611,20 @@ def _post_register_follow_up(request: Request, account_user_id: str) -> None:
         )
         if not target:
             return
+        refresh_result = pool.refresh_account_by_id(target.account_id)
+        _write_refresh_action_result_to_account(
+            target.account_id, "refresh", refresh_result
+        )
+        _append_action_history_log(
+            "refresh",
+            {
+                "account_id": target.account_id,
+                "user_id": target.user_id,
+                "user_email": target.user_email,
+                "summary": _summarize_action_payload(refresh_result),
+                "result": refresh_result,
+            },
+        )
         result = pool.sync_workspace_by_id(target.account_id)
         _write_workspace_action_result_to_account(
             target.account_id, "sync_workspace", result

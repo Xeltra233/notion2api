@@ -183,11 +183,26 @@ class AccountPool:
             if not self.clients:
                 raise RuntimeError("暂无可用账号，请先在后台添加或导入账号。")
             start_index = self._current_index
+            saw_capacity_limited = False
 
             while True:
                 idx = self._current_index
-                # 如果过了冷却时间，视为可用
-                if self.cooldown_until[idx] <= now and self.invalid_until[idx] <= now:
+                session_status = self.clients[idx].get_session_status()
+                workspace_state = str(
+                    self.clients[idx].status.get("workspace_state")
+                    or self.clients[idx].workspace.get("state")
+                    or ""
+                ).strip()
+                has_workspace = self.workspace_count[idx] > 0
+
+                if self.cooldown_until[idx] > now or self.invalid_until[idx] > now:
+                    saw_capacity_limited = True
+                elif (
+                    not session_status.get("expired")
+                    and not session_status.get("needs_refresh")
+                    and workspace_state != "workspace_creation_pending"
+                    and has_workspace
+                ):
                     # 轮询步进
                     self._current_index = (self._current_index + 1) % len(self.clients)
                     return self.clients[idx]
@@ -197,12 +212,16 @@ class AccountPool:
 
                 # 如果转了一圈都没找到可用的
                 if self._current_index == start_index:
-                    next_available = (
-                        min(self.cooldown_until) if self.cooldown_until else now
-                    )
-                    wait_seconds = max(1, int(next_available - now))
+                    if saw_capacity_limited:
+                        next_available = (
+                            min(self.cooldown_until) if self.cooldown_until else now
+                        )
+                        wait_seconds = max(1, int(next_available - now))
+                        raise RuntimeError(
+                            f"Notion 账号限流中（触发官方公平使用政策），请在 {wait_seconds} 秒后重试。"
+                        )
                     raise RuntimeError(
-                        f"Notion 账号限流中（触发官方公平使用政策），请在 {wait_seconds} 秒后重试。"
+                        "暂无可用于模型调用的健康账号，请先刷新、重新授权或补全工作区。"
                     )
 
     def _find_client_object_index(

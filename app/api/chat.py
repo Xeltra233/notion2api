@@ -47,7 +47,7 @@ from app.schemas import (
     MediaUploadResponse,
     ResponsesRequest,
 )
-from app.api.admin import _ensure_chat_access
+from app.api.admin import _require_chat_browser_access
 
 router = APIRouter()
 gemini_router = APIRouter()
@@ -2593,7 +2593,7 @@ async def upload_media(
     payload: MediaUploadRequest,
     x_chat_session: str | None = Header(default=None, alias="X-Chat-Session"),
 ):
-    _ensure_chat_access(request, x_chat_session)
+    _require_chat_browser_access(request, x_chat_session)
     saved = _store_media_data(
         request,
         data_url=str(payload.data_url or ""),
@@ -2638,7 +2638,6 @@ async def create_chat_completion(
     """
     from app.config import is_standard_mode
 
-    _ensure_chat_access(request, x_chat_session)
     req_body.messages = _normalize_request_messages(req_body.messages)
     _validate_sampling_params(req_body)
     _validate_tooling_params(req_body)
@@ -3427,7 +3426,7 @@ async def delete_conversation(
     request: Request,
     x_chat_session: str | None = Header(default=None, alias="X-Chat-Session"),
 ):
-    _ensure_chat_access(request, x_chat_session)
+    _require_chat_browser_access(request, x_chat_session)
     manager = getattr(request.app.state, "conversation_manager", None)
     if manager is None:
         raise HTTPException(

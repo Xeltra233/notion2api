@@ -1143,6 +1143,12 @@ def _ensure_chat_access(request: Request, session_token: str | None) -> dict[str
     return {"mode": "password"}
 
 
+def _require_chat_browser_access(
+    request: Request, session_token: str | None
+) -> dict[str, Any]:
+    return _ensure_chat_access(request, session_token)
+
+
 def _rebuild_pool(request: Request) -> None:
     pool = AccountPool(get_accounts())
     pool.expand_workspaces()
