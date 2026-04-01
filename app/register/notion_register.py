@@ -87,6 +87,15 @@ def find_chromium_path() -> Optional[str]:
     return None
 
 
+def should_force_headless() -> bool:
+    system_name = platform.system().lower()
+    if system_name != "linux":
+        return False
+    if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+        return False
+    return True
+
+
 class NotionRegisterResult:
     def __init__(
         self,
@@ -139,7 +148,7 @@ class NotionRegisterService:
         log_callback: Optional[Callable[[str, str], None]] = None,
     ):
         self.proxy = proxy
-        self.headless = headless
+        self.headless = bool(headless) or should_force_headless()
         self.timeout = timeout
         self.log_callback = log_callback
         self._page = None

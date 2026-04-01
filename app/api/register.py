@@ -13,7 +13,11 @@ from pydantic import BaseModel
 from app.config import get_config_store
 from app.logger import logger
 from app.register.mail_client import create_temp_mail_client
-from app.register.notion_register import NotionRegisterService, NotionRegisterResult
+from app.register.notion_register import (
+    NotionRegisterResult,
+    NotionRegisterService,
+    should_force_headless,
+)
 
 
 def _is_proxy_url_reachable(proxy_url: str) -> bool:
@@ -428,7 +432,7 @@ def _register_one(
     log_cb("info", "开始 Notion 注册...")
     register_service = NotionRegisterService(
         proxy=proxy or "",
-        headless=headless,
+        headless=(True if should_force_headless() else headless),
         timeout=180,
         log_callback=log_cb,
     )
