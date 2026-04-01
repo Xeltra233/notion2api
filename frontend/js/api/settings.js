@@ -2537,11 +2537,16 @@ window.NotionAI.API.Settings = {
     },
 
     getManualRegisterPayload() {
+        const rawMailApiKey = document.getElementById('runtimeAutoRegisterMailApiKeyInput')?.value.trim() || '';
+        const hasExistingMailApiKey = Boolean(this._runtimeSecretPresence?.auto_register_mail_api_key);
+        const mailApiKey = rawMailApiKey && rawMailApiKey !== '********'
+            ? rawMailApiKey
+            : (hasExistingMailApiKey ? undefined : '');
         return {
             count: Number(document.getElementById('runtimeManualRegisterCountInput')?.value || 5),
             mail_provider: document.getElementById('runtimeAutoRegisterMailProviderInput')?.value || 'freemail',
             mail_base_url: document.getElementById('runtimeAutoRegisterMailBaseUrlInput')?.value.trim() || '',
-            mail_api_key: document.getElementById('runtimeAutoRegisterMailApiKeyInput')?.value.trim() || '',
+            mail_api_key: mailApiKey,
             domain: document.getElementById('runtimeAutoRegisterDomainInput')?.value.trim() || '',
             use_api: Boolean(document.getElementById('runtimeAutoRegisterUseApiInput')?.checked),
             headless: Boolean(document.getElementById('runtimeAutoRegisterHeadlessInput')?.checked),
