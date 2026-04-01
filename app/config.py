@@ -529,7 +529,7 @@ class RuntimeConfigStore:
             config["auto_register_busy_cooldown_seconds"] = 1200
         try:
             config["auto_register_batch_size"] = max(
-                1, min(3, int(raw.get("auto_register_batch_size", 1)))
+                1, int(raw.get("auto_register_batch_size", 1))
             )
         except (TypeError, ValueError):
             config["auto_register_batch_size"] = 1

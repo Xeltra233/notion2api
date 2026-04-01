@@ -196,6 +196,24 @@ window.NotionAI.API.Admin = {
         return data;
     },
 
+    async startManualRegister(payload) {
+        const response = await window.NotionAI.API.Client.post('/v1/register/start', payload);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.detail || '启动手动注册任务失败');
+        }
+        return data;
+    },
+
+    async getRegisterTaskStatus(taskId) {
+        const response = await window.NotionAI.API.Client.get(`/v1/register/status/${encodeURIComponent(taskId)}`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.detail || '加载注册任务状态失败');
+        }
+        return data;
+    },
+
     async getSessionRefreshStatus() {
         const response = await window.NotionAI.API.Client.get('/v1/admin/session/refresh-status');
         const data = await response.json().catch(() => ({}));

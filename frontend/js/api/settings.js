@@ -1667,6 +1667,7 @@ window.NotionAI.API.Settings = {
     async refreshAdminPanel(message) {
         try {
             const usageFilters = this.getUsageFilters();
+            this.bindManualRegisterControls();
             const data = await window.NotionAI.API.Admin.loadSafeAccounts(this.getAdminFilters());
             const runtimeConfig = await window.NotionAI.API.Admin.loadConfig();
             const alerts = await window.NotionAI.API.Admin.loadAlerts();
@@ -2009,6 +2010,8 @@ window.NotionAI.API.Settings = {
             'runtimeCheckProxyBtn',
             'runtimeTriggerAutoRegisterBtn',
             'runtimeRefreshAutoRegisterBtn',
+            'runtimeStartManualRegisterBtn',
+            'runtimeRefreshManualRegisterBtn',
             'adminRefreshBtn',
             'adminApplyFiltersBtn',
             'adminClearFiltersBtn',
@@ -2480,6 +2483,119 @@ window.NotionAI.API.Settings = {
         }
     },
 
+    renderManualRegisterSummary(task = {}) {
+        this._lastManualRegisterTask = task || {};
+        const panel = document.getElementById('runtimeManualRegisterSummary');
+        if (!panel) return;
+        const status = String(task.status || 'idle').trim().toLowerCase() || 'idle';
+        const pills = [
+            ['状态', status],
+            ['进度', `${Number(task.progress || 0)}/${Number(task.total || 0)}`],
+            ['成功', Number(task.success_count || 0)],
+            ['失败', Number(task.fail_count || 0)],
+            ['任务 ID', task.task_id || '-'],
+        ];
+        panel.innerHTML = pills.map(([label, value]) => `<span class="admin-mini-pill"><strong>${this.escapeHtml(value)}</strong><span>${this.escapeHtml(label)}</span></span>`).join('');
+    },
+
+    renderManualRegisterGuidance(task = {}) {
+        const panel = document.getElementById('runtimeManualRegisterGuidance');
+        if (!panel) return;
+        const status = String(task.status || 'idle').trim().toLowerCase() || 'idle';
+        if (!task.task_id) {
+            panel.textContent = '可以自定义本次注册数量，手动启动一次注册任务，并观察成功数、失败数和实时日志。';
+            return;
+        }
+        if (status === 'running' || status === 'queued') {
+            panel.textContent = '手动注册任务正在运行，可以随时刷新查看进度和日志。';
+            return;
+        }
+        if (status === 'completed') {
+            panel.textContent = `任务已完成：成功 ${Number(task.success_count || 0)}，失败 ${Number(task.fail_count || 0)}。`;
+            return;
+        }
+        panel.textContent = `任务状态：${status}`;
+    },
+
+    renderManualRegisterLogs(task = {}) {
+        const panel = document.getElementById('runtimeManualRegisterLogs');
+        if (!panel) return;
+        const logs = Array.isArray(task.logs) ? task.logs : [];
+        const results = Array.isArray(task.results) ? task.results : [];
+        if (!logs.length && !results.length) {
+            panel.innerHTML = '<div class="text-gray-400 dark:text-gray-500">暂无手动注册日志。</div>';
+            return;
+        }
+        const logHtml = logs.slice(-80).map((item) => {
+            const level = String(item.level || 'info').trim().toLowerCase();
+            const time = this.formatTimestamp(Number(item.time || 0)) || '-';
+            return `<div data-level="${this.escapeHtmlAttribute(level)}"><span class="text-gray-400 dark:text-gray-500">[${this.escapeHtml(time)}]</span> <strong>${this.escapeHtml(level.toUpperCase())}</strong> ${this.escapeHtml(item.message || '')}</div>`;
+        }).join('');
+        const resultHtml = results.length ? `<div class="pt-2 mt-2 border-t border-black/8 dark:border-white/10">${results.map((item, index) => `<div><strong>#${index + 1}</strong> ${this.escapeHtml(item.email || item.error || '无结果')}</div>`).join('')}</div>` : '';
+        panel.innerHTML = logHtml + resultHtml;
+        panel.scrollTop = panel.scrollHeight;
+    },
+
+    getManualRegisterPayload() {
+        return {
+            count: Number(document.getElementById('runtimeManualRegisterCountInput')?.value || 5),
+            mail_provider: document.getElementById('runtimeAutoRegisterMailProviderInput')?.value || 'freemail',
+            mail_base_url: document.getElementById('runtimeAutoRegisterMailBaseUrlInput')?.value.trim() || '',
+            mail_api_key: document.getElementById('runtimeAutoRegisterMailApiKeyInput')?.value.trim() || '',
+            domain: document.getElementById('runtimeAutoRegisterDomainInput')?.value.trim() || '',
+            use_api: Boolean(document.getElementById('runtimeAutoRegisterUseApiInput')?.checked),
+            headless: Boolean(document.getElementById('runtimeAutoRegisterHeadlessInput')?.checked),
+        };
+    },
+
+    async startManualRegisterTask() {
+        try {
+            const payload = this.getManualRegisterPayload();
+            const data = await window.NotionAI.API.Admin.startManualRegister(payload);
+            const task = {
+                task_id: data.task_id || '',
+                status: data.status || 'queued',
+                progress: 0,
+                total: Number(payload.count || 0),
+                success_count: 0,
+                fail_count: 0,
+                logs: [],
+                results: [],
+            };
+            this.renderManualRegisterSummary(task);
+            this.renderManualRegisterGuidance(task);
+            this.renderManualRegisterLogs(task);
+            this.setAdminNotice('手动注册任务已创建。');
+            await this.refreshManualRegisterTaskStatus(true);
+        } catch (error) {
+            this.setAdminNotice(error.message || '启动手动注册任务失败。');
+        }
+    },
+
+    async refreshManualRegisterTaskStatus(silent = false) {
+        const taskId = String((this._lastManualRegisterTask || {}).task_id || '').trim();
+        if (!taskId) {
+            this.renderManualRegisterSummary({});
+            this.renderManualRegisterGuidance({});
+            this.renderManualRegisterLogs({});
+            if (!silent) {
+                this.setAdminNotice('当前还没有手动注册任务。');
+            }
+            return;
+        }
+        try {
+            const data = await window.NotionAI.API.Admin.getRegisterTaskStatus(taskId);
+            this.renderManualRegisterSummary(data || {});
+            this.renderManualRegisterGuidance(data || {});
+            this.renderManualRegisterLogs(data || {});
+            if (!silent) {
+                this.setAdminNotice('手动注册任务状态已刷新。');
+            }
+        } catch (error) {
+            this.setAdminNotice(error.message || '刷新手动注册任务失败。');
+        }
+    },
+
     async triggerAutoRegisterNow() {
         try {
             const data = await window.NotionAI.API.Admin.triggerAutoRegisterNow();
@@ -2505,12 +2621,18 @@ window.NotionAI.API.Settings = {
 
     async refreshAutoRegisterStatus(silent = false) {
         try {
+            this.bindManualRegisterControls();
             const data = await window.NotionAI.API.Admin.getAutoRegisterStatus();
             this.renderRegisterAutomationSummary(data.automation || {});
             this.renderRegisterAutomationGuidance(data.guidance || {});
             this.renderRuntimeProxyHealth(data.proxy_health?.summary || (this._lastRuntimeProxyHealth || {}));
             this.renderRuntimeProxyChecks(data.proxy_health?.checks || {});
             this.renderRuntimeOperationsPanel(data.runtime_operations_panel || {});
+            const latestTaskId = String(data?.automation?.last_task_id || '').trim();
+            if (latestTaskId && latestTaskId !== String((this._lastManualRegisterTask || {}).task_id || '').trim()) {
+                this._lastManualRegisterTask = { task_id: latestTaskId };
+            }
+            await this.refreshManualRegisterTaskStatus(true);
             if (!silent) {
                 this.setAdminNotice('自动注册状态已加载。');
             }
@@ -2834,9 +2956,26 @@ window.NotionAI.API.Settings = {
             return data;
         } catch (error) {
             if (!silent) {
-                this.setAdminNotice(error.message || '加载聊天访问状态失败。');
+            this.setAdminNotice(error.message || '加载聊天访问状态失败。');
             }
             return null;
+        }
+    },
+
+    bindManualRegisterControls() {
+        const startBtn = document.getElementById('runtimeStartManualRegisterBtn');
+        if (startBtn && startBtn.dataset.bound !== 'true') {
+            startBtn.dataset.bound = 'true';
+            startBtn.addEventListener('click', () => {
+                this.startManualRegisterTask();
+            });
+        }
+        const refreshBtn = document.getElementById('runtimeRefreshManualRegisterBtn');
+        if (refreshBtn && refreshBtn.dataset.bound !== 'true') {
+            refreshBtn.dataset.bound = 'true';
+            refreshBtn.addEventListener('click', () => {
+                this.refreshManualRegisterTaskStatus();
+            });
         }
     },
 
@@ -2861,6 +3000,23 @@ window.NotionAI.API.Settings = {
         } catch (error) {
             window.NotionAI.Core.State.clearChatSession();
             this.setAdminNotice(error.message || 'Chat 解锁失败。');
+        }
+    },
+
+    bindManualRegisterControls() {
+        const startBtn = document.getElementById('runtimeStartManualRegisterBtn');
+        if (startBtn && startBtn.dataset.bound !== 'true') {
+            startBtn.dataset.bound = 'true';
+            startBtn.addEventListener('click', () => {
+                this.startManualRegisterTask();
+            });
+        }
+        const refreshBtn = document.getElementById('runtimeRefreshManualRegisterBtn');
+        if (refreshBtn && refreshBtn.dataset.bound !== 'true') {
+            refreshBtn.dataset.bound = 'true';
+            refreshBtn.addEventListener('click', () => {
+                this.refreshManualRegisterTaskStatus();
+            });
         }
     },
 
