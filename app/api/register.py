@@ -934,6 +934,30 @@ def _effective_proxy(explicit_proxy: Optional[str]) -> str:
     ).strip()
 
 
+def _resolve_manual_register_request(req: RegisterRequest) -> RegisterRequest:
+    config = get_config_store().get_config()
+    return RegisterRequest(
+        count=max(1, int(req.count or 1)),
+        mail_provider=str(
+            req.mail_provider or config.get("auto_register_mail_provider") or "moemail"
+        ).strip()
+        or "moemail",
+        domain=str(req.domain or config.get("auto_register_domain") or "").strip()
+        or None,
+        mail_base_url=str(
+            req.mail_base_url or config.get("auto_register_mail_base_url") or ""
+        ).strip()
+        or None,
+        mail_api_key=str(
+            req.mail_api_key or config.get("auto_register_mail_api_key") or ""
+        ).strip()
+        or None,
+        use_api=bool(req.use_api),
+        headless=bool(req.headless),
+        proxy=str(req.proxy or "").strip() or None,
+    )
+
+
 def _run_register_task(
     request: Request,
     task_id: str,
@@ -997,12 +1021,13 @@ async def start_register(
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ) -> Dict[str, Any]:
     _ensure_admin(request, x_admin_session)
+    resolved_req = _resolve_manual_register_request(req)
     task_id = str(uuid.uuid4())
     REGISTER_TASKS[task_id] = {
         "task_id": task_id,
         "status": "queued",
         "progress": 0,
-        "total": req.count,
+        "total": resolved_req.count,
         "success_count": 0,
         "fail_count": 0,
         "logs": [],
@@ -1012,23 +1037,23 @@ async def start_register(
         "cancelled": False,
         "auto": False,
         "config": {
-            "mail_provider": req.mail_provider,
-            "domain": req.domain,
-            "use_api": req.use_api,
-            "headless": req.headless,
+            "mail_provider": resolved_req.mail_provider,
+            "domain": resolved_req.domain,
+            "use_api": resolved_req.use_api,
+            "headless": resolved_req.headless,
         },
     }
-    proxy = _effective_proxy(req.proxy)
+    proxy = _effective_proxy(resolved_req.proxy)
     _start_register_thread(
         request,
         task_id,
-        req.count,
-        req.mail_provider,
-        req.domain,
-        req.mail_base_url,
-        req.mail_api_key,
-        req.use_api,
-        req.headless,
+        resolved_req.count,
+        resolved_req.mail_provider,
+        resolved_req.domain,
+        resolved_req.mail_base_url,
+        resolved_req.mail_api_key,
+        resolved_req.use_api,
+        resolved_req.headless,
         proxy,
     )
     return {"task_id": task_id, "status": "queued"}
