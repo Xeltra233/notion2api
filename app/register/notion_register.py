@@ -33,6 +33,11 @@ DEFAULT_REGISTER_DISPLAY_NAME = "zhatianbang66fasdgewfas"
 CHROMIUM_PATHS = [
     "/usr/bin/chromium",
     "/usr/bin/chromium-browser",
+    "/usr/bin/google-chrome-beta",
+    "/usr/bin/google-chrome-unstable",
+    "/opt/google/chrome/chrome",
+    "/opt/chromium/chrome",
+    "/nix/store/chromium/chrome",
     "/usr/bin/google-chrome",
     "/usr/bin/google-chrome-stable",
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
@@ -447,12 +452,21 @@ class NotionRegisterService:
         chromium_path = find_chromium_path()
         if chromium_path:
             options.set_browser_path(chromium_path)
+        debug_dir = os.path.join(
+            os.path.dirname(__file__), "..", "..", "data", "register_browser"
+        )
+        os.makedirs(debug_dir, exist_ok=True)
+        user_data_dir = os.path.join(debug_dir, f"session_{uuid.uuid4().hex}")
+        os.makedirs(user_data_dir, exist_ok=True)
+        options.set_user_data_path(user_data_dir)
         options.set_argument("--incognito")
         options.set_argument("--disable-extensions")
+        options.set_argument("--disable-features=Translate,AutomationControlled")
         is_linux = platform.system().lower() == "linux"
         if is_linux:
             options.set_argument("--no-sandbox")
             options.set_argument("--disable-dev-shm-usage")
+            options.set_argument("--disable-setuid-sandbox")
         vw, vh = random.choice(COMMON_VIEWPORTS)
         options.set_argument(f"--window-size={vw},{vh}")
         options.set_user_agent(
