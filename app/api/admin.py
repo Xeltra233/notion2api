@@ -3442,8 +3442,8 @@ def _build_refresh_diagnostics(accounts: list[dict[str, Any]]) -> dict[str, Any]
 
         rows.append(
             {
-                "account_id": account.get("id"),
-                "user_id": account.get("user_id"),
+                "account_id": _mask_secret(account.get("id")),
+                "user_id": _mask_secret(account.get("user_id")),
                 "user_email": account.get("user_email"),
                 "plan_category": account.get("plan_category"),
                 "readiness": readiness,
@@ -3499,8 +3499,8 @@ def _build_workspace_diagnostics(accounts: list[dict[str, Any]]) -> dict[str, An
         summary["total"] += 1
         rows.append(
             {
-                "account_id": account.get("id"),
-                "user_id": account.get("user_id"),
+                "account_id": _mask_secret(account.get("id")),
+                "user_id": _mask_secret(account.get("user_id")),
                 "user_email": account.get("user_email"),
                 "plan_category": account.get("plan_category"),
                 "workspace_state": workspace_state,
