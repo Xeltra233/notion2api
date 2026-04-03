@@ -58,6 +58,8 @@ _RUNTIME_SECRET_FIELDS = {
     "refresh_client_secret",
 }
 _ACCOUNT_SECRET_FIELDS = {"token_v2"}
+_ACCOUNT_REPORT_IDENTIFIER_FIELDS = {"id", "user_id", "space_id", "space_view_id"}
+_HEALTH_REPORT_IDENTIFIER_FIELDS = {"account_id", "user_id", "space_id"}
 _SESSION_SECRET_FIELDS = {"access_token", "refresh_token"}
 _EMAIL_LOGIN_SESSION_TTL_SECONDS = 15 * 60
 
@@ -114,6 +116,51 @@ def _redact_health_payload(health: dict[str, Any]) -> dict[str, Any]:
     redacted["session"] = _redact_session_payload(session_payload)
     return redacted
 
+
+
+
+def _redact_account_report_payload(account: dict[str, Any]) -> dict[str, Any]:
+    redacted = _redact_account_payload(account)
+    for field in _ACCOUNT_REPORT_IDENTIFIER_FIELDS:
+        raw_value = redacted.get(field, "")
+        redacted[field] = _mask_secret(raw_value)
+
+    workspace_payload = (
+        redacted.get("workspace") if isinstance(redacted.get("workspace"), dict) else None
+    )
+    if workspace_payload is not None:
+        redacted["workspace"] = _redact_template_preview_payload(workspace_payload)
+
+    status_payload = (
+        redacted.get("status") if isinstance(redacted.get("status"), dict) else None
+    )
+    if status_payload is not None:
+        status_redacted = dict(status_payload)
+        status_redacted["last_refresh_probe"] = _redact_template_preview_payload(
+            status_redacted.get("last_refresh_probe", {})
+        )
+        status_redacted["last_workspace_probe"] = _redact_template_preview_payload(
+            status_redacted.get("last_workspace_probe", {})
+        )
+        redacted["status"] = status_redacted
+
+    health_payload = (
+        redacted.get("health") if isinstance(redacted.get("health"), dict) else None
+    )
+    if health_payload is not None:
+        health_redacted = _redact_health_payload(health_payload)
+        for field in _HEALTH_REPORT_IDENTIFIER_FIELDS:
+            raw_value = health_redacted.get(field, "")
+            health_redacted[field] = _mask_secret(raw_value)
+        health_redacted["workspaces"] = _redact_template_preview_payload(
+            health_redacted.get("workspaces", [])
+        )
+        redacted["health"] = health_redacted
+    return redacted
+
+
+def _redact_account_report_list(accounts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [_redact_account_report_payload(account) for account in accounts]
 
 def _redact_account_list(accounts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [_redact_account_payload(account) for account in accounts]
@@ -1881,7 +1928,7 @@ async def admin_report(
             "accounts_path": str(ACCOUNTS_PATH),
         },
         "settings": settings,
-        "accounts": _redact_account_list(accounts),
+        "accounts": _redact_account_report_list(accounts),
         "alerts": alerts,
         "refresh_diagnostics": refresh_diagnostics,
         "workspace_diagnostics": workspace_diagnostics,
