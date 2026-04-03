@@ -17,3 +17,5 @@
 ## Implementation learnings
 - `frontend/js/api/settings.js`: use `value ?? ''` instead of `value || ''` in HTML escaping so numeric zero renders correctly.
 - `app/api/chat.py`: avoid `imghdr`; Python 3.13 removes it. A small signature-based detector for PNG/JPEG/GIF/WEBP keeps media upload detection working and lets the app start in this environment.
+- Browser-testing also exposed that account-level request template previews could leak real account/user/workspace identifiers even while the admin UI claimed `safe` view mode. Backend-side recursive redaction in `app/api/admin.py` should be applied before returning template preview payloads.
+

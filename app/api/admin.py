@@ -119,6 +119,66 @@ def _redact_account_list(accounts: list[dict[str, Any]]) -> list[dict[str, Any]]
     return [_redact_account_payload(account) for account in accounts]
 
 
+_TEMPLATE_PREVIEW_SENSITIVE_KEYS = {
+    "account_id",
+    "account_key",
+    "created_by_id",
+    "email",
+    "id",
+    "permission_record_id",
+    "request_id",
+    "source_space_id",
+    "space_id",
+    "template_space_id",
+    "transaction_id",
+    "user_email",
+    "user_id",
+    "user_name",
+    "workspace_name",
+}
+
+_TEMPLATE_PREVIEW_SENSITIVE_HEADER_KEYS = {
+    "authorization",
+    "x_notion_active_user_header",
+    "x_notion_space_id",
+}
+
+
+def _should_redact_template_preview_value(key: str, *, parent_key: str = "") -> bool:
+    normalized = str(key or "").strip().lower().replace("-", "_")
+    compact = normalized.replace("_", "")
+    parent = str(parent_key or "").strip().lower().replace("-", "_")
+    if normalized in _TEMPLATE_PREVIEW_SENSITIVE_KEYS:
+        return True
+    if compact in {"userid", "spaceid", "workspaceid", "accountid"}:
+        return True
+    if normalized == "name" and parent in {"args", "client_context", "record_context"}:
+        return True
+    return False
+
+
+def _redact_template_preview_payload(value: Any, *, parent_key: str = "") -> Any:
+    normalized_parent = str(parent_key or "").strip().lower().replace("-", "_")
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, item in value.items():
+            normalized_key = str(key or "").strip().lower().replace("-", "_")
+            if normalized_parent == "field_hints":
+                redacted[key] = item
+            elif normalized_parent == "headers" and normalized_key in _TEMPLATE_PREVIEW_SENSITIVE_HEADER_KEYS:
+                redacted[key] = _mask_secret(item)
+            elif _should_redact_template_preview_value(str(key), parent_key=parent_key):
+                redacted[key] = _mask_secret(item)
+            else:
+                redacted[key] = _redact_template_preview_payload(item, parent_key=str(key))
+        return redacted
+    if isinstance(value, list):
+        return [
+            _redact_template_preview_payload(item, parent_key=parent_key) for item in value
+        ]
+    return value
+
+
 def _build_proxy_health_summary(config: dict[str, Any]) -> dict[str, Any]:
     settings = {
         "upstream_proxy": config.get("upstream_proxy", ""),
@@ -1735,6 +1795,7 @@ async def request_templates(
     return {
         "ok": True,
         "response_mode": "template_preview",
+        "redaction_mode": "safe",
         "contains_secrets": False,
         "refresh": _build_generic_refresh_request_template(),
         "workspace_create": _build_generic_workspace_request_template(
@@ -4606,15 +4667,16 @@ async def get_account_request_templates(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     client = pool.clients[idx]
-    refresh_preview = client.try_refresh_session()
-    workspace_preview = client.maybe_create_workspace()
+    refresh_preview = _redact_template_preview_payload(client.try_refresh_session())
+    workspace_preview = _redact_template_preview_payload(client.maybe_create_workspace())
     return {
         "ok": True,
         "response_mode": "template_preview",
+        "redaction_mode": "safe",
         "contains_secrets": False,
-        "account_id": account_id,
-        "user_id": client.user_id,
-        "user_email": client.user_email,
+        "account_id": _mask_secret(account_id),
+        "user_id": _mask_secret(client.user_id),
+        "user_email": _mask_secret(client.user_email),
         "refresh": refresh_preview,
         "workspace_create": workspace_preview,
     }
