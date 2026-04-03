@@ -1,7 +1,6 @@
 import asyncio
 import base64
 from difflib import SequenceMatcher
-import imghdr
 import json
 import mimetypes
 import re
@@ -102,15 +101,14 @@ def _guess_media_extension(mime_type: str) -> str:
 
 
 def _detect_image_mime_type(data: bytes, *, fallback: str = "") -> str:
-    kind = imghdr.what(None, h=data)
-    if kind == "jpeg":
-        return "image/jpeg"
-    if kind == "png":
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
         return "image/png"
-    if kind == "webp":
-        return "image/webp"
-    if kind == "gif":
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if data.startswith((b"GIF87a", b"GIF89a")):
         return "image/gif"
+    if len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        return "image/webp"
     lowered_fallback = str(fallback or "").strip().lower()
     if lowered_fallback in _MEDIA_EXTENSION_BY_MIME:
         return lowered_fallback
