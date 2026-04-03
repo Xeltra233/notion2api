@@ -2394,8 +2394,8 @@ def _build_alerts(accounts: list[dict[str, Any]]) -> dict[str, Any]:
         )
         effective_state = str(status.get("effective_state") or "")
         alert_payload = {
-            "account_id": account.get("id"),
-            "user_id": account.get("user_id"),
+            "account_id": _mask_secret(account.get("id")),
+            "user_id": _mask_secret(account.get("user_id")),
             "user_email": account.get("user_email"),
             "plan_category": account.get("plan_category"),
             "last_error": status.get("last_error", ""),
@@ -4097,7 +4097,7 @@ async def export_accounts(
     return {
         "ok": True,
         "count": len(accounts),
-        "accounts": accounts if raw else _redact_account_list(accounts),
+        "accounts": accounts if raw else _redact_account_report_list(accounts),
         "export_mode": export_mode,
         "view_mode": export_mode,
         "storage": {

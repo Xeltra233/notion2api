@@ -21,6 +21,8 @@
 - Safe-mode inconsistencies can also appear in `admin/snapshot` and `admin/report`: recent action/probe/operation logs may still expose raw account/workspace identifiers unless those log payloads are recursively redacted before returning them to the frontend.
 - The diagnostics `导出完整报告` flow has stricter redaction needs than the normal account cards: the exported safe report can still leak raw `id`/`user_id`/`space_id` and nested probe or health metadata unless report-only account redaction is applied before serializing the textarea JSON.
 - The diagnostics side panels for `刷新诊断` and `工作区诊断` also write full JSON into the shared textarea, so their safe responses must mask `account_id` and `user_id` even if the visible summary cards only show email/readiness fields.
+- Safe-mode `alerts` sections in `admin/report` and the `导出账号` JSON export can leak raw account/workspace IDs if they reuse the normal account-card payload shape; export/report-only paths should use stricter report redaction than the interactive account list.
+
 
 
 
