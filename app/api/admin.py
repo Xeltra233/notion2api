@@ -1891,9 +1891,9 @@ async def admin_report(
                 str(config.get("workspace_creation_template_space_id") or "")
             ),
         },
-        "operation_logs": operation_logs,
-        "probe_logs": probe_logs,
-        "action_history": filtered_action_history,
+        "operation_logs": _redact_template_preview_payload(operation_logs),
+        "probe_logs": _redact_template_preview_payload(probe_logs),
+        "action_history": _redact_template_preview_payload(filtered_action_history),
         "action_history_filters": {
             "account": str(action_account or "").strip(),
         },
@@ -1979,9 +1979,9 @@ async def admin_snapshot(
         "alerts": alerts.get("summary", {}),
         "refresh": refresh_diagnostics.get("summary", {}),
         "workspace": workspace_diagnostics.get("summary", {}),
-        "recent_operations": operation_logs[-10:],
-        "recent_probes": probe_logs[-10:],
-        "recent_actions": filtered_action_history[-10:],
+        "recent_operations": _redact_template_preview_payload(operation_logs[-10:]),
+        "recent_probes": _redact_template_preview_payload(probe_logs[-10:]),
+        "recent_actions": _redact_template_preview_payload(filtered_action_history[-10:]),
         "action_history_filters": {
             "account": str(action_account or "").strip(),
         },
