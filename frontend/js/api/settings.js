@@ -1726,7 +1726,7 @@ window.NotionAI.API.Settings = {
                 <div class="rounded-xl border border-black/10 dark:border-white/10 px-3 py-2 bg-black/[0.02] dark:bg-white/[0.03]">
                     <div class="flex items-center justify-between gap-2">
                         <div class="text-xs font-medium">${label}</div>
-                        <button type="button" class="admin-action-btn admin-alert-filter-btn" data-alert-type="${this.escapeHtmlAttribute(key)}">查看筛选结果</button>
+                        <button type="button" class="admin-action-btn admin-alert-filter-btn" data-alert-type="${this.escapeHtmlAttribute(key)}" data-alert-label="${this.escapeHtmlAttribute(label)}">查看${label}结果</button>
                     </div>
                     <div class="mt-2 space-y-1">${preview}</div>
                     ${actionHint}
@@ -1737,6 +1737,8 @@ window.NotionAI.API.Settings = {
         details.querySelectorAll('.admin-alert-filter-btn').forEach((button) => {
             button.addEventListener('click', (event) => {
                 const type = event.currentTarget.dataset.alertType;
+                const label = event.currentTarget.dataset.alertLabel || type;
+                this.setAdminNotice(`正在应用告警筛选：${label}。`);
                 this.applyAlertFilter(type);
             });
         });
