@@ -197,6 +197,8 @@ def _should_redact_template_preview_value(key: str, *, parent_key: str = "") -> 
     parent = str(parent_key or "").strip().lower().replace("-", "_")
     if normalized in _TEMPLATE_PREVIEW_SENSITIVE_KEYS:
         return True
+    if normalized.endswith("_id"):
+        return True
     if compact in {"actorid", "userid", "spaceid", "workspaceid", "accountid"}:
         return True
     if normalized == "name" and parent in {"args", "client_context", "record_context"}:
