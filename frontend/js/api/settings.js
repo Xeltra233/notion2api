@@ -78,6 +78,16 @@ window.NotionAI.API.Settings = {
         return parts;
     },
 
+    hasScopedAdminAccountFilters(filters = {}) {
+        return Boolean(
+            filters.q
+            || filters.state
+            || filters.plan_category
+            || filters.enabled
+        );
+    },
+
+
     setAdminFilterContext(sourceType = '', sourceLabel = '') {
         this._lastAdminFilterContext = sourceType
             ? { sourceType, sourceLabel }
@@ -1343,7 +1353,10 @@ window.NotionAI.API.Settings = {
             : '';
         const viewBanner = `<div class="accounts-toolbar-copy">视图模式：<strong>${safeViewMode}</strong>${viewMode === 'safe' ? '，敏感字段已遮罩。' : '，当前响应可见原始账号数据。'}</div>`;
         if (!accounts.length) {
-            panel.innerHTML = `<div class="admin-access-card"><div class="text-sm text-gray-500 dark:text-gray-400">未加载到账号。</div></div>`;
+            const emptyLabel = activeFilters.length || filterContext
+                ? '当前筛选条件下没有匹配账号。'
+                : '未加载到账号。';
+            panel.innerHTML = `${filterBanner}${viewBanner}<div class="admin-access-card"><div class="text-sm text-gray-500 dark:text-gray-400">${emptyLabel}</div></div>`;
             return;
         }
 
@@ -1376,7 +1389,7 @@ window.NotionAI.API.Settings = {
             const label = this.escapeHtml(account.user_email || account.user_id || account.id || '未知');
             const toggleLabel = account.enabled === false ? '启用' : '停用';
             const tags = Array.isArray(account.tags) ? account.tags : [];
-            const safeTags = (tags.length ? tags : [account.source || 'manual']).map((tag) => this.escapeHtml(tag));
+            const rawTags = tags.length ? tags : [account.source || 'manual'];
             const planType = this.escapeHtml(account.plan_type || '未知');
             const safePlanCategory = this.escapeHtml(account.plan_category || status.plan_category || '未知');
             const subscriptionTier = this.escapeHtml(workspace.subscription_tier || '无');
@@ -1399,6 +1412,13 @@ window.NotionAI.API.Settings = {
             if (!badgeItems.length) {
                 badgeItems.push({ state: status.effective_state || 'unknown', label: status.effective_state || '未知' });
             }
+            const badgeLabelSet = new Set(badgeItems.map((badge) => String(badge.label || '').trim().toLowerCase()).filter(Boolean));
+            const fallbackSourceTag = String(account.source || 'manual').trim();
+            let visibleTags = rawTags.filter((tag) => !badgeLabelSet.has(String(tag || '').trim().toLowerCase()));
+            if (!visibleTags.length && fallbackSourceTag && !badgeLabelSet.has(fallbackSourceTag.toLowerCase())) {
+                visibleTags = [fallbackSourceTag];
+            }
+            const safeTags = visibleTags.map((tag) => this.escapeHtml(tag));
             const detailId = `admin-account-detail-${safeAccountId}`;
             return `
                 <div class="admin-account-row" data-account-id="${safeAccountId}">
@@ -1801,18 +1821,23 @@ window.NotionAI.API.Settings = {
     async refreshAdminPanel(message) {
         try {
             const usageFilters = this.getUsageFilters();
+            const adminFilters = this.getAdminFilters();
+            const hasScopedAccountFilters = this.hasScopedAdminAccountFilters(adminFilters);
             this.bindManualRegisterControls();
-            const data = await window.NotionAI.API.Admin.loadSafeAccounts(this.getAdminFilters());
-            const runtimeConfig = await window.NotionAI.API.Admin.loadConfig();
-            const alerts = await window.NotionAI.API.Admin.loadAlerts();
-            const operations = await window.NotionAI.API.Admin.loadOperationLogs();
-            const snapshot = await window.NotionAI.API.Admin.getAdminSnapshot({
-                action_account: this.getActionHistoryFilters().account,
-            });
-            const usageSummary = await window.NotionAI.API.Admin.getUsageSummary(usageFilters);
-            const usageEvents = await window.NotionAI.API.Admin.getUsageEvents(usageFilters);
+            const [data, unfilteredAccountMeta, runtimeConfig, alerts, operations, snapshot, usageSummary, usageEvents] = await Promise.all([
+                window.NotionAI.API.Admin.loadSafeAccounts(adminFilters),
+                hasScopedAccountFilters ? window.NotionAI.API.Admin.loadSafeAccounts({}) : Promise.resolve(null),
+                window.NotionAI.API.Admin.loadConfig(),
+                window.NotionAI.API.Admin.loadAlerts(),
+                window.NotionAI.API.Admin.loadOperationLogs(),
+                window.NotionAI.API.Admin.getAdminSnapshot({
+                    action_account: this.getActionHistoryFilters().account,
+                }),
+                window.NotionAI.API.Admin.getUsageSummary(usageFilters),
+                window.NotionAI.API.Admin.getUsageEvents(usageFilters),
+            ]);
             this._lastAdminSnapshot = snapshot || {};
-            this.renderAdminSummary(data.summary || {});
+            this.renderAdminSummary((unfilteredAccountMeta && unfilteredAccountMeta.summary) || data.summary || {});
             this.renderAdminAuthSource(runtimeConfig.admin_auth || {});
             this.renderAdminAccessStatus(runtimeConfig.admin_auth || {});
             this.renderAdminSessionSummary(runtimeConfig.admin_auth || {});

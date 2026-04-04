@@ -14,6 +14,16 @@
 ## Browser verification notes
 - The user prefers real browser-based validation over pure script/command verification.
 - A real production browser session exposed a frontend bug where zero-valued summary pills rendered as blank text.
+- On the production admin overview, browser automation can mis-target densely packed filter buttons; unique alert button labels added in commit `11f9b31`, and direct button handler binding added in commit `8e954ac` helped distinguish real app behavior from automation click offset.
+
+- 当前浏览器自动化里，`browser_get_content` 对登录态后台页面的提取可能滞后于真实 DOM；验证账号区快捷筛选是否真正生效时，要更信任 `browser_get_state` 中的统计变化（例如总数 10 → 8 → 2）与页面 notice/banner，而不是只看内容提取结果。
+- 本地账号/总览筛选链路里，账号区三枚快捷筛选按钮（缺少工作区 / 工作区待处理 / 探测失败）最好保留 inline `onclick` 兜底；仅靠集中绑定时，在真实浏览器和自动化里都出现过点击命中但未可靠触发筛选的问题。
+- `frontend/js/api/settings.js` 的 `applyQuickFilter('probe_failures')` 以前只刷新页面、不写入真实筛选条件；如果以后再改账号筛选链路，记得同时维护前端状态下拉、后端 `state=probe_failures` 过滤和 banner 文案三处。
+- 后台 `probe_failures` 的真实口径不要再用“任何 `last_probe_ok=false` 都算失败”；`app/api/admin.py` 里应统一走 `_has_probe_failure(...)`，排除 dry-run / live-template / blocked / unsupported 等未真正发起上游探测的结果，并让列表过滤、summary、alerts 共用同一 helper。
+- `frontend/js/api/settings.js` 的账号区空结果态不能吞掉 `当前筛选 / 来源 / 视图模式` banner；真实浏览器里筛选到 0 条时，仍应保留 banner，并把文案写成“当前筛选条件下没有匹配账号”。
+- 账号筛选只应影响账号区本地摘要，不应污染总览/当前配置里的全局数字；前端 `refreshAdminPanel()` 如需在筛选状态下刷新全局统计，应额外拉一次未筛选的 accounts summary。
+- 账号卡的 badge 与 tag 容易在 pending 场景重复（如 `hydration:pending` 同时出现在 badge 和 tag）；前端要对 badge/tag 做去重，但如果去重后 tag 为空，仍应回退显示 `account.source`（例如 `register_flow`），避免来源信息丢失。
+
 
 ## Implementation learnings
 - `frontend/js/api/settings.js`: use `value ?? ''` instead of `value || ''` in HTML escaping so numeric zero renders correctly.

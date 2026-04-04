@@ -62,6 +62,40 @@ _ACCOUNT_REPORT_IDENTIFIER_FIELDS = {"id", "user_id", "space_id", "space_view_id
 _HEALTH_REPORT_IDENTIFIER_FIELDS = {"account_id", "user_id", "space_id"}
 _SESSION_SECRET_FIELDS = {"access_token", "refresh_token"}
 _EMAIL_LOGIN_SESSION_TTL_SECONDS = 15 * 60
+_NON_FAILURE_PROBE_RESULT_ACTIONS = {
+    "refresh_probe_dry_run",
+    "refresh_probe_live_template",
+    "real_refresh_probe_blocked",
+    "workspace_create_probe_dry_run",
+    "workspace_create_probe_live_template",
+    "real_workspace_probe_blocked",
+}
+_NON_FAILURE_PROBE_REASON_MARKERS = (
+    "only supports dry_run",
+    "no upstream request was sent",
+    "no upstream transaction was sent",
+    "request skeleton is fully populated, but no upstream",
+    "execution is blocked",
+)
+
+
+def _has_probe_failure(status: dict[str, Any]) -> bool:
+    probe_failure_category = str(status.get("last_probe_failure_category") or "").strip().lower()
+    if probe_failure_category and probe_failure_category != "success":
+        return True
+    probe_result_action = str(status.get("last_probe_result_action") or "").strip().lower()
+    if probe_result_action in _NON_FAILURE_PROBE_RESULT_ACTIONS:
+        return False
+    probe_reason = str(status.get("last_probe_reason") or "").strip().lower()
+    if any(marker in probe_reason for marker in _NON_FAILURE_PROBE_REASON_MARKERS):
+        return False
+    if "last_probe_probed" in status and not bool(status.get("last_probe_probed", False)):
+        return False
+    return bool(status.get("last_probe_action")) and not bool(
+        status.get("last_probe_ok", True)
+    )
+
+
 
 
 def _mask_secret(value: Any) -> str:
@@ -1140,6 +1174,8 @@ def _normalize_account_status(status: dict[str, Any]) -> dict[str, Any]:
         normalized["session_expired"] = bool(normalized.get("oauth_expired"))
     if "oauth_expires_at" in normalized and "session_expires_at" not in normalized:
         normalized["session_expires_at"] = normalized.get("oauth_expires_at")
+    if "last_probe_probed" not in normalized and "last_probe_action" in normalized:
+        normalized["last_probe_probed"] = None
     normalized.pop("oauth_expired", None)
     normalized.pop("oauth_expires_at", None)
     return normalized
@@ -2203,7 +2239,7 @@ def _build_account_view(
             if status_has_needs_reauth
             else health.get("needs_reauth", False)
         )
-        has_probe_failure = bool(probe_failure_category) and probe_failure_category != "success"
+        has_probe_failure = _has_probe_failure(status)
         has_refresh_failure = bool(refresh_failure_category) and refresh_failure_category != "success"
         if workspace_state == "ready" or workspace_count > 0:
             pool_state = "active"
@@ -2404,6 +2440,11 @@ def _build_account_view(
                         "last_probe_response_excerpt", ""
                     ),
                     "last_probe_parse_error": status.get("last_probe_parse_error", ""),
+                    "last_probe_probed": status.get("last_probe_probed"),
+                    "last_probe_result_action": status.get(
+                        "last_probe_result_action", ""
+                    ),
+                    "has_probe_failure": has_probe_failure,
                     "last_probe_recognized_fields": status.get(
                         "last_probe_recognized_fields", {}
                     ),
@@ -2501,9 +2542,7 @@ def _build_alerts(accounts: list[dict[str, Any]]) -> dict[str, Any]:
             if retry_after <= int(time.time()):
                 alert_types["workspace_hydration_due"].append(alert_payload)
         probe_failure_category = str(status.get("last_probe_failure_category") or "").strip()
-        if (probe_failure_category and probe_failure_category != "success") or (
-            bool(status.get("last_probe_action")) and not bool(status.get("last_probe_ok", True))
-        ):
+        if _has_probe_failure(status):
             alert_types["probe_failures"].append(
                 {
                     **alert_payload,
@@ -3240,6 +3279,8 @@ def _write_probe_result_to_account(
             {
                 "last_probe_action": action,
                 "last_probe_ok": bool(result.get("ok", False)),
+                "last_probe_probed": bool(result.get("probed", False)),
+                "last_probe_result_action": str(result.get("action") or ""),
                 "last_probe_reason": str(result.get("reason") or ""),
                 "last_probe_status_code": result.get("status_code"),
                 "last_probe_failure_category": result.get("failure_category", ""),
@@ -5026,13 +5067,8 @@ def _list_accounts_payload(
             accounts = [
                 item
                 for item in accounts
-                if (
-                    str(item.get("status", {}).get("last_probe_failure_category") or "").strip().lower()
-                    not in {"", "success"}
-                )
-                or (
-                    bool(item.get("status", {}).get("last_probe_action"))
-                    and not bool(item.get("status", {}).get("last_probe_ok", True))
+                if _has_probe_failure(
+                    item.get("status", {}) if isinstance(item.get("status"), dict) else {}
                 )
             ]
         else:
@@ -5122,11 +5158,8 @@ def _list_accounts_payload(
         "probe_failures": sum(
             1
             for item in accounts
-            if str(item.get("status", {}).get("last_probe_failure_category") or "").strip().lower()
-            not in {"", "success"}
-            or (
-                bool(item.get("status", {}).get("last_probe_action"))
-                and not bool(item.get("status", {}).get("last_probe_ok", True))
+            if _has_probe_failure(
+                item.get("status", {}) if isinstance(item.get("status"), dict) else {}
             )
         ),
         "no_workspace": sum(
