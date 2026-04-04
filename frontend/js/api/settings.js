@@ -2922,13 +2922,19 @@ window.NotionAI.API.Settings = {
                 return;
             }
             element.dataset.bound = 'true';
-            const eventName = element.tagName === 'INPUT' && element.type === 'text' ? 'input' : 'change';
-            element.addEventListener(eventName, () => {
+            const handler = () => {
                 if (id === 'adminActionHistoryAccountFilter') {
                     this.refreshAdminPanel('Action history account filter updated.');
                     return;
                 }
                 this.renderActionHistory(this._lastAdminSnapshot || {});
+            };
+            const isTextInput = element.tagName === 'INPUT' && element.type === 'text';
+            const eventNames = isTextInput
+                ? ['input']
+                : (element.tagName === 'INPUT' && element.type === 'checkbox' ? ['change', 'click'] : ['change']);
+            eventNames.forEach((eventName) => {
+                element.addEventListener(eventName, handler);
             });
         });
     },
