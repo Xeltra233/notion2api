@@ -170,6 +170,40 @@ def _redact_account_list(accounts: list[dict[str, Any]]) -> list[dict[str, Any]]
     return [_redact_account_payload(account) for account in accounts]
 
 
+
+def _find_account_by_reference(
+    accounts: list[dict[str, Any]], account_ref: str
+) -> dict[str, Any] | None:
+    normalized_ref = str(account_ref or "").strip()
+    if not normalized_ref:
+        return None
+    lowered_ref = normalized_ref.lower()
+    for account in accounts:
+        account_id = str(account.get("id") or "").strip()
+        user_email = str(account.get("user_email") or "").strip().lower()
+        user_id = str(account.get("user_id") or "").strip().lower()
+        if normalized_ref == account_id or lowered_ref in {user_email, user_id}:
+            return account
+    return None
+
+
+
+def _resolve_account_reference(account_ref: str) -> tuple[str, dict[str, Any]]:
+    accounts = get_config_store().get_accounts()
+    target = _find_account_by_reference(accounts, account_ref)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    resolved_account_id = str(target.get("id") or "").strip()
+    if not resolved_account_id:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return resolved_account_id, target
+
+
+
+def _redact_action_result_payload(value: Any) -> Any:
+    return _redact_template_preview_payload(value)
+
+
 _TEMPLATE_PREVIEW_SENSITIVE_KEYS = {
     "account_id",
     "account_key",
@@ -4007,18 +4041,12 @@ async def patch_account(
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
     _ensure_admin(request, x_admin_session)
-    store = get_config_store()
-    accounts = store.get_accounts()
-    target = next(
-        (account for account in accounts if account.get("id") == account_id), None
-    )
-    if target is None:
-        raise HTTPException(status_code=404, detail="Account not found")
+    resolved_account_id, target = _resolve_account_reference(account_id)
     updates = payload.model_dump(exclude_none=True)
     target.update(updates)
-    saved = store.upsert_account(target)
+    saved = get_config_store().upsert_account(target)
     _rebuild_pool(request)
-    return {"ok": True, "account": _redact_account_payload(saved)}
+    return {"ok": True, "account": _redact_account_payload(saved), "account_ref": _mask_secret(resolved_account_id)}
 
 
 @router.delete("/admin/accounts/{account_id}")
@@ -4028,11 +4056,12 @@ async def delete_account(
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
     _ensure_admin(request, x_admin_session)
-    deleted = get_config_store().delete_account(account_id)
+    resolved_account_id, _ = _resolve_account_reference(account_id)
+    deleted = get_config_store().delete_account(resolved_account_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Account not found")
     _rebuild_pool(request)
-    return {"ok": True, "deleted": True, "account_id": account_id}
+    return {"ok": True, "deleted": True, "account_ref": _mask_secret(resolved_account_id)}
 
 
 @router.post("/admin/accounts/import")
@@ -4268,7 +4297,7 @@ async def probe_accounts(
 ):
     _ensure_admin(request, x_admin_session)
     results = request.app.state.account_pool.keepalive_accounts()
-    return {"ok": True, "results": results}
+    return {"ok": True, "results": _redact_action_result_payload(results)}
 
 
 @router.post("/admin/accounts/{account_id}/probe")
@@ -4278,6 +4307,7 @@ async def probe_single_account(
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
     _ensure_admin(request, x_admin_session)
+    account_id, _ = _resolve_account_reference(account_id)
     pool = request.app.state.account_pool
     try:
         result = pool.probe_account_by_id(account_id)
@@ -4315,7 +4345,7 @@ async def probe_single_account(
             "failed_count": 1 if result.get("ok") is False else 0,
         },
     )
-    return {"ok": True, "result": result}
+    return {"ok": True, "result": _redact_action_result_payload(result)}
 
 
 @router.post("/admin/accounts/refresh")
@@ -4346,7 +4376,7 @@ async def refresh_accounts(
             "failed_count": sum(1 for item in results if item.get("ok") is False),
         },
     )
-    return {"ok": True, "results": results}
+    return {"ok": True, "results": _redact_action_result_payload(results)}
 
 
 @router.post("/admin/accounts/{account_id}/refresh")
@@ -4356,6 +4386,7 @@ async def refresh_single_account(
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
     _ensure_admin(request, x_admin_session)
+    account_id, _ = _resolve_account_reference(account_id)
     pool = request.app.state.account_pool
     try:
         result = pool.refresh_account_by_id(account_id)
@@ -4394,7 +4425,7 @@ async def refresh_single_account(
             "failed_count": 1 if result.get("ok") is False else 0,
         },
     )
-    return {"ok": True, "result": result}
+    return {"ok": True, "result": _redact_action_result_payload(result)}
 
 
 @router.post("/admin/accounts/workspaces/sync")
@@ -4404,7 +4435,7 @@ async def sync_account_workspaces(
 ):
     _ensure_admin(request, x_admin_session)
     results = request.app.state.account_pool.sync_workspaces()
-    return {"ok": True, "results": results}
+    return {"ok": True, "results": _redact_action_result_payload(results)}
 
 
 @router.post("/admin/accounts/{account_id}/workspaces/sync")
@@ -4414,6 +4445,7 @@ async def sync_single_account_workspaces(
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
     _ensure_admin(request, x_admin_session)
+    account_id, _ = _resolve_account_reference(account_id)
     pool = request.app.state.account_pool
     try:
         result = pool.sync_workspace_by_id(account_id)
@@ -4514,7 +4546,7 @@ async def sync_single_account_workspaces(
             "failed_count": 1 if result.get("ok") is False else 0,
         },
     )
-    return {"ok": True, "result": result}
+    return {"ok": True, "result": _redact_action_result_payload(result)}
 
 
 @router.post("/admin/accounts/{account_id}/register-hydration-retry")
@@ -4524,6 +4556,7 @@ async def retry_single_account_register_hydration(
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
     _ensure_admin(request, x_admin_session)
+    account_id, _ = _resolve_account_reference(account_id)
     pool = request.app.state.account_pool
     try:
         result = retry_pending_register_hydration(request, account_id)
@@ -4561,7 +4594,7 @@ async def retry_single_account_register_hydration(
             "failed_count": 1 if result.get("ok") is False else 0,
         },
     )
-    return {"ok": True, "result": result}
+    return {"ok": True, "result": _redact_action_result_payload(result)}
 
 
 @router.post("/admin/accounts/workspaces/create")
@@ -4592,7 +4625,7 @@ async def create_account_workspaces(
             "failed_count": sum(1 for item in results if item.get("ok") is False),
         },
     )
-    return {"ok": True, "results": results}
+    return {"ok": True, "results": _redact_action_result_payload(results)}
 
 
 @router.post("/admin/accounts/{account_id}/workspaces/create")
@@ -4602,6 +4635,7 @@ async def create_single_account_workspace(
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
     _ensure_admin(request, x_admin_session)
+    account_id, _ = _resolve_account_reference(account_id)
     pool = request.app.state.account_pool
     try:
         result = pool.create_workspace_by_id(account_id)
@@ -4703,7 +4737,7 @@ async def create_single_account_workspace(
             "failed_count": 1 if result.get("ok") is False else 0,
         },
     )
-    return {"ok": True, "result": result}
+    return {"ok": True, "result": _redact_action_result_payload(result)}
 
 
 @router.get("/admin/accounts/{account_id}/request-templates")
@@ -4713,6 +4747,7 @@ async def get_account_request_templates(
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
     _ensure_admin(request, x_admin_session)
+    account_id, _ = _resolve_account_reference(account_id)
     pool = request.app.state.account_pool
     try:
         idx = pool._find_client_index(account_id)
@@ -4742,6 +4777,7 @@ async def refresh_probe_account(
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
     _ensure_admin(request, x_admin_session)
+    account_id, _ = _resolve_account_reference(account_id)
     pool = request.app.state.account_pool
     try:
         idx = pool._find_client_index(account_id)
@@ -4780,6 +4816,7 @@ async def workspace_probe_account(
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
     _ensure_admin(request, x_admin_session)
+    account_id, _ = _resolve_account_reference(account_id)
     pool = request.app.state.account_pool
     try:
         idx = pool._find_client_index(account_id)
@@ -4849,14 +4886,9 @@ async def get_account(
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
     _ensure_admin(request, x_admin_session)
-    accounts = get_config_store().get_accounts()
-    target = next(
-        (account for account in accounts if account.get("id") == account_id), None
-    )
-    if target is None:
-        raise HTTPException(status_code=404, detail="Account not found")
+    resolved_account_id, target = _resolve_account_reference(account_id)
     if raw:
-        return {"ok": True, "account": target, "view_mode": "raw", "contains_secrets": True}
+        return {"ok": True, "account": target, "view_mode": "raw", "contains_secrets": True, "account_ref": _mask_secret(resolved_account_id)}
     return {
         "ok": True,
         "account": _redact_account_report_payload(target),
@@ -5302,18 +5334,11 @@ async def disable_account(
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
     _ensure_admin(request, x_admin_session)
-    store = get_config_store()
-    accounts = store.get_accounts()
-    target = next(
-        (account for account in accounts if account.get("id") == payload.account_id),
-        None,
-    )
-    if target is None:
-        raise HTTPException(status_code=404, detail="Account not found")
+    _, target = _resolve_account_reference(payload.account_id)
     target["enabled"] = False
-    saved = store.upsert_account(target)
+    saved = get_config_store().upsert_account(target)
     _rebuild_pool(request)
-    return {"ok": True, "account": saved}
+    return {"ok": True, "account": _redact_account_payload(saved)}
 
 
 @router.post("/admin/accounts/enable")
@@ -5323,18 +5348,11 @@ async def enable_account(
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
     _ensure_admin(request, x_admin_session)
-    store = get_config_store()
-    accounts = store.get_accounts()
-    target = next(
-        (account for account in accounts if account.get("id") == payload.account_id),
-        None,
-    )
-    if target is None:
-        raise HTTPException(status_code=404, detail="Account not found")
+    _, target = _resolve_account_reference(payload.account_id)
     target["enabled"] = True
-    saved = store.upsert_account(target)
+    saved = get_config_store().upsert_account(target)
     _rebuild_pool(request)
-    return {"ok": True, "account": saved}
+    return {"ok": True, "account": _redact_account_payload(saved)}
 
 
 @router.post("/admin/accounts/bulk-action")
@@ -5363,9 +5381,17 @@ async def bulk_account_action(
         raise HTTPException(status_code=400, detail="account_ids cannot be empty")
     store = get_config_store()
     accounts = store.get_accounts()
-    matched = [
-        account for account in accounts if str(account.get("id") or "") in account_ids
-    ]
+    matched: list[dict[str, Any]] = []
+    seen_account_ids: set[str] = set()
+    for account_ref in account_ids:
+        target = _find_account_by_reference(accounts, account_ref)
+        if target is None:
+            continue
+        target_account_id = str(target.get("id") or "").strip()
+        if not target_account_id or target_account_id in seen_account_ids:
+            continue
+        seen_account_ids.add(target_account_id)
+        matched.append(target)
     if not matched:
         raise HTTPException(status_code=404, detail="No matching accounts found")
 
@@ -5572,7 +5598,7 @@ async def bulk_account_action(
         "count": len(results),
         "success_count": success_count,
         "failed_count": failed_count,
-        "results": results,
+        "results": _redact_action_result_payload(results),
     }
     _append_operation_log(action, response)
     if action in {"refresh_probe", "workspace_probe"}:

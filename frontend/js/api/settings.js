@@ -1255,7 +1255,7 @@ window.NotionAI.API.Settings = {
             const safePlanCategory = this.escapeHtml(account.plan_category || status.plan_category || '未知');
             const subscriptionTier = this.escapeHtml(workspace.subscription_tier || '无');
             const notes = this.escapeHtml(account.notes || '');
-            const safeAccountId = this.escapeHtmlAttribute(account.id || '');
+            const safeAccountId = this.escapeHtmlAttribute(account.user_email || account.id || '');
             const safeTagValue = this.escapeHtmlAttribute(tags.join(', '));
             const badgeItems = [];
             if (status.last_probe_failure_category) {
@@ -2785,7 +2785,7 @@ window.NotionAI.API.Settings = {
     async bulkActionOnFiltered(action, successMessage) {
         try {
             const data = await window.NotionAI.API.Admin.loadSafeAccounts(this.getAdminFilters());
-            const accountIds = (data.accounts || []).map((item) => item.id).filter(Boolean);
+            const accountIds = (data.accounts || []).map((item) => item.user_email || item.id).filter(Boolean);
             if (!accountIds.length) {
                 this.setAdminNotice('没有筛选出的账号匹配当前批量动作。');
                 return;
