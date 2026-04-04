@@ -2924,10 +2924,18 @@ window.NotionAI.API.Settings = {
             element.dataset.bound = 'true';
             const handler = () => {
                 if (id === 'adminActionHistoryAccountFilter') {
-                    this.refreshAdminPanel('Action history account filter updated.');
+                    this.refreshAdminPanel('动作历史账号筛选已更新。');
                     return;
                 }
                 this.renderActionHistory(this._lastAdminSnapshot || {});
+                if (id === 'adminActionHistoryReauthOnly') {
+                    this.setAdminNotice(`动作历史筛选已更新：仅看重授权=${element.checked ? '是' : '否'}。`);
+                    return;
+                }
+                const activeFilters = this.describeActionHistoryFilters(this.getActionHistoryFilters());
+                this.setAdminNotice(activeFilters.length
+                    ? `动作历史筛选已更新：${activeFilters.join(' · ')}。`
+                    : '动作历史筛选已更新：全部结果。');
             };
             const isTextInput = element.tagName === 'INPUT' && element.type === 'text';
             const eventNames = isTextInput
