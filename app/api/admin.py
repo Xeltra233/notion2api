@@ -5070,6 +5070,7 @@ async def list_accounts(
     sort_order: str = Query(default="desc"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=200),
+    raw: bool = Query(default=False),
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
     _ensure_admin(request, x_admin_session)
@@ -5084,9 +5085,15 @@ async def list_accounts(
         page=page,
         page_size=page_size,
     )
-    payload["view_mode"] = "raw"
+    if raw:
+        payload["view_mode"] = "raw"
+        log_action = "accounts_list_raw"
+    else:
+        payload["accounts"] = _redact_account_report_list(payload.get("accounts", []))
+        payload["view_mode"] = "safe"
+        log_action = "accounts_list_safe"
     _append_operation_log(
-        "accounts_list_raw",
+        log_action,
         {
             "count": len(payload.get("accounts", [])),
             "success_count": len(payload.get("accounts", [])),
@@ -5101,6 +5108,7 @@ async def list_accounts(
                 "sort_by": sort_by,
                 "sort_order": sort_order,
             },
+            "raw": raw,
         },
     )
     return payload

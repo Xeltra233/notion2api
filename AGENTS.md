@@ -27,6 +27,8 @@
 - `GET /v1/admin/accounts/{account_id}` 不应默认返回原始账号明细；更安全的做法是默认返回脱敏 `safe_detail`，只有编辑器这类显式后台操作再附带 `?raw=true` 请求原始字段。
 - `GET /v1/admin/accounts/safe` 虽然名字叫 safe，但如果只套用普通账号脱敏仍会泄漏 `user_id`、`space_id`、`pending-signup-*` 等标识；这个接口应直接复用更严格的报告级账号脱敏。
 - `GET /v1/admin/config` 也会返回账号列表和健康明细，不能只做普通 token/session 脱敏；这里同样要按报告级别掩码 `user_id`、`space_id`、`pending-signup-*` 以及健康项中的 `account_id` 等字段。
+- `GET /v1/admin/accounts` 不能默认当成内部原始接口暴露；即使前端主流程当前走 `/admin/accounts/safe`，这个主列表接口本身也应默认返回安全视图，只把 `?raw=true` 留给显式后台调试用途。
+
 
 
 
