@@ -24,6 +24,28 @@ window.NotionAI.API.Settings = {
         };
     },
 
+    describeActionHistoryFilters(filters = {}) {
+        const parts = [];
+        if (filters.account) {
+            parts.push(`账号 ${filters.account}`);
+        }
+        if (filters.type) {
+            parts.push(`类型 ${filters.type}`);
+        }
+        if (filters.status === 'failed') {
+            parts.push('仅失败');
+        } else if (filters.status === 'success') {
+            parts.push('仅成功');
+        }
+        if (filters.failureCategory) {
+            parts.push(`失败分类 ${filters.failureCategory}`);
+        }
+        if (filters.reauthOnly) {
+            parts.push('仅看重授权');
+        }
+        return parts;
+    },
+
     getAdminFilters() {
         const rawPageSize = String(document.getElementById('adminPageSizeInput')?.value || '24');
         const requestedShowAll = rawPageSize === 'all';
@@ -927,6 +949,10 @@ window.NotionAI.API.Settings = {
         }
         const logs = Array.isArray(snapshot.recent_actions) ? snapshot.recent_actions : [];
         const filters = this.getActionHistoryFilters();
+        const filterSummary = this.describeActionHistoryFilters(filters);
+        const filterSummaryHtml = filterSummary.length
+            ? `<div class="mb-2 text-[11px] text-gray-500 dark:text-gray-400">当前筛选：${this.escapeHtml(filterSummary.join(' · '))}</div>`
+            : '';
         const filteredLogs = logs.filter((item) => {
             const summary = item.payload?.summary || {};
             const accountNeedle = String(filters.account || '').trim().toLowerCase();
@@ -963,10 +989,10 @@ window.NotionAI.API.Settings = {
             return true;
         });
         if (!filteredLogs.length) {
-            panel.innerHTML = '<div>当前筛选条件下没有匹配到操作历史。</div>';
+            panel.innerHTML = `${filterSummaryHtml}<div>当前筛选条件下没有匹配到操作历史。</div>`;
             return;
         }
-        panel.innerHTML = filteredLogs.slice(-5).reverse().map((item) => {
+        panel.innerHTML = `${filterSummaryHtml}${filteredLogs.slice(-5).reverse().map((item) => {
             const date = item.timestamp ? new Date(item.timestamp * 1000).toLocaleString() : '未知时间';
             const summary = item.payload?.summary || {};
             const reason = summary.reason || '';
@@ -987,7 +1013,7 @@ window.NotionAI.API.Settings = {
             const okLabel = summary.ok === false ? 'failed' : 'ok';
             const remediation = summary.remediation_message || '';
             return `<div class="rounded-lg border border-black/10 dark:border-white/10 px-3 py-2 bg-black/[0.02] dark:bg-white/[0.03]"><div><strong>${item.action || 'action'}</strong> | ${okLabel} | ${failureCategory} | ${statusCode} | ${reauthorizeRequired} | ${accountId} | ${spaceId} | ${date}<br>${summary.action || 'action-n/a'}${reason ? ` · ${reason}` : ''}${suggestion ? `<br>建议：${suggestion}` : ''}${remediation ? `<br>指引：${remediation}` : ''}${recognizedFields ? `<br>${recognizedFields}` : ''}</div><div class="mt-2 flex flex-wrap gap-2"><button type="button" class="admin-action-btn admin-action-history-toggle" data-action-key="${actionKey}">${expanded ? '隐藏 JSON' : '查看 JSON'}</button><button type="button" class="admin-action-btn admin-action-history-copy" data-copy-kind="payload" data-action-json="${this.escapeHtmlAttribute(payloadJson)}">复制 payload</button><button type="button" class="admin-action-btn admin-action-history-copy" data-copy-kind="summary" data-action-json="${this.escapeHtmlAttribute(summaryJson)}">复制 summary</button><button type="button" class="admin-action-btn admin-action-history-copy" data-copy-kind="result" data-action-json="${this.escapeHtmlAttribute(resultJson)}">复制 result</button></div>${expanded ? `<pre class="mt-2 whitespace-pre-wrap break-all text-[11px] text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-[#1f1f1f] rounded-lg p-2 overflow-auto">${this.escapeHtml(payloadJson)}</pre>` : ''}</div>`;
-        }).join('');
+        }).join('')}`;
         panel.querySelectorAll('.admin-action-history-toggle').forEach((button) => {
             button.addEventListener('click', (event) => {
                 const actionKey = event.currentTarget.dataset.actionKey || '';
