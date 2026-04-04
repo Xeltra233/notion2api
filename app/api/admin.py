@@ -4860,10 +4860,10 @@ async def account_workspace_status(
         )
         rows.append(
             {
-                "account_id": account.get("id"),
-                "user_id": account.get("user_id"),
+                "account_id": _mask_secret(account.get("id")),
+                "user_id": _mask_secret(account.get("user_id")),
                 "user_email": account.get("user_email"),
-                "space_id": account.get("space_id"),
+                "space_id": _mask_secret(account.get("space_id")),
                 "workspace_state": workspace.get("state", "missing"),
                 "workspace_count": workspace.get("workspace_count", 0),
                 "subscription_tier": workspace.get("subscription_tier", ""),
