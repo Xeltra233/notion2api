@@ -20,7 +20,7 @@ Notion2API 已经不只是一个简单的 `/v1/chat/completions` 代理壳。
 - usage 汇总与明细查询
 - 邮箱验证码导入 / register 自动化工具链
 - workspace 同步 / 探测 / 创建能力
-- 一批无人工验证脚本
+- 一批自动化验证脚本
 
 如果你原本只把它理解成一个上游代理，现在它更接近一个“带控制台和运维面板的产品化系统”。
 
@@ -100,7 +100,7 @@ API 同时支持纯文本消息，以及 OpenAI 风格的多模态 `content` 数
 - auto-register 状态与队列可见性
 - workspace create dry-run 状态暴露
 
-更多后台访问与 Runtime 保存说明：[`ADMIN_QUICK_START.md#admin-quick-start`](ADMIN_QUICK_START.md#admin-quick-start)
+更多后台访问与 Runtime 保存说明，请参考：[ADMIN_QUICK_START.md](./ADMIN_QUICK_START.md#admin-quick-start)
 
 ### 6. Usage 查询能力
 
@@ -266,7 +266,7 @@ PORT=8000
 - `SILICONFLOW_API_KEY`
 - refresh / workspace 相关高级配置
 
-更完整的模板请直接看 `.env.example`。其中部分配置虽然已经能在后台 Runtime 面板里编辑，但像 `ALLOWED_ORIGINS` 这类启动期配置，修改后通常仍需要重启服务才能完全生效。
+更完整的模板请直接看 [`.env.example`](./.env.example)。其中部分配置虽然已经能在后台 Runtime 面板里编辑，但像 `ALLOWED_ORIGINS` 这类启动期配置，修改后通常仍需要重启服务才能完全生效。
 
 ### 2. 启动服务
 
@@ -372,46 +372,46 @@ uvicorn app.server:app --host 0.0.0.0 --port 8000
 
 ### 认证 / Session / 安全边界
 
-- `scripts/verify_admin_session_auth_flow.py`
-- `scripts/verify_register_admin_protection.py`
-- `scripts/verify_admin_redaction_modes.py`
-- `scripts/verify_safe_accounts_view.py`
-- `scripts/verify_usage_admin_endpoints.py`
+- [`scripts/verify_admin_session_auth_flow.py`](./scripts/verify_admin_session_auth_flow.py)
+- [`scripts/verify_register_admin_protection.py`](./scripts/verify_register_admin_protection.py)
+- [`scripts/verify_admin_redaction_modes.py`](./scripts/verify_admin_redaction_modes.py)
+- [`scripts/verify_safe_accounts_view.py`](./scripts/verify_safe_accounts_view.py)
+- [`scripts/verify_usage_admin_endpoints.py`](./scripts/verify_usage_admin_endpoints.py)
 
 ### 后台壳与前后端语义契约
 
-- `scripts/verify_frontend_semantic_fields_backend_contract.py`
-- `scripts/verify_admin_first_entry_shell.py`
-- `scripts/verify_admin_first_default_module_contract.py`
-- `scripts/verify_workspace_footer_actions_contract.py`
-- `scripts/verify_direct_mode_ignores_warp_proxy.py`
+- [`scripts/verify_frontend_semantic_fields_backend_contract.py`](./scripts/verify_frontend_semantic_fields_backend_contract.py)
+- [`scripts/verify_admin_first_entry_shell.py`](./scripts/verify_admin_first_entry_shell.py)
+- [`scripts/verify_admin_first_default_module_contract.py`](./scripts/verify_admin_first_default_module_contract.py)
+- [`scripts/verify_workspace_footer_actions_contract.py`](./scripts/verify_workspace_footer_actions_contract.py)
+- [`scripts/verify_direct_mode_ignores_warp_proxy.py`](./scripts/verify_direct_mode_ignores_warp_proxy.py)
 
 ### Chat / 访问门禁 / 媒体
 
-- `scripts/verify_chat_access_flow.py`
-- `scripts/verify_chat_session_module_access_contract.py`
-- `scripts/verify_admin_logout_chat_gate_contract.py`
-- `scripts/verify_runtime_chat_session_reset_contract.py`
-- `scripts/verify_chat_access_refresh_session_cleanup_contract.py`
-- `scripts/verify_media_upload_flow.py`
+- [`scripts/verify_chat_access_flow.py`](./scripts/verify_chat_access_flow.py)
+- [`scripts/verify_chat_session_module_access_contract.py`](./scripts/verify_chat_session_module_access_contract.py)
+- [`scripts/verify_admin_logout_chat_gate_contract.py`](./scripts/verify_admin_logout_chat_gate_contract.py)
+- [`scripts/verify_runtime_chat_session_reset_contract.py`](./scripts/verify_runtime_chat_session_reset_contract.py)
+- [`scripts/verify_chat_access_refresh_session_cleanup_contract.py`](./scripts/verify_chat_access_refresh_session_cleanup_contract.py)
+- [`scripts/verify_media_upload_flow.py`](./scripts/verify_media_upload_flow.py)
 
 ### Refresh / Workspace / 探测流程
 
-- `scripts/verify_refresh_action_success.py`
-- `scripts/verify_create_workspace_success.py`
-- `scripts/verify_refresh_probe_success.py`
-- `scripts/verify_workspace_probe_success.py`
+- [`scripts/verify_refresh_action_success.py`](./scripts/verify_refresh_action_success.py)
+- [`scripts/verify_create_workspace_success.py`](./scripts/verify_create_workspace_success.py)
+- [`scripts/verify_refresh_probe_success.py`](./scripts/verify_refresh_probe_success.py)
+- [`scripts/verify_workspace_probe_success.py`](./scripts/verify_workspace_probe_success.py)
 
 ### OpenAI / Anthropic / Gemini 兼容层
 
-- `scripts/verify_api_compat_openai.py`
-- `scripts/verify_api_compat_anthropic_messages.py`
-- `scripts/verify_api_compat_gemini_generate_content.py`
-- `scripts/verify_api_compat_all.py`
+- [`scripts/verify_api_compat_openai.py`](./scripts/verify_api_compat_openai.py)
+- [`scripts/verify_api_compat_anthropic_messages.py`](./scripts/verify_api_compat_anthropic_messages.py)
+- [`scripts/verify_api_compat_gemini_generate_content.py`](./scripts/verify_api_compat_gemini_generate_content.py)
+- [`scripts/verify_api_compat_all.py`](./scripts/verify_api_compat_all.py)
 
 这些脚本的目的，是让关键后端行为不只依赖人工点页面验证。
 
-其中 `verify_api_compat_all.py` 会统一串跑 OpenAI、Anthropic Messages 与 Gemini GenerateContent 的 smoke 验证。
+其中 [`verify_api_compat_all.py`](./scripts/verify_api_compat_all.py) 会统一串跑 OpenAI、Anthropic Messages 与 Gemini GenerateContent 的 smoke 验证。
 
 ---
 
@@ -429,7 +429,7 @@ uvicorn app.server:app --host 0.0.0.0 --port 8000
 - workspace create 目前主要暴露 dry-run 与诊断导向的运维能力
 - 项目仍支持聊天 API 使用，但后台运维已经成为一等功能
 
-### 兼容入口调用示例
+## 兼容入口调用示例
 
 ### OpenAI Responses / Tools 兼容边界
 

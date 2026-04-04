@@ -340,6 +340,7 @@ function bindEventListeners() {
         window.NotionAI.API.Settings.refreshAdminPanel('后台面板已刷新。');
     });
     document.getElementById('adminApplyFiltersBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.setAdminFilterContext('manual_filter', '手动应用筛选');
         window.NotionAI.API.Settings.refreshAdminPanel('筛选条件已应用。');
     });
     document.getElementById('adminClearFiltersBtn').addEventListener('click', () => {

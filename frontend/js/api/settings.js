@@ -13,6 +13,7 @@ window.NotionAI.API.Settings = {
     _runtimeHasChatPassword: false,
     _adminMaxShowAllAccounts: 200,
     _lastAdminPagination: null,
+    _lastAdminFilterContext: null,
 
     getActionHistoryFilters() {
         return {
@@ -44,6 +45,42 @@ window.NotionAI.API.Settings = {
             parts.push('仅看重授权');
         }
         return parts;
+    },
+
+    describeAdminFilters(filters = {}) {
+        const parts = [];
+        const stateLabels = {
+            active: '可用',
+            cooling: '冷却中',
+            invalid: '无效',
+            session_expired: '会话已过期',
+            needs_refresh: '需要刷新',
+            no_workspace: '缺少工作区',
+            workspace_creation_pending: '工作区待创建',
+            workspace_hydration_due: '工作区补全到期',
+            disabled: '已停用',
+        };
+        if (filters.q) {
+            parts.push(`搜索 ${filters.q}`);
+        }
+        if (filters.state) {
+            parts.push(`状态 ${stateLabels[filters.state] || filters.state}`);
+        }
+        if (filters.plan_category) {
+            parts.push(`套餐 ${filters.plan_category}`);
+        }
+        if (filters.enabled === 'true') {
+            parts.push('仅看已启用');
+        } else if (filters.enabled === 'false') {
+            parts.push('仅看已停用');
+        }
+        return parts;
+    },
+
+    setAdminFilterContext(sourceType = '', sourceLabel = '') {
+        this._lastAdminFilterContext = sourceType
+            ? { sourceType, sourceLabel }
+            : null;
     },
 
     getAdminFilters() {
@@ -97,6 +134,7 @@ window.NotionAI.API.Settings = {
         if (stateFilter) {
             stateFilter.value = 'workspace_creation_pending';
         }
+        this.setAdminFilterContext('quick_filter', '快捷筛选：待补全工作区');
         this.refreshAdminPanel('已筛选为待补全账号。');
     },
 
@@ -105,6 +143,7 @@ window.NotionAI.API.Settings = {
         if (stateFilter) {
             stateFilter.value = 'workspace_hydration_due';
         }
+        this.setAdminFilterContext('quick_filter', '快捷筛选：工作区补全到期');
         this.refreshAdminPanel('已筛选为补全到期账号。');
     },
 
@@ -207,10 +246,20 @@ window.NotionAI.API.Settings = {
             reauthOnly.checked = false;
         }
         this.clearUsageFilters();
+        this.setAdminFilterContext();
     },
 
     applyQuickFilter(type) {
         this.clearAdminFilters();
+        const labels = {
+            invalid: '快捷筛选：无效账号',
+            probe_failures: '快捷筛选：探测失败',
+            needs_refresh: '快捷筛选：需要刷新',
+            no_workspace: '快捷筛选：缺少工作区',
+            education: '快捷筛选：教育账号',
+            usable: '快捷筛选：仅看可用账号',
+        };
+        this.setAdminFilterContext('quick_filter', labels[type] || `快捷筛选：${type}`);
         if (type === 'probe_failures') {
             this.refreshAdminPanel(`已应用快捷筛选：${type}。`);
             return;
@@ -236,6 +285,7 @@ window.NotionAI.API.Settings = {
         if (!type) {
             return;
         }
+        this.setAdminFilterContext('alert_filter', `告警卡：${label}`);
         this.setAdminNotice(`正在应用告警筛选：${label}。`);
         this.applyAlertFilter(type);
     },
@@ -1287,6 +1337,11 @@ window.NotionAI.API.Settings = {
         const blockedShowAll = requestedShowAll && total > this._adminMaxShowAllAccounts;
         this.showAdminAccountsRenderNotice(blockedShowAll ? `当前共有 ${total} 个账号。为防止当前页面一次渲染过多内容，已禁止“全部显示”。请改用分页或较小的每页数量。` : '');
         this.renderAccountsSnapshot(data.summary || {}, pagination || {});
+        const activeFilters = this.describeAdminFilters(this.getAdminFilters());
+        const filterContext = this._lastAdminFilterContext;
+        const filterBanner = activeFilters.length || filterContext
+            ? `<div class="accounts-toolbar-copy">当前筛选：<strong>${this.escapeHtml(activeFilters.length ? activeFilters.join(' · ') : '全部账号')}</strong>${filterContext?.sourceLabel ? ` · 来源：<strong>${this.escapeHtml(filterContext.sourceLabel)}</strong>` : ''}</div>`
+            : '';
         const viewBanner = `<div class="accounts-toolbar-copy">视图模式：<strong>${safeViewMode}</strong>${viewMode === 'safe' ? '，敏感字段已遮罩。' : '，当前响应可见原始账号数据。'}</div>`;
         if (!accounts.length) {
             panel.innerHTML = `<div class="admin-access-card"><div class="text-sm text-gray-500 dark:text-gray-400">未加载到账号。</div></div>`;
@@ -1349,7 +1404,7 @@ window.NotionAI.API.Settings = {
             return `
                 <div class="admin-account-row" data-account-id="${safeAccountId}">
                     <div class="admin-account-main">
-                        ${viewBanner}
+                        ${filterBanner}${viewBanner}
                         <div class="text-sm font-medium text-gray-800 dark:text-gray-100">${label}</div>
                         <div class="text-[11px] text-gray-500 dark:text-gray-400">${planType} · ${safePlanCategory} · ${subscriptionTier}</div>
                         <div class="flex flex-wrap gap-2">

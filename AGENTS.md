@@ -9,6 +9,7 @@
 - Install deps: `python -m pip install -r requirements.txt`
 - Run locally: `ADMIN_PASSWORD=test-admin-password python -m uvicorn app.server:app --host 0.0.0.0 --port 8011`
 - Health check: `curl http://127.0.0.1:8011/health`
+- Run unit tests: `python -m unittest discover -s tests -p 'test_*.py' -v`
 
 ## Browser verification notes
 - The user prefers real browser-based validation over pure script/command verification.
