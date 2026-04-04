@@ -118,6 +118,17 @@ def _redact_health_payload(health: dict[str, Any]) -> dict[str, Any]:
 
 
 
+def _redact_health_report_payload(health: dict[str, Any]) -> dict[str, Any]:
+    health_redacted = _redact_health_payload(health)
+    for field in _HEALTH_REPORT_IDENTIFIER_FIELDS:
+        raw_value = health_redacted.get(field, "")
+        health_redacted[field] = _mask_secret(raw_value)
+    health_redacted["workspaces"] = _redact_template_preview_payload(
+        health_redacted.get("workspaces", [])
+    )
+    return health_redacted
+
+
 
 def _redact_account_report_payload(account: dict[str, Any]) -> dict[str, Any]:
     redacted = _redact_account_payload(account)
@@ -148,14 +159,7 @@ def _redact_account_report_payload(account: dict[str, Any]) -> dict[str, Any]:
         redacted.get("health") if isinstance(redacted.get("health"), dict) else None
     )
     if health_payload is not None:
-        health_redacted = _redact_health_payload(health_payload)
-        for field in _HEALTH_REPORT_IDENTIFIER_FIELDS:
-            raw_value = health_redacted.get(field, "")
-            health_redacted[field] = _mask_secret(raw_value)
-        health_redacted["workspaces"] = _redact_template_preview_payload(
-            health_redacted.get("workspaces", [])
-        )
-        redacted["health"] = health_redacted
+        redacted["health"] = _redact_health_report_payload(health_payload)
     return redacted
 
 
@@ -3795,9 +3799,9 @@ async def get_admin_config(
             register_automation
         ),
         "runtime_operations_panel": runtime_panel,
-        "accounts": _redact_account_list(account_view),
+        "accounts": _redact_account_report_list(account_view),
         "health": [
-            _redact_health_payload(item)
+            _redact_health_report_payload(item)
             for item in request.app.state.account_pool.get_detailed_status()
         ],
     }
