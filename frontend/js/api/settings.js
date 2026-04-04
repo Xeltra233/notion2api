@@ -1370,7 +1370,7 @@ window.NotionAI.API.Settings = {
             return String(a.user_email || a.user_id || '').localeCompare(String(b.user_email || b.user_id || ''));
         });
 
-        panel.innerHTML = sortedAccounts.map((account) => {
+        panel.innerHTML = `${filterBanner}${viewBanner}${sortedAccounts.map((account) => {
             const status = account.status || {};
             const workspace = account.workspace || {};
             const session = account.session || account.oauth || {};
@@ -1404,7 +1404,6 @@ window.NotionAI.API.Settings = {
             return `
                 <div class="admin-account-row" data-account-id="${safeAccountId}">
                     <div class="admin-account-main">
-                        ${filterBanner}${viewBanner}
                         <div class="text-sm font-medium text-gray-800 dark:text-gray-100">${label}</div>
                         <div class="text-[11px] text-gray-500 dark:text-gray-400">${planType} · ${safePlanCategory} · ${subscriptionTier}</div>
                         <div class="flex flex-wrap gap-2">
@@ -1452,7 +1451,7 @@ window.NotionAI.API.Settings = {
                     </details>
                 </div>
             `;
-        }).join('');
+        }).join('')}`;
 
         panel.querySelectorAll('.admin-account-expand-btn').forEach((button) => {
             button.addEventListener('click', (event) => {
