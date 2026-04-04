@@ -1469,6 +1469,10 @@ window.NotionAI.API.Settings = {
                 if (!accountId) return;
                 try {
                     const result = await window.NotionAI.API.Admin.runAccountAction(accountId, 'workspaces/sync');
+                    const output = document.getElementById('requestTemplateOutput');
+                    if (output) {
+                        output.value = JSON.stringify(result, null, 2);
+                    }
                     await this.refreshAdminPanel(this.buildActionResultNotice(result, '单账号工作区同步已完成。', '单账号工作区同步返回失败结果'));
                 } catch (error) {
                     await this.refreshAdminPanel(error.message || '同步工作区失败。');
@@ -1487,9 +1491,9 @@ window.NotionAI.API.Settings = {
                     if (output) {
                         output.value = JSON.stringify(result, null, 2);
                     }
-                    await this.refreshAdminPanel('注册补全重试已完成。');
+                    await this.refreshAdminPanel(this.buildActionResultNotice(result, '注册补全重试已完成。', '注册补全重试返回失败结果'));
                 } catch (error) {
-                    this.setAdminNotice(error.message || '重试注册补全失败。');
+                    await this.refreshAdminPanel(error.message || '重试注册补全失败。');
                 }
             });
         });
@@ -1501,6 +1505,10 @@ window.NotionAI.API.Settings = {
                 if (!accountId) return;
                 try {
                     const result = await window.NotionAI.API.Admin.runAccountAction(accountId, 'workspaces/create');
+                    const output = document.getElementById('requestTemplateOutput');
+                    if (output) {
+                        output.value = JSON.stringify(result, null, 2);
+                    }
                     await this.refreshAdminPanel(this.buildActionResultNotice(result, '已触发单账号工作区创建。', '单账号工作区创建返回失败结果'));
                 } catch (error) {
                     await this.refreshAdminPanel(error.message || '创建工作区失败。');
