@@ -24,6 +24,8 @@
 - Safe-mode `alerts` sections in `admin/report` and the `导出账号` JSON export can leak raw account/workspace IDs if they reuse the normal account-card payload shape; export/report-only paths should use stricter report redaction than the interactive account list.
 - The diagnostics tool button `工作区创建状态` uses `/v1/admin/accounts/workspaces/status` and writes a safe-summary JSON blob into the shared textarea; mask `account_id`, `user_id`, and `space_id` there too, not just in the newer diagnostics endpoints.
 - Account-card `刷新探测` and `工作区探测` actions also dump their full response JSON into the shared textarea. Even for dry-run probes, mask top-level `account_id` and recursively redact nested request-template identifiers, especially any `*_id` fields plus transaction `actor_id`, before returning to the browser.
+- `GET /v1/admin/accounts/{account_id}` 不应默认返回原始账号明细；更安全的做法是默认返回脱敏 `safe_detail`，只有编辑器这类显式后台操作再附带 `?raw=true` 请求原始字段。
+
 
 
 

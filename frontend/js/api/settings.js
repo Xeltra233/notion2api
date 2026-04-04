@@ -1365,7 +1365,7 @@ window.NotionAI.API.Settings = {
                 if (!accountId) {
                     return;
                 }
-                const data = await window.NotionAI.API.Admin.getAccount(accountId);
+                const data = await window.NotionAI.API.Admin.getAccount(accountId, { raw: true });
                 const account = data.account;
                 if (account) {
                     this.fillAccountForm(account);

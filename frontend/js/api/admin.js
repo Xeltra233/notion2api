@@ -76,8 +76,14 @@ window.NotionAI.API.Admin = {
         return data;
     },
 
-    async getAccount(accountId) {
-        const response = await window.NotionAI.API.Client.get(`/v1/admin/accounts/${accountId}`);
+    async getAccount(accountId, options = {}) {
+        const params = new URLSearchParams();
+        if (options.raw) {
+            params.set('raw', 'true');
+        }
+        const query = params.toString();
+        const endpoint = query ? `/v1/admin/accounts/${accountId}?${query}` : `/v1/admin/accounts/${accountId}`;
+        const response = await window.NotionAI.API.Client.get(endpoint);
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
             throw new Error(data.detail || '加载账号失败');

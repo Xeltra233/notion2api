@@ -4841,6 +4841,7 @@ async def list_accounts_safe(
 async def get_account(
     account_id: str,
     request: Request,
+    raw: bool = Query(default=False),
     x_admin_session: str | None = Header(default=None, alias="X-Admin-Session"),
 ):
     _ensure_admin(request, x_admin_session)
@@ -4850,7 +4851,14 @@ async def get_account(
     )
     if target is None:
         raise HTTPException(status_code=404, detail="Account not found")
-    return {"ok": True, "account": target, "view_mode": "raw"}
+    if raw:
+        return {"ok": True, "account": target, "view_mode": "raw", "contains_secrets": True}
+    return {
+        "ok": True,
+        "account": _redact_account_report_payload(target),
+        "view_mode": "safe_detail",
+        "contains_secrets": False,
+    }
 
 
 @router.get("/admin/accounts/workspaces/status")
