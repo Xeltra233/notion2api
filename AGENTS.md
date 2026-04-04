@@ -29,6 +29,7 @@
 - `GET /v1/admin/config` 也会返回账号列表和健康明细，不能只做普通 token/session 脱敏；这里同样要按报告级别掩码 `user_id`、`space_id`、`pending-signup-*` 以及健康项中的 `account_id` 等字段。
 - `GET /v1/admin/accounts` 不能默认当成内部原始接口暴露；即使前端主流程当前走 `/admin/accounts/safe`，这个主列表接口本身也应默认返回安全视图，只把 `?raw=true` 留给显式后台调试用途。
 - 安全账号列表如果把 `id` 一并脱敏，前端不能再把 `account.id` 当作动作主键；更稳妥的做法是前端仅持有已展示的公开引用（如 `user_email`），后端统一把这个引用解析回真实账号，再执行编辑/探测/批量动作。
+- 只要前端把邮箱这类公开引用放进按账号路径的 URL（如 `/admin/accounts/{account_ref}/...`），就必须统一做 `encodeURIComponent(account_ref)`；否则真实浏览器里某些按钮会出现接口手工调用正常、但页面点击却报 `Account not found` 的不一致。
 - 那些会把执行结果写回页面文本框或批量结果面板的动作接口，也要默认返回安全脱敏后的 `result/results`，否则即使列表安全，按钮点击后仍会把原始 `account_id/space_id/workspace ids` 再次泄漏到浏览器。
 
 

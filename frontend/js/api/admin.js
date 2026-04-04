@@ -2,6 +2,10 @@ window.NotionAI = window.NotionAI || {};
 window.NotionAI.API = window.NotionAI.API || {};
 
 window.NotionAI.API.Admin = {
+    encodeAccountRef(accountId) {
+        return encodeURIComponent(String(accountId ?? '').trim());
+    },
+
     async login(username, password) {
         const response = await window.NotionAI.API.Client.post('/v1/admin/login', { username, password }, {
             headers: { 'X-Admin-Session': '' }
@@ -82,7 +86,8 @@ window.NotionAI.API.Admin = {
             params.set('raw', 'true');
         }
         const query = params.toString();
-        const endpoint = query ? `/v1/admin/accounts/${accountId}?${query}` : `/v1/admin/accounts/${accountId}`;
+        const accountRef = this.encodeAccountRef(accountId);
+        const endpoint = query ? `/v1/admin/accounts/${accountRef}?${query}` : `/v1/admin/accounts/${accountRef}`;
         const response = await window.NotionAI.API.Client.get(endpoint);
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
@@ -92,7 +97,8 @@ window.NotionAI.API.Admin = {
     },
 
     async patchAccount(accountId, payload) {
-        const response = await window.NotionAI.API.Client.patch(`/v1/admin/accounts/${accountId}`, payload);
+        const accountRef = this.encodeAccountRef(accountId);
+        const response = await window.NotionAI.API.Client.patch(`/v1/admin/accounts/${accountRef}`, payload);
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
             throw new Error(data.detail || '更新账号失败');
@@ -114,11 +120,13 @@ window.NotionAI.API.Admin = {
     },
 
     async runAccountAction(accountId, action) {
-        return this.trigger(`/v1/admin/accounts/${accountId}/${action}`);
+        const accountRef = this.encodeAccountRef(accountId);
+        return this.trigger(`/v1/admin/accounts/${accountRef}/${action}`);
     },
 
     async deleteAccount(accountId) {
-        const response = await window.NotionAI.API.Client.delete(`/v1/admin/accounts/${accountId}`);
+        const accountRef = this.encodeAccountRef(accountId);
+        const response = await window.NotionAI.API.Client.delete(`/v1/admin/accounts/${accountRef}`);
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
             throw new Error(data.detail || '删除账号失败');
@@ -266,7 +274,8 @@ window.NotionAI.API.Admin = {
     },
 
     async getAccountRequestTemplates(accountId) {
-        const response = await window.NotionAI.API.Client.get(`/v1/admin/accounts/${accountId}/request-templates`);
+        const accountRef = this.encodeAccountRef(accountId);
+        const response = await window.NotionAI.API.Client.get(`/v1/admin/accounts/${accountRef}/request-templates`);
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
             throw new Error(data.detail || '加载账号请求模板失败');
@@ -303,15 +312,18 @@ window.NotionAI.API.Admin = {
     },
 
     async runRefreshProbe(accountId) {
-        return this.trigger(`/v1/admin/accounts/${accountId}/refresh-probe`);
+        const accountRef = this.encodeAccountRef(accountId);
+        return this.trigger(`/v1/admin/accounts/${accountRef}/refresh-probe`);
     },
 
     async runWorkspaceProbe(accountId) {
-        return this.trigger(`/v1/admin/accounts/${accountId}/workspace-probe`);
+        const accountRef = this.encodeAccountRef(accountId);
+        return this.trigger(`/v1/admin/accounts/${accountRef}/workspace-probe`);
     },
 
     async retryRegisterHydration(accountId) {
-        return this.trigger(`/v1/admin/accounts/${accountId}/register-hydration-retry`);
+        const accountRef = this.encodeAccountRef(accountId);
+        return this.trigger(`/v1/admin/accounts/${accountRef}/register-hydration-retry`);
     },
 
     async exportAccounts(raw = false) {
