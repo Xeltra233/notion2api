@@ -230,6 +230,16 @@ window.NotionAI.API.Settings = {
         this.refreshAdminPanel(`已应用快捷筛选：${type}。`);
     },
 
+    handleAlertFilterClick(button) {
+        const type = button?.dataset?.alertType || '';
+        const label = button?.dataset?.alertLabel || type;
+        if (!type) {
+            return;
+        }
+        this.setAdminNotice(`正在应用告警筛选：${label}。`);
+        this.applyAlertFilter(type);
+    },
+
     applyAlertFilter(type) {
         this.clearAdminFilters();
         if (type === 'session_expired' || type === 'needs_refresh' || type === 'invalid' || type === 'no_workspace' || type === 'workspace_creation_pending') {
@@ -1726,22 +1736,13 @@ window.NotionAI.API.Settings = {
                 <div class="rounded-xl border border-black/10 dark:border-white/10 px-3 py-2 bg-black/[0.02] dark:bg-white/[0.03]">
                     <div class="flex items-center justify-between gap-2">
                         <div class="text-xs font-medium">${label}</div>
-                        <button type="button" class="admin-action-btn admin-alert-filter-btn" data-alert-type="${this.escapeHtmlAttribute(key)}" data-alert-label="${this.escapeHtmlAttribute(label)}">查看${label}结果</button>
+                        <button type="button" class="admin-action-btn admin-alert-filter-btn" data-alert-type="${this.escapeHtmlAttribute(key)}" data-alert-label="${this.escapeHtmlAttribute(label)}" onclick="window.NotionAI.API.Settings.handleAlertFilterClick(this)">查看${label}结果</button>
                     </div>
                     <div class="mt-2 space-y-1">${preview}</div>
                     ${actionHint}
                 </div>
             `;
         }).join('');
-
-        details.querySelectorAll('.admin-alert-filter-btn').forEach((button) => {
-            button.addEventListener('click', (event) => {
-                const type = event.currentTarget.dataset.alertType;
-                const label = event.currentTarget.dataset.alertLabel || type;
-                this.setAdminNotice(`正在应用告警筛选：${label}。`);
-                this.applyAlertFilter(type);
-            });
-        });
     },
 
     async refreshAdminPanel(message) {
