@@ -68,6 +68,17 @@ def _mask_secret(value: Any) -> str:
     return _SECRET_MASK if str(value or "").strip() else ""
 
 
+def _coerce_alert_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (list, tuple, set)):
+        parts = [_coerce_alert_text(item) for item in value]
+        return ", ".join(part for part in parts if part)
+    if isinstance(value, dict):
+        return ""
+    return str(value).strip()
+
+
 def _redact_runtime_settings(settings: dict[str, Any]) -> dict[str, Any]:
     redacted = dict(settings)
     for field in _RUNTIME_SECRET_FIELDS:
@@ -2432,16 +2443,27 @@ def _build_alerts(accounts: list[dict[str, Any]]) -> dict[str, Any]:
         status = (
             account.get("status") if isinstance(account.get("status"), dict) else {}
         )
-        effective_state = str(status.get("effective_state") or "")
+        workspace = (
+            account.get("workspace") if isinstance(account.get("workspace"), dict) else {}
+        )
+        effective_state = _coerce_alert_text(status.get("effective_state"))
+        workspace_state = _coerce_alert_text(
+            workspace.get("state") or status.get("workspace_state")
+        )
         alert_payload = {
             "account_id": _mask_secret(account.get("id")),
             "user_id": _mask_secret(account.get("user_id")),
             "user_email": account.get("user_email"),
             "plan_category": account.get("plan_category"),
-            "last_error": status.get("last_error", ""),
-            "last_refresh_error": status.get("last_refresh_error", ""),
-            "workspace_state": status.get("workspace_state", ""),
-            "workspace_expand_error": status.get("workspace_expand_error", ""),
+            "effective_state": effective_state,
+            "last_error": _coerce_alert_text(status.get("last_error", "")),
+            "last_refresh_error": _coerce_alert_text(
+                status.get("last_refresh_error", "")
+            ),
+            "workspace_state": workspace_state,
+            "workspace_expand_error": _coerce_alert_text(
+                status.get("workspace_expand_error", "")
+            ),
             "workspace_expand_status_code": status.get("workspace_expand_status_code"),
         }
 
@@ -2459,7 +2481,7 @@ def _build_alerts(accounts: list[dict[str, Any]]) -> dict[str, Any]:
             alert_types["no_workspace"].append(alert_payload)
         if (
             effective_state == "workspace_creation_pending"
-            or str(status.get("workspace_state") or "") == "workspace_creation_pending"
+            or workspace_state == "workspace_creation_pending"
         ):
             alert_types["workspace_creation_pending"].append(alert_payload)
             retry_after = int(status.get("workspace_hydration_retry_after") or 0)

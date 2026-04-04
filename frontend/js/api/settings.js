@@ -1025,6 +1025,22 @@ window.NotionAI.API.Settings = {
             .replaceAll("'", '&#39;');
     },
 
+    normalizeAlertReason(value) {
+        if (value == null) {
+            return '';
+        }
+        if (Array.isArray(value)) {
+            return value
+                .map((item) => this.normalizeAlertReason(item))
+                .filter(Boolean)
+                .join(', ');
+        }
+        if (typeof value === 'object') {
+            return '';
+        }
+        return String(value).trim();
+    },
+
     escapeHtmlAttribute(value) {
         return this.escapeHtml(value).replaceAll('\n', '&#10;');
     },
@@ -1666,7 +1682,15 @@ window.NotionAI.API.Settings = {
             }
             const preview = rows.slice(0, 3).map((item) => {
                 const title = item.user_email || item.user_id || item.account_id || '未知';
-                const reason = item.failure_category || item.probe_failure_category || item.workspace_expand_error || item.last_error || item.last_refresh_error || item.workspace_state || '无详情';
+                const reason = [
+                    item.failure_category,
+                    item.probe_failure_category,
+                    item.workspace_expand_error,
+                    item.last_error,
+                    item.last_refresh_error,
+                    item.workspace_state,
+                    item.effective_state,
+                ].map((value) => this.normalizeAlertReason(value)).find(Boolean) || '无详情';
                 return `<div class="text-[11px] text-gray-600 dark:text-gray-300">${this.escapeHtml(title)} - ${this.escapeHtml(reason)}</div>`;
             }).join('');
             const actionHint = key === 'action_failures' || key === 'action_reauth_required' || key === 'action_rate_limited'
