@@ -301,7 +301,7 @@ window.NotionAI.API.Settings = {
             }
             this.setAdminNotice(result.message || result.status || '会话刷新状态已加载。');
         } catch (error) {
-            this.setAdminNotice(error.message || '加载会话刷新状态失败。');
+            this.handleAdminSessionError(error.message || '加载会话刷新状态失败。', '加载会话刷新状态失败。');
         }
     },
 
@@ -315,7 +315,7 @@ window.NotionAI.API.Settings = {
             const hasTemplate = !!(result.request_template && result.request_template.operation);
             this.setAdminNotice(`${result.message || result.status || '工作区创建状态已加载。'}${hasTemplate ? ' 请求模板已就绪。' : ''}`);
         } catch (error) {
-            this.setAdminNotice(error.message || '加载工作区创建状态失败。');
+            this.handleAdminSessionError(error.message || '加载工作区创建状态失败。', '加载工作区创建状态失败。');
         }
     },
 
@@ -326,7 +326,7 @@ window.NotionAI.API.Settings = {
             this.renderRefreshDiagnostics(result);
             this.setAdminNotice(`刷新诊断已更新：可直接刷新 ${summary.refresh_ready ?? 0}，需手动重新授权 ${summary.manual_reauthorize ?? 0}，已过期 ${summary.expired ?? 0}。`);
         } catch (error) {
-            this.setAdminNotice(error.message || '加载会话刷新诊断失败。');
+            this.handleAdminSessionError(error.message || '加载会话刷新诊断失败。', '加载会话刷新诊断失败。');
         }
     },
 
@@ -337,7 +337,7 @@ window.NotionAI.API.Settings = {
             this.renderWorkspaceDiagnostics(result);
             this.setAdminNotice(`工作区诊断已更新：已就绪 ${summary.ready ?? 0}，缺失 ${summary.missing ?? summary.缺失 ?? 0}，待处理 ${summary.pending ?? 0}，未实现 ${summary.unimplemented ?? 0}。`);
         } catch (error) {
-            this.setAdminNotice(error.message || '加载工作区诊断失败。');
+            this.handleAdminSessionError(error.message || '加载工作区诊断失败。', '加载工作区诊断失败。');
         }
     },
 
@@ -407,7 +407,7 @@ window.NotionAI.API.Settings = {
             const mode = String(result.response_mode || 'template_preview').trim().toLowerCase() || 'template_preview';
             this.setAdminNotice(`已加载通用请求模板，当前模式：${mode}。`);
         } catch (error) {
-            this.setAdminNotice(error.message || '加载请求模板失败。');
+            this.handleAdminSessionError(error.message || '加载请求模板失败。', '加载请求模板失败。');
         }
     },
 
@@ -436,7 +436,7 @@ window.NotionAI.API.Settings = {
             }
             this.setAdminNotice('完整后台报告已加载。');
         } catch (error) {
-            this.setAdminNotice(error.message || '加载后台报告失败。');
+            this.handleAdminSessionError(error.message || '加载后台报告失败。', '加载后台报告失败。');
         }
     },
 
@@ -451,7 +451,7 @@ window.NotionAI.API.Settings = {
             }
             this.setAdminNotice(`快照已更新：账号 ${result.summary?.accounts ?? 0} 个，告警 ${result.summary?.alerts ?? 0} 条，操作 ${result.summary?.operations ?? 0} 条。`);
         } catch (error) {
-            this.setAdminNotice(error.message || '加载后台快照失败。');
+            this.handleAdminSessionError(error.message || '加载后台快照失败。', '加载后台快照失败。');
         }
     },
 
@@ -743,6 +743,18 @@ window.NotionAI.API.Settings = {
             return;
         }
         this.setAdminNotice(reason || '当前后台会话已失效，请重新登录。');
+    },
+
+    handleAdminSessionError(messageText, fallbackMessage) {
+        if (
+            window.NotionAI.Core.State.get('adminSessionToken')
+            && /(api key|invalid_api_key|401|unauthorized|forbidden|admin session)/i.test(messageText)
+        ) {
+            this.resetInvalidAdminSession(messageText);
+            return true;
+        }
+        this.setAdminNotice(messageText || fallbackMessage);
+        return false;
     },
 
     async signOutAdminSession() {
