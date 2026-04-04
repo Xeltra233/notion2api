@@ -4760,7 +4760,11 @@ async def refresh_probe_account(
             "result": result,
         },
     )
-    return {"ok": True, "account_id": account_id, "result": result}
+    return {
+        "ok": True,
+        "account_id": _mask_secret(account_id),
+        "result": _redact_template_preview_payload(result),
+    }
 
 
 @router.post("/admin/accounts/{account_id}/workspace-probe")
@@ -4794,7 +4798,11 @@ async def workspace_probe_account(
             "result": result,
         },
     )
-    return {"ok": True, "account_id": account_id, "result": result}
+    return {
+        "ok": True,
+        "account_id": _mask_secret(account_id),
+        "result": _redact_template_preview_payload(result),
+    }
 
 
 @router.get("/admin/accounts/safe")

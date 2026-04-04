@@ -23,6 +23,8 @@
 - The diagnostics side panels for `刷新诊断` and `工作区诊断` also write full JSON into the shared textarea, so their safe responses must mask `account_id` and `user_id` even if the visible summary cards only show email/readiness fields.
 - Safe-mode `alerts` sections in `admin/report` and the `导出账号` JSON export can leak raw account/workspace IDs if they reuse the normal account-card payload shape; export/report-only paths should use stricter report redaction than the interactive account list.
 - The diagnostics tool button `工作区创建状态` uses `/v1/admin/accounts/workspaces/status` and writes a safe-summary JSON blob into the shared textarea; mask `account_id`, `user_id`, and `space_id` there too, not just in the newer diagnostics endpoints.
+- Account-card `刷新探测` and `工作区探测` actions also dump their full response JSON into the shared textarea. Even for dry-run probes, mask top-level `account_id` and recursively redact nested request-template identifiers before returning to the browser.
+
 
 
 
