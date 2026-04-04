@@ -141,21 +141,23 @@ window.NotionAI.API.Settings = {
     },
 
     applyPendingHydrationFilter() {
+        this.clearAdminFilters();
         const stateFilter = document.getElementById('adminStateFilterInput');
         if (stateFilter) {
             stateFilter.value = 'workspace_creation_pending';
         }
         this.setAdminFilterContext('quick_filter', '快捷筛选：待补全工作区');
-        this.refreshAdminPanel('已筛选为待补全账号。');
+        this.refreshAdminPanel('已筛选为工作区待处理账号。');
     },
 
     applyHydrationDueFilter() {
+        this.clearAdminFilters();
         const stateFilter = document.getElementById('adminStateFilterInput');
         if (stateFilter) {
             stateFilter.value = 'workspace_hydration_due';
         }
         this.setAdminFilterContext('quick_filter', '快捷筛选：工作区补全到期');
-        this.refreshAdminPanel('已筛选为补全到期账号。');
+        this.refreshAdminPanel('已筛选为工作区补全到期账号。');
     },
 
     changeAdminPage(delta) {
@@ -270,6 +272,14 @@ window.NotionAI.API.Settings = {
             education: '快捷筛选：教育账号',
             usable: '快捷筛选：仅看可用账号',
         };
+        const noticeLabels = {
+            invalid: '无效账号',
+            probe_failures: '探测失败',
+            needs_refresh: '需要刷新',
+            no_workspace: '缺少工作区',
+            education: '教育账号',
+            usable: '仅看可用账号',
+        };
         this.setAdminFilterContext('quick_filter', labels[type] || `快捷筛选：${type}`);
         if (type === 'invalid') {
             document.getElementById('adminStateFilterInput').value = 'invalid';
@@ -285,7 +295,7 @@ window.NotionAI.API.Settings = {
             document.getElementById('adminStateFilterInput').value = 'active';
             document.getElementById('adminEnabledFilterInput').value = 'true';
         }
-        this.refreshAdminPanel(`已应用快捷筛选：${type}。`);
+        this.refreshAdminPanel(`已应用快捷筛选：${noticeLabels[type] || type}。`);
     },
 
     handleAlertFilterClick(button) {
@@ -294,16 +304,19 @@ window.NotionAI.API.Settings = {
         if (!type) {
             return;
         }
-        this.setAdminFilterContext('alert_filter', `告警卡：${label}`);
         this.setAdminNotice(`正在应用告警筛选：${label}。`);
-        this.applyAlertFilter(type);
+        if (typeof window.NotionAI.Core.App?.setActiveModule === 'function') {
+            window.NotionAI.Core.App.setActiveModule('accounts');
+        }
+        this.applyAlertFilter(type, label);
     },
 
-    applyAlertFilter(type) {
+    applyAlertFilter(type, label = '') {
         this.clearAdminFilters();
         if (type === 'session_expired' || type === 'needs_refresh' || type === 'invalid' || type === 'probe_failures' || type === 'no_workspace' || type === 'workspace_creation_pending') {
+            this.setAdminFilterContext('alert_filter', `告警卡：${label || type}`);
             document.getElementById('adminStateFilterInput').value = type;
-            this.refreshAdminPanel(`已应用告警筛选：${type}。`);
+            this.refreshAdminPanel(`已应用告警筛选：${label || type}。`);
             return;
         }
         if (type === 'action_failures') {
@@ -1819,6 +1832,8 @@ window.NotionAI.API.Settings = {
     },
 
     async refreshAdminPanel(message) {
+        const requestId = (this._adminRefreshRequestId || 0) + 1;
+        this._adminRefreshRequestId = requestId;
         try {
             const usageFilters = this.getUsageFilters();
             const adminFilters = this.getAdminFilters();
@@ -1836,6 +1851,9 @@ window.NotionAI.API.Settings = {
                 window.NotionAI.API.Admin.getUsageSummary(usageFilters),
                 window.NotionAI.API.Admin.getUsageEvents(usageFilters),
             ]);
+            if (requestId !== this._adminRefreshRequestId) {
+                return;
+            }
             this._lastAdminSnapshot = snapshot || {};
             this.renderAdminSummary((unfilteredAccountMeta && unfilteredAccountMeta.summary) || data.summary || {});
             this.renderAdminAuthSource(runtimeConfig.admin_auth || {});
@@ -1861,6 +1879,9 @@ window.NotionAI.API.Settings = {
             const operationsMode = String((operations || {}).response_mode || 'audit_log').trim().toLowerCase() || 'audit_log';
             this.setAdminNotice(message || `后台面板已同步，当前视图：${viewMode}。告警模式：${alertsMode}。操作模式：${operationsMode}。`);
         } catch (error) {
+            if (requestId !== this._adminRefreshRequestId) {
+                return;
+            }
             this._lastAdminSnapshot = {};
             this.renderAdminAccounts({ accounts: [] });
             const messageText = error.message || '加载后台账号失败。';

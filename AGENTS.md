@@ -23,6 +23,10 @@
 - `frontend/js/api/settings.js` 的账号区空结果态不能吞掉 `当前筛选 / 来源 / 视图模式` banner；真实浏览器里筛选到 0 条时，仍应保留 banner，并把文案写成“当前筛选条件下没有匹配账号”。
 - 账号筛选只应影响账号区本地摘要，不应污染总览/当前配置里的全局数字；前端 `refreshAdminPanel()` 如需在筛选状态下刷新全局统计，应额外拉一次未筛选的 accounts summary。
 - 账号卡的 badge 与 tag 容易在 pending 场景重复（如 `hydration:pending` 同时出现在 badge 和 tag）；前端要对 badge/tag 做去重，但如果去重后 tag 为空，仍应回退显示 `account.source`（例如 `register_flow`），避免来源信息丢失。
+- 旧的 hydration 快捷筛选入口（`applyPendingHydrationFilter()` / `applyHydrationDueFilter()`）也必须像 `applyQuickFilter()` 一样先 `clearAdminFilters()`；否则真实浏览器里先点“教育账号”再点“待补全工作区”，旧 `plan=education` 会残留，导致应有 2 条 pending 的结果被错误污染。
+- 总览告警卡的“查看…结果”按钮不该只改筛选而停留在总览；真实浏览器里更符合预期的行为是：点击后直接切到账号模块，并在 banner 里保留 `来源：告警卡：...`。
+- 后台筛选成功 notice 不要直接暴露内部状态枚举（如 `probe_failures`、`workspace_creation_pending`）；真实页面里应尽量显示中文标签，便于用户理解当前已应用的筛选。
+
 
 
 ## Implementation learnings
