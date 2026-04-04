@@ -371,6 +371,15 @@ function bindEventListeners() {
     document.getElementById('adminQuickUsableBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.applyQuickFilter('usable');
     });
+    document.getElementById('adminAccountsQuickNoWorkspaceBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.applyQuickFilter('no_workspace');
+    });
+    document.getElementById('adminAccountsQuickPendingBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.applyPendingHydrationFilter();
+    });
+    document.getElementById('adminAccountsQuickProbeFailuresBtn').addEventListener('click', () => {
+        window.NotionAI.API.Settings.applyQuickFilter('probe_failures');
+    });
     document.getElementById('adminBulkProbeBtn').addEventListener('click', () => {
         window.NotionAI.API.Settings.bulkActionOnFiltered('probe', '批量探测已完成。');
     });
