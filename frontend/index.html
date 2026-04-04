@@ -601,6 +601,7 @@
                             <option value="invalid">无效</option>
                             <option value="session_expired">会话已过期</option>
                             <option value="needs_refresh">需要刷新</option>
+                            <option value="probe_failures">探测失败</option>
                             <option value="no_workspace">缺少工作区</option>
                             <option value="workspace_creation_pending">工作区待创建</option>
                             <option value="workspace_hydration_due">工作区补全到期</option>
@@ -794,9 +795,9 @@
                             <div class="admin-action-group">
                                 <div class="admin-action-group-label">告警直达筛选</div>
                                 <div class="admin-action-group-actions">
-                                    <button id="adminAccountsQuickNoWorkspaceBtn" type="button" class="admin-action-btn">缺少工作区</button>
-                                    <button id="adminAccountsQuickPendingBtn" type="button" class="admin-action-btn">工作区待处理</button>
-                                    <button id="adminAccountsQuickProbeFailuresBtn" type="button" class="admin-action-btn">探测失败</button>
+                                    <button id="adminAccountsQuickNoWorkspaceBtn" type="button" class="admin-action-btn" onclick="window.NotionAI.API.Settings.applyQuickFilter('no_workspace')">缺少工作区</button>
+                                    <button id="adminAccountsQuickPendingBtn" type="button" class="admin-action-btn" onclick="window.NotionAI.API.Settings.applyPendingHydrationFilter()">工作区待处理</button>
+                                    <button id="adminAccountsQuickProbeFailuresBtn" type="button" class="admin-action-btn" onclick="window.NotionAI.API.Settings.applyQuickFilter('probe_failures')">探测失败</button>
                                 </div>
                             </div>
                         </div>

@@ -2180,15 +2180,11 @@ def _build_account_view(
         prefer_persisted_refresh_state = (
             status_last_refresh_at >= health_last_refresh_at
         )
-        session_expired = bool(
-            status.get("session_expired")
-            if prefer_persisted_refresh_state or "session_expired" in status
-            else session_payload.get("expired", False)
+        session_expired = bool(status.get("session_expired", False)) or bool(
+            session_payload.get("expired", False)
         )
-        needs_refresh = bool(
-            status.get("needs_refresh")
-            if prefer_persisted_refresh_state or "needs_refresh" in status
-            else session_payload.get("needs_refresh", False)
+        needs_refresh = bool(status.get("needs_refresh", False)) or bool(
+            session_payload.get("needs_refresh", False)
         )
         raw_pool_state = str(health.get("state") or status.get("state") or "unknown")
         no_workspace = workspace_count == 0
@@ -2200,6 +2196,15 @@ def _build_account_view(
             status.get("last_probe_ok", False)
             and status.get("last_probe_action") == "workspace_probe"
         )
+        probe_failure_category = str(status.get("last_probe_failure_category") or "").strip().lower()
+        refresh_failure_category = str(status.get("last_refresh_failure_category") or "").strip().lower()
+        needs_reauth = bool(
+            status.get("needs_reauth", False)
+            if status_has_needs_reauth
+            else health.get("needs_reauth", False)
+        )
+        has_probe_failure = bool(probe_failure_category) and probe_failure_category != "success"
+        has_refresh_failure = bool(refresh_failure_category) and refresh_failure_category != "success"
         if workspace_state == "ready" or workspace_count > 0:
             pool_state = "active"
         elif refresh_probe_ok and not session_expired and not needs_refresh:
@@ -2217,9 +2222,11 @@ def _build_account_view(
 
         if not enabled:
             effective_state = "disabled"
-        elif session_expired and workspace_state != "ready" and no_workspace:
+        elif raw_pool_state == "invalid" or needs_reauth or refresh_failure_category in {"unauthorized", "forbidden"}:
+            effective_state = "invalid"
+        elif session_expired:
             effective_state = "session_expired"
-        elif needs_refresh and workspace_state != "ready" and no_workspace:
+        elif needs_refresh:
             effective_state = "needs_refresh"
         elif workspace_state in {
             "workspace_creation_pending",
@@ -2227,14 +2234,24 @@ def _build_account_view(
             "workspace_creation_unverified",
         }:
             effective_state = workspace_state
-        elif pool_state in {"invalid", "cooling", "active", "no_workspace"}:
-            effective_state = pool_state
-        elif no_workspace:
+        elif no_workspace or pool_state == "no_workspace":
             effective_state = "no_workspace"
+        elif pool_state in {"cooling", "active"}:
+            effective_state = pool_state
         else:
             effective_state = "unknown"
 
-        usable = enabled and not no_workspace and pool_state == "active"
+        usable = (
+            enabled
+            and effective_state == "active"
+            and pool_state == "active"
+            and not no_workspace
+            and not session_expired
+            and not needs_refresh
+            and not needs_reauth
+            and not has_refresh_failure
+            and not has_probe_failure
+        )
         hydration_retry_policy, hydration_failure_category = (
             _resolve_pending_hydration_classification(
                 account_id,
@@ -2295,11 +2312,7 @@ def _build_account_view(
                     "no_workspace": no_workspace,
                     "session_expired": session_expired,
                     "needs_refresh": needs_refresh,
-                    "needs_reauth": bool(
-                        status.get("needs_reauth", False)
-                        if status_has_needs_reauth
-                        else health.get("needs_reauth", False)
-                    ),
+                    "needs_reauth": needs_reauth,
                     "workspace_state": workspace_state,
                     "cooldown_until": health.get(
                         "cooldown_until", status.get("cooldown_until", 0)
@@ -2487,15 +2500,14 @@ def _build_alerts(accounts: list[dict[str, Any]]) -> dict[str, Any]:
             retry_after = int(status.get("workspace_hydration_retry_after") or 0)
             if retry_after <= int(time.time()):
                 alert_types["workspace_hydration_due"].append(alert_payload)
-        if bool(status.get("last_probe_action")) and not bool(
-            status.get("last_probe_ok", True)
+        probe_failure_category = str(status.get("last_probe_failure_category") or "").strip()
+        if (probe_failure_category and probe_failure_category != "success") or (
+            bool(status.get("last_probe_action")) and not bool(status.get("last_probe_ok", True))
         ):
             alert_types["probe_failures"].append(
                 {
                     **alert_payload,
-                    "probe_failure_category": status.get(
-                        "last_probe_failure_category", ""
-                    ),
+                    "probe_failure_category": probe_failure_category,
                     "probe_reason": status.get("last_probe_reason", ""),
                 }
             )
@@ -5004,6 +5016,25 @@ def _list_accounts_payload(
                 )
                 <= now_ts
             ]
+        elif state_filter == "no_workspace":
+            accounts = [
+                item
+                for item in accounts
+                if bool(item.get("status", {}).get("no_workspace", False))
+            ]
+        elif state_filter == "probe_failures":
+            accounts = [
+                item
+                for item in accounts
+                if (
+                    str(item.get("status", {}).get("last_probe_failure_category") or "").strip().lower()
+                    not in {"", "success"}
+                )
+                or (
+                    bool(item.get("status", {}).get("last_probe_action"))
+                    and not bool(item.get("status", {}).get("last_probe_ok", True))
+                )
+            ]
         else:
             accounts = [
                 item
@@ -5087,6 +5118,16 @@ def _list_accounts_payload(
             == "workspace_creation_pending"
             and int(item.get("status", {}).get("workspace_hydration_retry_after") or 0)
             <= int(time.time())
+        ),
+        "probe_failures": sum(
+            1
+            for item in accounts
+            if str(item.get("status", {}).get("last_probe_failure_category") or "").strip().lower()
+            not in {"", "success"}
+            or (
+                bool(item.get("status", {}).get("last_probe_action"))
+                and not bool(item.get("status", {}).get("last_probe_ok", True))
+            )
         ),
         "no_workspace": sum(
             1 for item in accounts if item.get("status", {}).get("no_workspace")

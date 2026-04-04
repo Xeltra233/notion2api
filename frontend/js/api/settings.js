@@ -55,6 +55,7 @@ window.NotionAI.API.Settings = {
             invalid: '无效',
             session_expired: '会话已过期',
             needs_refresh: '需要刷新',
+            probe_failures: '探测失败',
             no_workspace: '缺少工作区',
             workspace_creation_pending: '工作区待创建',
             workspace_hydration_due: '工作区补全到期',
@@ -260,14 +261,12 @@ window.NotionAI.API.Settings = {
             usable: '快捷筛选：仅看可用账号',
         };
         this.setAdminFilterContext('quick_filter', labels[type] || `快捷筛选：${type}`);
-        if (type === 'probe_failures') {
-            this.refreshAdminPanel(`已应用快捷筛选：${type}。`);
-            return;
-        }
         if (type === 'invalid') {
             document.getElementById('adminStateFilterInput').value = 'invalid';
         } else if (type === 'needs_refresh') {
             document.getElementById('adminStateFilterInput').value = 'needs_refresh';
+        } else if (type === 'probe_failures') {
+            document.getElementById('adminStateFilterInput').value = 'probe_failures';
         } else if (type === 'no_workspace') {
             document.getElementById('adminStateFilterInput').value = 'no_workspace';
         } else if (type === 'education') {
@@ -292,7 +291,7 @@ window.NotionAI.API.Settings = {
 
     applyAlertFilter(type) {
         this.clearAdminFilters();
-        if (type === 'session_expired' || type === 'needs_refresh' || type === 'invalid' || type === 'no_workspace' || type === 'workspace_creation_pending') {
+        if (type === 'session_expired' || type === 'needs_refresh' || type === 'invalid' || type === 'probe_failures' || type === 'no_workspace' || type === 'workspace_creation_pending') {
             document.getElementById('adminStateFilterInput').value = type;
             this.refreshAdminPanel(`已应用告警筛选：${type}。`);
             return;
