@@ -4832,7 +4832,7 @@ async def list_accounts_safe(
         page=page,
         page_size=page_size,
     )
-    payload["accounts"] = _redact_account_list(payload.get("accounts", []))
+    payload["accounts"] = _redact_account_report_list(payload.get("accounts", []))
     payload["view_mode"] = "safe"
     return payload
 

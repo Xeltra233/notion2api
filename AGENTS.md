@@ -25,6 +25,8 @@
 - The diagnostics tool button `工作区创建状态` uses `/v1/admin/accounts/workspaces/status` and writes a safe-summary JSON blob into the shared textarea; mask `account_id`, `user_id`, and `space_id` there too, not just in the newer diagnostics endpoints.
 - Account-card `刷新探测` and `工作区探测` actions also dump their full response JSON into the shared textarea. Even for dry-run probes, mask top-level `account_id` and recursively redact nested request-template identifiers, especially any `*_id` fields plus transaction `actor_id`, before returning to the browser.
 - `GET /v1/admin/accounts/{account_id}` 不应默认返回原始账号明细；更安全的做法是默认返回脱敏 `safe_detail`，只有编辑器这类显式后台操作再附带 `?raw=true` 请求原始字段。
+- `GET /v1/admin/accounts/safe` 虽然名字叫 safe，但如果只套用普通账号脱敏仍会泄漏 `user_id`、`space_id`、`pending-signup-*` 等标识；这个接口应直接复用更严格的报告级账号脱敏。
+
 
 
 
