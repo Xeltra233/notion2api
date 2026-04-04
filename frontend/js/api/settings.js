@@ -295,6 +295,10 @@ window.NotionAI.API.Settings = {
     async loadSessionRefreshStatus() {
         try {
             const result = await window.NotionAI.API.Admin.getSessionRefreshStatus();
+            const output = document.getElementById('requestTemplateOutput');
+            if (output) {
+                output.value = JSON.stringify(result, null, 2);
+            }
             this.setAdminNotice(result.message || result.status || '会话刷新状态已加载。');
         } catch (error) {
             this.setAdminNotice(error.message || '加载会话刷新状态失败。');
@@ -304,6 +308,10 @@ window.NotionAI.API.Settings = {
     async loadWorkspaceCreateStatus() {
         try {
             const result = await window.NotionAI.API.Admin.getWorkspaceCreateStatus();
+            const output = document.getElementById('requestTemplateOutput');
+            if (output) {
+                output.value = JSON.stringify(result, null, 2);
+            }
             const hasTemplate = !!(result.request_template && result.request_template.operation);
             this.setAdminNotice(`${result.message || result.status || '工作区创建状态已加载。'}${hasTemplate ? ' 请求模板已就绪。' : ''}`);
         } catch (error) {
